@@ -1,3 +1,4 @@
+global using CasCap.Abstractions;
 global using CasCap.Common.Abstractions;
 global using CasCap.Constants;
 global using CasCap.Models;

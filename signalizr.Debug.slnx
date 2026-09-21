@@ -4,6 +4,9 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
   </Folder>
+  <Folder Name="/signalizr/CasCap.Api.SignalCli/">
+    <Project Path="../CasCap.Api.SignalCli/src/CasCap.Api.SignalCli/CasCap.Api.SignalCli.csproj" />
+  </Folder>
   <Folder Name="/signalizr/CasCap.Common/">
     <Project Path="../CasCap.Common/src/CasCap.Common.Abstractions/CasCap.Common.Abstractions.csproj" />
     <Project Path="../CasCap.Common/src/CasCap.Common.Configuration/CasCap.Common.Configuration.csproj" />

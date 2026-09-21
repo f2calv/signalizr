@@ -8,7 +8,7 @@ namespace CasCap.Services;
 /// Not yet implemented; the service currently idles.
 /// </remarks>
 // TODO: drain the upstream receive stream into a bounded channel, then dispatch from a separate consumer.
-public sealed class ReceiverBgService(ILogger<ReceiverBgService> logger) : IBgFeature
+public sealed class ReceiverBgService(ILogger<ReceiverBgService> logger, ISignalCliReceiver receiver) : IBgFeature
 {
     /// <inheritdoc/>
     public string FeatureName => FeatureNames.Receiver;
@@ -16,7 +16,8 @@ public sealed class ReceiverBgService(ILogger<ReceiverBgService> logger) : IBgFe
     /// <inheritdoc/>
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("{ClassName} started (no receive stream implemented yet)", nameof(ReceiverBgService));
+        logger.LogInformation("{ClassName} started with {ReceiverType} (no receive stream implemented yet)",
+            nameof(ReceiverBgService), receiver.GetType().Name);
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
     }
 }

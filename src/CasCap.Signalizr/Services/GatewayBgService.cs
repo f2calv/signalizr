@@ -6,7 +6,7 @@ namespace CasCap.Services;
 /// feature-flag host can be exercised end to end.
 /// </remarks>
 // TODO: implement the REST send endpoint and the gRPC bidirectional subscription surface.
-public sealed class GatewayBgService(ILogger<GatewayBgService> logger) : IBgFeature
+public sealed class GatewayBgService(ILogger<GatewayBgService> logger, ISignalCliClient client) : IBgFeature
 {
     /// <inheritdoc/>
     public string FeatureName => FeatureNames.Gateway;
@@ -14,7 +14,8 @@ public sealed class GatewayBgService(ILogger<GatewayBgService> logger) : IBgFeat
     /// <inheritdoc/>
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("{ClassName} started (no surface implemented yet)", nameof(GatewayBgService));
+        logger.LogInformation("{ClassName} started with {ClientType} (no surface implemented yet)",
+            nameof(GatewayBgService), client.GetType().Name);
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
     }
 }

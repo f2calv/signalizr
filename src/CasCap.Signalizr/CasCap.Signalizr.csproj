@@ -9,11 +9,13 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)'=='Release'">
+    <PackageReference Include="CasCap.Api.SignalCli" />
     <PackageReference Include="CasCap.Common.Abstractions" />
     <PackageReference Include="CasCap.Common.Extensions" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)'!='Release'">
+    <ProjectReference Include="..\..\..\CasCap.Api.SignalCli\src\CasCap.Api.SignalCli\CasCap.Api.SignalCli.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Abstractions\CasCap.Common.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Extensions\CasCap.Common.Extensions.csproj" />
   </ItemGroup>

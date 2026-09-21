@@ -1,0 +1,172 @@
+# ── signalizr umbrella values ────────────────────────────────────────
+# Each top-level key maps to a dependency alias in Chart.yaml. Values here are
+# public-safe defaults; a deployment supplies the private parts — the phone number,
+# the ingress host and the channel map — through its own values or a Secret.
+#
+# Nothing in this file may contain a phone number, a group id, a hostname or any
+# other account-linked identifier.
+# ─────────────────────────────────────────────────────────────────────
+
+# The upstream signal-cli REST wrapper. One account, one owner.
+signalcli:
+  replicaCount: 1
+  # Pinned so the in-cluster address below is correct regardless of the release name.
+  fullnameOverride: signalcli
+  image:
+    repository: bbernhard/signal-cli-rest-api
+    pullPolicy: IfNotPresent
+    tag: "0.100"
+  service:
+    enabled: true
+    name: http
+    type: ClusterIP
+    port: 80
+    containerPort: 8080
+    protocol: TCP
+  # signal-cli-rest-api is not a .NET application, so the downward-API variables the
+  # shared chart injects for our own workloads are not wanted here.
+  envFieldRef: null
+  envVars:
+    # json-rpc keeps a persistent signal-cli process and makes /v1/receive a WebSocket,
+    # which is the transport the Receiver role depends on.
+    MODE: json-rpc
+    LOG_LEVEL: info
+  # A JVM that is network-bound once warm but wants real CPU while it loads account
+  # state. Keep the reservation modest and raise only the ceiling so startup is not
+  # throttled.
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 2000m
+      memory: 768Mi
+  # The wrapper exposes no /healthz endpoints, but /v1/about answers only once the JVM has
+  # loaded account state - without it Kubernetes routes traffic to a process that cannot serve it.
+  startupProbe:
+    httpGet:
+      path: /v1/about
+      port: 8080
+    periodSeconds: 10
+    initialDelaySeconds: 15
+    failureThreshold: 30
+  readinessProbe:
+    httpGet:
+      path: /v1/about
+      port: 8080
+    periodSeconds: 20
+    failureThreshold: 3
+  # No liveness probe: a JVM that is slow or busy is not a JVM that should be killed, and a
+  # restart drops the registered session and forces every consumer to reconnect.
+  livenessProbe: false
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: signalcli-pvc
+  volumeMounts:
+    - name: data
+      mountPath: /home/.local/share/signal-cli
+  persistentVolumeClaims:
+    - name: signalcli-pvc
+      accessModes:
+        - ReadWriteOnce
+      storage: 512Mi
+
+# The gateway. Send and Subscribe surfaces plus the single receive owner.
+signalizr:
+  replicaCount: 1
+  fullnameOverride: signalizr
+  image:
+    repository: ghcr.io/f2calv/signalizr
+    pullPolicy: IfNotPresent
+    tag: ""
+  service:
+    enabled: true
+    name: http
+    type: ClusterIP
+    port: 80
+    containerPort: 8080
+    protocol: TCP
+  envFieldRef:
+    AppConfig__NodeName: spec.nodeName
+    AppConfig__PodName: metadata.name
+    AppConfig__Namespace: metadata.namespace
+    AppConfig__PodIp: status.podIP
+  envVars:
+    # Receiver must stay single-owner: the upstream broadcast is an unbuffered channel
+    # with a non-blocking send, so a second reader causes duplicate delivery. Scale the
+    # Gateway role separately rather than raising replicaCount here.
+    CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
+    CasCap__SignalCliConfig__BaseAddress: http://signalcli:80
+  # The phone number is personal data and must arrive from a Secret, never from values.
+  # Create the Secret out of band with a key matching the environment variable name:
+  #   kubectl create secret generic signalizr \
+  #     --from-literal=CasCap__SignalCliConfig__PhoneNumber='+...'
+  envSecrets:
+    CasCap__SignalCliConfig__PhoneNumber: signalizr
+  # Readiness includes the upstream signal-cli check, so a pod leaves the Service rotation when
+  # the wrapper is unreachable rather than accepting sends it cannot fulfil. Liveness deliberately
+  # excludes it: restarting the gateway cannot fix a wrapper outage, and would turn a recoverable
+  # dependency failure into a cluster-wide restart loop.
+  startupProbe:
+    httpGet:
+      path: /healthz/startup
+      port: 8080
+    periodSeconds: 10
+    initialDelaySeconds: 10
+    failureThreshold: 6
+  readinessProbe:
+    httpGet:
+      path: /healthz/ready
+      port: 8080
+    periodSeconds: 10
+    initialDelaySeconds: 15
+    failureThreshold: 6
+  livenessProbe:
+    httpGet:
+      path: /healthz/live
+      port: 8080
+    periodSeconds: 20
+    initialDelaySeconds: 30
+    failureThreshold: 6
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# The same image running only the DemoClient role, for evaluating a live gateway.
+# Disabled by default: set replicaCount to 1 to enable it.
+demo:
+  replicaCount: 0
+  fullnameOverride: signalizr-demo
+  image:
+    repository: ghcr.io/f2calv/signalizr
+    pullPolicy: IfNotPresent
+    tag: ""
+  # The demo client never talks to Signal, so it needs no account and no Secret.
+  service:
+    enabled: false
+  envVars:
+    CasCap__FeatureConfig__EnabledFeatures: DemoClient
+    CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:80
+  # The demo client serves no traffic, so it needs no readiness gate; liveness stays on the
+  # process-only endpoint.
+  startupProbe: false
+  readinessProbe: false
+  livenessProbe:
+    httpGet:
+      path: /healthz/live
+      port: 8080
+    periodSeconds: 30
+    initialDelaySeconds: 30
+    failureThreshold: 6
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi

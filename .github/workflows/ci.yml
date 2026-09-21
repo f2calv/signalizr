@@ -54,8 +54,24 @@ jobs:
       smoke-test: |
         ! docker run --rm -e CasCap__FeatureConfig__EnabledFeatures=NotAFeature $IMAGE
 
+  chart:
+    needs: [versioning, image]
+    permissions:
+      contents: read
+      packages: write #push the OCI chart to ghcr.io
+    uses: f2calv/gha-workflows/.github/workflows/helm-chart-package.yml@v1
+    with:
+      tag: ${{ needs.versioning.outputs.version }}
+      image-registry: ghcr.io/${{ github.repository_owner }}
+      image-repository: signalizr
+      chart-registry: ghcr.io
+      chart-repository: ${{ github.repository_owner }}/signalizr/charts
+      chart-path: ./charts/signalizr
+      #A pull request proves the chart lints and packages without publishing it.
+      push-chart: ${{ github.event_name != 'pull_request' }}
+
   release:
-    needs: [lint, versioning, build, image]
+    needs: [lint, versioning, build, image, chart]
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     uses: f2calv/gha-workflows/.github/workflows/gha-release-versioning.yml@v1
     permissions:

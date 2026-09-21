@@ -4,6 +4,7 @@ using CasCap.Constants;
 using CasCap.Extensions;
 using CasCap.Models;
 using CasCap.Services;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -40,5 +41,21 @@ builder.Services.AddHealthChecks();
 var app = builder.Build();
 
 app.MapHealthChecks("/healthz");
+
+// One endpoint per Kubernetes probe type, each running only the checks carrying that tag.
+// The upstream signal-cli check is tagged "ready" by default, so an unreachable wrapper takes a
+// pod out of the Service rotation without also failing liveness — a liveness probe that depended
+// on the upstream would restart every gateway pod during a wrapper outage it cannot fix.
+foreach (var probeType in Enum.GetValues<KubernetesProbeTypes>())
+{
+    if (probeType is KubernetesProbeTypes.None)
+        continue;
+
+    var tag = probeType.GetDescription();
+    app.MapHealthChecks($"/healthz/{tag}", new HealthCheckOptions
+    {
+        Predicate = healthCheck => healthCheck.Tags.Contains(tag)
+    });
+}
 
 await app.RunAsync();

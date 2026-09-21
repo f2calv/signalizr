@@ -431,13 +431,9 @@ FodyWeavers.xsd
 
 # custom
 .docker/*
-!.docker/postgres
-!.docker/otelcol.yaml
-!.docker/p3x.json
-!.docker/redis.conf
 *.tgz
 *.lock
-!charts/smarthaus/Chart.lock
+!charts/signalizr/Chart.lock
 manifest*
 appsettings.Local.json
 appsettings.Local.*.json

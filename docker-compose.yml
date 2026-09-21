@@ -1,0 +1,50 @@
+# Quickstart: the Signal REST wrapper, the gateway, and a demo client - one command, no cluster.
+#
+# The wrapper needs a registered Signal account before anything can be sent. Follow the upstream
+# registration/linking steps first: https://github.com/bbernhard/signal-cli-rest-api
+#
+#   cp .env.example .env     # then edit, it holds a phone number and is gitignored
+#   docker compose up
+name: signalizr
+
+services:
+  signal-cli-rest-api:
+    image: bbernhard/signal-cli-rest-api:0.100
+    environment:
+      MODE: json-rpc
+    ports:
+      - "8180:8080"
+    volumes:
+      - signal-cli-data:/home/.local/share/signal-cli
+    restart: unless-stopped
+
+  # Default role: the gateway surface plus the single receive owner.
+  signalizr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - signal-cli-rest-api
+    environment:
+      CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
+      CasCap__SignalCliConfig__BaseAddress: http://signal-cli-rest-api:8080
+      # Personal data: keep the real value in .env, never in this file.
+      CasCap__SignalCliConfig__PhoneNumber: ${SIGNALIZR_PHONE_NUMBER:-+10000000000}
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  # Same image, second role - selected purely by the feature flag.
+  signalizr-demo-client:
+    image: signalizr-signalizr
+    depends_on:
+      - signalizr
+    environment:
+      CasCap__FeatureConfig__EnabledFeatures: DemoClient
+      CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:8080
+      ASPNETCORE_ENVIRONMENT: Development
+    restart: unless-stopped
+
+volumes:
+  signal-cli-data:

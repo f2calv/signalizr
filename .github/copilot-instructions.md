@@ -1,0 +1,93 @@
+# Copilot Instructions
+
+## Shared Instructions
+
+Shared Copilot instructions, skills and prompts are maintained centrally in the
+[account-level .github repository](https://github.com/f2calv/.github). They are deliberately not
+copied here. Clone that repository and add it to the VS Code workspace, or link its instruction
+folders into `~/.copilot/`. If the shared files are unavailable, stop rather than guessing the
+conventions.
+
+Everything below is specific to this repository.
+
+## Current Baseline
+
+This repository is scaffolding only — repository conventions, no application code. Do not describe
+unimplemented behaviour as though it exists, in the README, in comments or in commit messages.
+
+## Open Source Boundary
+
+signalizr must be usable by a stranger with no access to any private repository.
+
+- Never reference a private repository, a deployment environment, a cluster, a namespace, a manifest
+  location or an operational procedure in tracked files, commits, issues or pull requests.
+- The Compose quickstart and the chart must both work from a clean clone with public inputs only.
+- Describe any private dependency generically and supply its coordinates through configuration.
+
+## Gateway, Not Proxy
+
+Use **gateway** consistently — repository, image, chart, documentation and code. signalizr does not
+forward the upstream API; it translates a named-channel contract onto it and owns account policy.
+
+- The send path is a **gateway endpoint**, the inbound path is a **dispatcher** or **fan-out**.
+- Do not add an arbitrary pass-through route to the upstream wrapper. Single ownership of the account
+  is the reason this service exists.
+
+## One Image, Two Roles
+
+A single image whose role is selected by feature flag, following the account's established pattern:
+a `FeatureNames` constant class whose valid names are derived by reflection, `IBgFeature`
+implementations registered inside `if (enabledFeatures.Contains(...))` blocks, and controllers gated
+with `[FeatureController(...)]` so a disabled feature returns 404 rather than a dependency-injection
+failure.
+
+- Keep `DemoClient` small enough that shipping it inside the product image stays justified. If it
+  grows its own dependencies or an inbound surface, split it out then.
+- Do not add a second image or a `samples/` demo project for the demo client.
+
+## Transports
+
+- **Send is REST.** It must remain callable with `curl` and from a webhook, without a generated
+  client.
+- **Inbound subscription is gRPC bidirectional streaming.** Bidirectional specifically so consumers
+  acknowledge messages; fire-and-forget streaming would reproduce the upstream's silent-drop defect
+  one layer up.
+- Do not duplicate the send surface across both transports.
+
+## Receive Ownership
+
+The upstream broadcast is lossy by construction — an unbuffered channel with a non-blocking send, so
+a consumer that is not parked in a receive misses the message silently.
+
+- Exactly one process owns the receive stream.
+- It must drain into a buffered queue and do **no** inline work. Group resolution, an outbound call
+  or dispatch inside the read loop will drop messages exactly as a naive consumer does.
+
+## Channel Resolution
+
+- Channels are declared by **name** and resolved to ids at startup; ids are never committed.
+- Group names are not unique. Fail loudly on ambiguity at startup rather than picking the first
+  match.
+- Re-resolve on a not-found failure instead of crash-looping.
+
+## Privacy
+
+- Phone numbers are personal data. They belong in a Secret or a gitignored local file, never in a
+  committed values file, and never in a log field, metric label or trace attribute — the number is
+  the sender on every outbound call, so naive request logging will capture it.
+- Resolved group ids are account-linked identifiers; treat them as sensitive.
+- Tests, fixtures, documentation and the Compose environment example use placeholders only.
+
+## Configuration
+
+Loading must be source-agnostic from the first commit: the same shape whether it arrives as a mounted
+file, a projected ConfigMap key or environment variables. A Kubernetes-aware code path would make the
+Compose target a fork that rots.
+
+## Build and Deploy Scripts
+
+`build.ps1`, `build.sh` and `deploy.ps1` are byte-identical across the account's repositories. Every
+repository-specific value is derived, not declared — the image name comes from the repository
+directory, the buildx builder name from the image name, and sibling dependencies from
+`Dockerfile.Debug`. Never reintroduce a hardcoded default; a change here must be synchronised across
+the sibling repositories and verified by hash.

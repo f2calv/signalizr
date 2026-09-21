@@ -1,0 +1,15 @@
+<Solution>
+  <Configurations>
+    <BuildType Name="Release" />
+  </Configurations>
+  <Folder Name="/signalizr/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/signalizr/">
+    <Project Path="src/CasCap.App.Server/CasCap.App.Server.csproj" />
+    <Project Path="src/CasCap.Signalizr.Tests/CasCap.Signalizr.Tests.csproj" />
+    <Project Path="src/CasCap.Signalizr/CasCap.Signalizr.csproj" />
+  </Folder>
+</Solution>

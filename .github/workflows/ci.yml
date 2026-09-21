@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+#Deny all permissions at workflow level; jobs grant only what they need.
+permissions: {}
+
+jobs:
+  lint:
+    uses: f2calv/gha-workflows/.github/workflows/lint.yml@v1
+    permissions:
+      contents: read
+
+  versioning:
+    uses: f2calv/gha-workflows/.github/workflows/gha-release-versioning.yml@v1
+    permissions:
+      contents: read
+    with:
+      tag-prefix: ''
+      tag-and-release: false
+
+  build:
+    needs: [versioning]
+    permissions:
+      contents: read
+    uses: f2calv/gha-workflows/.github/workflows/app-build-dotnet.yml@v1
+    with:
+      version: ${{ needs.versioning.outputs.version }}
+      solution-name: signalizr.Release.slnx
+      dotnet-test-args: '["--filter-not-trait", "Category=Integration"]'
+
+  image:
+    needs: [versioning, build]
+    permissions:
+      contents: read
+      packages: write #push to ghcr.io
+    uses: f2calv/gha-workflows/.github/workflows/container-image-build.yml@v1
+    with:
+      registry: ghcr.io/${{ github.repository_owner }}
+      tag: ${{ needs.versioning.outputs.version }}
+      #A pull request proves the image builds on every architecture without publishing it.
+      push-image: ${{ github.event_name != 'pull_request' }}
+      #The container starts a long-lived host, so the smoke test asserts the startup validation
+      #instead: an unknown feature name must fail fast rather than boot a misconfigured role.
+      smoke-test: |
+        ! docker run --rm -e CasCap__FeatureConfig__EnabledFeatures=NotAFeature $IMAGE
+
+  release:
+    needs: [lint, versioning, build, image]
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    uses: f2calv/gha-workflows/.github/workflows/gha-release-versioning.yml@v1
+    permissions:
+      contents: write
+    with:
+      semVer: ${{ needs.versioning.outputs.version }}
+      tag-prefix: ''
+      move-major-tag: false

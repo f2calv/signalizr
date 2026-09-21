@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/signalizr/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/signalizr/CasCap.Common/">
+    <Project Path="../CasCap.Common/src/CasCap.Common.Abstractions/CasCap.Common.Abstractions.csproj" />
+    <Project Path="../CasCap.Common/src/CasCap.Common.Configuration/CasCap.Common.Configuration.csproj" />
+    <Project Path="../CasCap.Common/src/CasCap.Common.Extensions/CasCap.Common.Extensions.csproj" />
+    <Project Path="../CasCap.Common/src/CasCap.Common.Logging.Serilog/CasCap.Common.Logging.Serilog.csproj" />
+    <Project Path="../CasCap.Common/src/CasCap.Common.Services/CasCap.Common.Services.csproj" />
+  </Folder>
+  <Folder Name="/signalizr/">
+    <Project Path="src/CasCap.App.Server/CasCap.App.Server.csproj" />
+    <Project Path="src/CasCap.Signalizr.Tests/CasCap.Signalizr.Tests.csproj" />
+    <Project Path="src/CasCap.Signalizr/CasCap.Signalizr.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+option csharp_namespace = "CasCap.Grpc";
+
+package signalizr.v1;
+
+// Inbound Signal messages, fanned out to subscribers.
+service Inbound {
+  // Bidirectional, not server-streaming, so a subscriber acknowledges each message. A
+  // fire-and-forget stream would let the server consider a message delivered the moment it was
+  // written to the socket, which reproduces the upstream wrapper's silent-drop defect one layer
+  // up: the very thing this service exists to fix.
+  rpc Subscribe(stream SubscribeRequest) returns (stream InboundMessage);
+}
+
+message SubscribeRequest {
+  oneof payload {
+    // Sent once, before anything else, to identify the subscriber in logs and metrics.
+    Hello hello = 1;
+    // Sent per delivered message.
+    Ack ack = 2;
+  }
+}
+
+message Hello {
+  // Free-form and non-unique; used for diagnostics only, never for routing.
+  string subscriber_name = 1;
+}
+
+message Ack {
+  string delivery_id = 1;
+}
+
+message InboundMessage {
+  // Unique per delivery attempt to one subscriber, not per Signal message: two subscribers
+  // receiving the same message each acknowledge their own delivery.
+  string delivery_id = 1;
+
+  // The configured channel name, or empty when the message did not arrive on a known channel.
+  string channel = 2;
+
+  // The sender's Signal identifier. Personal data: never log it, never put it in a metric label
+  // or a trace attribute.
+  string sender = 3;
+
+  string message = 4;
+
+  // Milliseconds since the Unix epoch, as supplied by the Signal server.
+  int64 timestamp = 5;
+}

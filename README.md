@@ -97,8 +97,43 @@ loop and lose messages upstream, where nothing can count them; dropping loses th
 count is reported. It drops the oldest, on the basis that a stale message is worth less than a
 current one. Size it with `CasCap:ReceiverConfig:QueueCapacity`.
 
-The consumer that fans messages out over gRPC is not implemented yet. Until it is, the queue fills
-and drops, which the shutdown log reports.
+A separate dispatcher drains that queue and fans each message out to connected subscribers. Keeping
+it separate is the point: resolving the channel and delivering to subscribers is per-message work,
+and doing it in the receive loop would stop the upstream being read.
+
+## Subscribing
+
+`Subscribe` is a bidirectional stream on `signalizr.v1.Inbound`. A subscriber sends `Hello` once,
+then an `Ack` per message; the server streams `InboundMessage`.
+
+Bidirectional rather than server-streaming because the acknowledgement is what makes delivery
+observable. A fire-and-forget stream would let the server treat a message as delivered the moment it
+was written to the socket, which is the upstream wrapper's defect reproduced one layer up.
+
+Two limits protect the dispatcher from one slow subscriber, and both fail loudly:
+
+| Setting | Effect when exceeded |
+| --- | --- |
+| `CasCap:SubscriberConfig:QueueCapacity` | The subscriber is disconnected rather than having messages dropped |
+| `CasCap:SubscriberConfig:MaxOutstanding` | Delivery pauses until acknowledgements arrive |
+| `CasCap:SubscriberConfig:AckTimeoutMs` | The stream ends with `DEADLINE_EXCEEDED` |
+
+Each subscriber receives its own `delivery_id` for the same message, so one subscriber's
+acknowledgement can never clear another's.
+
+### Ports
+
+gRPC listens on its own port. A plaintext endpoint cannot negotiate protocols, because there is no
+ALPN without TLS, so one port answers HTTP/1.1 or HTTP/2 but never both — sharing one fails at the
+first gRPC call with `HTTP_1_1_REQUIRED`.
+
+| Port | Protocol | Serves |
+| --- | --- | --- |
+| `CasCap:GrpcHostConfig:Http1Port`, default `8080` | HTTP/1.1 | REST and the health probes |
+| `CasCap:GrpcHostConfig:Http2Port`, default `5001` | HTTP/2 | gRPC |
+
+Both are configurable so several applications can run side by side locally. Only the Receiver role
+opens the gRPC port, because only it holds the inbound stream.
 
 ## Deployment
 

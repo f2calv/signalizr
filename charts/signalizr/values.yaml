@@ -87,6 +87,12 @@ signalizr:
     port: 80
     containerPort: 8080
     protocol: TCP
+  # gRPC needs its own port: a plaintext endpoint cannot negotiate protocols without TLS, so one
+  # port answers HTTP/1.1 or HTTP/2, never both. Sharing fails with HTTP_1_1_REQUIRED.
+  extraPorts:
+    - name: grpc
+      port: 5001
+      containerPort: 5001
   envFieldRef:
     AppConfig__NodeName: spec.nodeName
     AppConfig__PodName: metadata.name

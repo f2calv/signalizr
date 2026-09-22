@@ -14,6 +14,14 @@ public interface IChannelResolver
     /// <returns><see langword="true"/> when the channel is configured and resolved.</returns>
     bool TryGetGroupId(string channelName, out string groupId);
 
+    /// <summary>Looks up the channel name for a Signal group id.</summary>
+    /// <remarks>
+    /// The inbound direction. A message arriving from an unconfigured group has no channel, which
+    /// is normal rather than an error: the account can belong to groups this deployment ignores.
+    /// </remarks>
+    /// <returns><see langword="true"/> when the group maps to a configured channel.</returns>
+    bool TryGetChannelName(string groupId, out string channelName);
+
     /// <summary>
     /// Resolves every configured channel against the account's groups, replacing the current map.
     /// </summary>

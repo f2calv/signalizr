@@ -6,6 +6,7 @@ using CasCap.Extensions;
 using CasCap.Models;
 using CasCap.Services;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,8 +31,14 @@ if (enabledFeatures.Contains(FeatureNames.Receiver))
 {
     builder.Services.Configure<ReceiverConfig>(
         builder.Configuration.GetSection(ReceiverConfig.ConfigurationSectionName));
+    builder.Services.Configure<SubscriberConfig>(
+        builder.Configuration.GetSection(SubscriberConfig.ConfigurationSectionName));
     builder.Services.AddSingleton<IInboundMessageQueue, InboundMessageQueue>();
+    builder.Services.AddSingleton<IInboundSubscriberRegistry, InboundSubscriberRegistry>();
     builder.Services.AddSingleton<IBgFeature, ReceiverBgService>();
+    // Separate from the receive loop: per-message work belongs here, where it cannot stop the
+    // upstream being read.
+    builder.Services.AddSingleton<IBgFeature, DispatcherBgService>();
 }
 
 //Only the roles that talk to Signal need an account, so a DemoClient container needs no phone number.
@@ -56,9 +63,37 @@ builder.Services.AddHealthChecks();
 // for one role would throw on activation elsewhere. Gating removes it from routing entirely.
 builder.Services.AddControllers().AddFeatureGatedControllers(enabledFeatures);
 
+// Only the receiver holds the inbound stream, so only it serves subscriptions and only it needs
+// the second endpoint.
+var servesGrpc = enabledFeatures.Contains(FeatureNames.Receiver);
+if (servesGrpc)
+{
+    var grpcHostConfig = builder.Configuration
+        .GetSection(GrpcHostConfig.ConfigurationSectionName)
+        .Get<GrpcHostConfig>() ?? new GrpcHostConfig();
+
+    builder.Services.AddGrpc();
+
+    // A plaintext port cannot negotiate protocols: without TLS there is no ALPN, so one endpoint
+    // answers HTTP/1.1 or HTTP/2, not both. Sharing one fails at the first gRPC call with
+    // HTTP_1_1_REQUIRED, which is why REST and gRPC get a port each.
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(grpcHostConfig.Http1Port, listen => listen.Protocols = HttpProtocols.Http1);
+        options.ListenAnyIP(grpcHostConfig.Http2Port, listen => listen.Protocols = HttpProtocols.Http2);
+    });
+
+    logger.LogInformation("{AppName} serving HTTP/1.1 on {Http1Port} and gRPC on {Http2Port}",
+        AppDomain.CurrentDomain.FriendlyName, grpcHostConfig.Http1Port, grpcHostConfig.Http2Port);
+}
+
 var app = builder.Build();
 
 app.MapControllers();
+
+if (servesGrpc)
+    app.MapGrpcService<InboundGrpcService>();
+
 app.MapHealthChecks("/healthz");
 
 // One endpoint per Kubernetes probe type, each running only the checks carrying that tag.

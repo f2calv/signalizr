@@ -80,6 +80,36 @@ public class DispatcherMappingTests
 
         // Sending to either name is unambiguous, receiving is not, so the inbound name is chosen
         // by ordinal order rather than by dictionary enumeration order.
-        Assert.Equal("zulu", ChannelResolver.Invert(resolved)[GroupId]);
+        Assert.Equal("zulu", ChannelResolver.Invert(resolved, [])[GroupId]);
+    }
+
+    [Fact]
+    public void Inversion_indexes_both_group_identifier_forms()
+    {
+        // GET /v1/groups returns the prefixed id, which sending needs, but an inbound message
+        // carries the unprefixed internal id. Indexing only the first means nothing ever resolves.
+        const string InternalId = "dGVzdA==";
+        var groups = new List<SignalGroup>
+        {
+            new() { Id = GroupId, Name = "CasCap.Signalizr System", InternalId = InternalId }
+        };
+        var resolved = new Dictionary<string, string> { ["system"] = GroupId };
+
+        var inverted = ChannelResolver.Invert(resolved, groups);
+
+        Assert.Equal("system", inverted[GroupId]);
+        Assert.Equal("system", inverted[InternalId]);
+    }
+
+    [Fact]
+    public void Inversion_tolerates_a_group_without_an_internal_id()
+    {
+        var groups = new List<SignalGroup> { new() { Id = GroupId, Name = "system" } };
+        var resolved = new Dictionary<string, string> { ["system"] = GroupId };
+
+        var inverted = ChannelResolver.Invert(resolved, groups);
+
+        Assert.Equal("system", inverted[GroupId]);
+        Assert.Single(inverted);
     }
 }

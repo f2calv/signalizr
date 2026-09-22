@@ -21,6 +21,12 @@ public sealed class DispatcherBgService(
 
         await foreach (var message in queue.DequeueAllAsync(cancellationToken).ConfigureAwait(false))
         {
+            // Receipts, typing indicators and syncs of the account's own sent messages carry no
+            // data message. Delivering them as empty messages would make every consumer filter
+            // them out, so they stop here.
+            if (message.Envelope.DataMessage is null)
+                continue;
+
             var delivery = CreateDelivery(message, channelResolver);
 
             foreach (var failed in subscribers.Broadcast(delivery))

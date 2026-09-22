@@ -85,17 +85,23 @@ public class InboundMessageQueueTests
     public async Task A_reader_waits_for_a_message_rather_than_spinning()
     {
         var queue = CreateQueue(10);
-        var reader = Task.Run(async () =>
+        var enumerator = queue.DequeueAllAsync(TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        try
         {
-            await foreach (var message in queue.DequeueAllAsync(TestContext.Current.CancellationToken))
-                return message.Envelope.Timestamp;
-            return null;
-        }, TestContext.Current.CancellationToken);
+            // An empty queue must leave the reader parked, not returning false or spinning.
+            var pending = enumerator.MoveNextAsync();
+            Assert.False(pending.IsCompleted);
 
-        Assert.False(reader.IsCompleted);
+            queue.TryEnqueue(CreateMessage(42));
 
-        queue.TryEnqueue(CreateMessage(42));
-
-        Assert.Equal(42L, await reader);
+            Assert.True(await pending);
+            Assert.Equal(42L, enumerator.Current.Envelope.Timestamp);
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
     }
 }

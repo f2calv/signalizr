@@ -1,3 +1,4 @@
+using CasCap.Abstractions;
 using CasCap.Common.Abstractions;
 using CasCap.Common.Extensions;
 using CasCap.Constants;
@@ -30,7 +31,12 @@ if (enabledFeatures.Contains(FeatureNames.Receiver))
 
 //Only the roles that talk to Signal need an account, so a DemoClient container needs no phone number.
 if (enabledFeatures.Contains(FeatureNames.Gateway) || enabledFeatures.Contains(FeatureNames.Receiver))
+{
     builder.Services.AddSignalCli(builder.Configuration);
+    builder.Services.Configure<ChannelConfig>(
+        builder.Configuration.GetSection(ChannelConfig.ConfigurationSectionName));
+    builder.Services.AddSingleton<IChannelResolver, ChannelResolver>();
+}
 
 if (enabledFeatures.Contains(FeatureNames.DemoClient))
     builder.Services.AddSingleton<IBgFeature, DemoClientBgService>();

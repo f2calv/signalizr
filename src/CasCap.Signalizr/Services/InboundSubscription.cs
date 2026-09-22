@@ -62,6 +62,9 @@ public sealed class InboundSubscription : IDisposable
         }
         catch (SemaphoreFullException)
         {
+            // A duplicated acknowledgement. Swallowed on purpose: releasing beyond the initial
+            // count would grow the budget rather than restore it, which is the one outcome worse
+            // than ignoring the duplicate.
         }
     }
 

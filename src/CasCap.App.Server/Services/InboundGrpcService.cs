@@ -59,6 +59,8 @@ public sealed class InboundGrpcService(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            // The client went away or the host is shutting down. Both are ordinary ends to a
+            // long-lived subscription, not failures to report.
         }
         finally
         {
@@ -82,6 +84,7 @@ public sealed class InboundGrpcService(
         }
         catch (OperationCanceledException)
         {
+            // Cancellation ends the acknowledgement reader in step with the delivery loop.
         }
         catch (Exception ex)
         {

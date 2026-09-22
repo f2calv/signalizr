@@ -19,6 +19,14 @@
     <ProjectReference Include="..\CasCap.Signalizr\CasCap.Signalizr.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\inbound.proto" GrpcServices="Server" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(Configuration)'=='Release'">
     <PackageReference Include="CasCap.Common.AspNetCore" />
     <PackageReference Include="CasCap.Common.Configuration" />

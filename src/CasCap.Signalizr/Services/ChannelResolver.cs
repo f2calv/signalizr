@@ -10,12 +10,20 @@ public sealed class ChannelResolver(
     private IReadOnlyDictionary<string, string> _resolved =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+    // Group ids are opaque and case-sensitive, unlike the channel names callers type.
+    private IReadOnlyDictionary<string, string> _byGroupId =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <inheritdoc/>
     public IReadOnlyCollection<string> ChannelNames => Volatile.Read(ref _resolved).Keys.ToArray();
 
     /// <inheritdoc/>
     public bool TryGetGroupId(string channelName, out string groupId)
         => Volatile.Read(ref _resolved).TryGetValue(channelName, out groupId!);
+
+    /// <inheritdoc/>
+    public bool TryGetChannelName(string groupId, out string channelName)
+        => Volatile.Read(ref _byGroupId).TryGetValue(groupId, out channelName!);
 
     /// <inheritdoc/>
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
@@ -29,6 +37,7 @@ public sealed class ChannelResolver(
 
         var resolved = Resolve(channelConfig.Value.Channels, groups);
         Volatile.Write(ref _resolved, resolved);
+        Volatile.Write(ref _byGroupId, Invert(resolved));
 
         // Group ids are account-linked identifiers, so log the channel names only.
         logger.LogInformation("{ClassName} resolved {ChannelCount} channel(s): {Channels}",
@@ -75,5 +84,21 @@ public sealed class ChannelResolver(
                 $"Channel resolution failed: {string.Join("; ", failures)}.");
 
         return resolved;
+    }
+
+    /// <summary>Builds the group-id to channel-name index used by the inbound direction.</summary>
+    /// <remarks>
+    /// Two channel names may point at the same group, which <see cref="Resolve"/> permits because
+    /// sending to either is unambiguous. Inbound is not: the last name wins, so the mapping is
+    /// deterministic by ordinal name order rather than by dictionary enumeration order.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, string> Invert(IReadOnlyDictionary<string, string> resolved)
+    {
+        var inverted = new Dictionary<string, string>(resolved.Count, StringComparer.Ordinal);
+
+        foreach (var (channelName, groupId) in resolved.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            inverted[groupId] = channelName;
+
+        return inverted;
     }
 }

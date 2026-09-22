@@ -3,6 +3,8 @@
 
 # explictly add exceptions for required files/paths
 !src/**/*.cs
+# protobuf codegen runs during publish, so the contract must be in the build context
+!src/**/*.proto
 !**/*.csproj
 !**/appsettings.*
 !global.json

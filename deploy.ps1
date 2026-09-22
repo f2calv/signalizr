@@ -620,9 +620,12 @@ function Publish-ConfiguredDeploymentChart {
         -OnlyCharts:$OnlyCharts -ChartPath $ChartPath -ChartRepository $ChartRepository `
         -DashboardChartPath $DashboardChartPath -DashboardChartRepository $DashboardChartRepository `
         -ChartVersion $ChartVersion
-    if ($OnlyCharts) { Test-DashboardChart -Chart $deploymentChart }
+    # Out-Host, not a bare call: helm writes to stdout, which PowerShell folds into this function's
+    # output. Without it the caller receives helm's chatter alongside the chart object and reading
+    # .Version member-enumerates onto strings.
+    if ($OnlyCharts) { Test-DashboardChart -Chart $deploymentChart | Out-Host }
     Publish-DeploymentChart -Chart $deploymentChart -ChartRegistry $ChartRegistry `
-        -DeploymentName $DeploymentName -Timestamp $Timestamp -Tag $Tag -OnlyCharts:$OnlyCharts
+        -DeploymentName $DeploymentName -Timestamp $Timestamp -Tag $Tag -OnlyCharts:$OnlyCharts | Out-Host
     return $deploymentChart
 }
 

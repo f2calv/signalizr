@@ -65,6 +65,7 @@ jobs:
       image-registry: ghcr.io/${{ github.repository_owner }}
       image-repository: signalizr
       chart-registry: ghcr.io
+      chart-registry-username: ${{ github.repository_owner }}
       chart-repository: ${{ github.repository_owner }}/signalizr/charts
       chart-path: ./charts/signalizr
       #A pull request proves the chart lints and packages without publishing it.

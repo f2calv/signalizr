@@ -54,6 +54,34 @@ A single container image, with the role selected by feature flag:
 
 Send is not duplicated across both transports.
 
+## Sending
+
+The send surface is addressed by channel name. A caller never names a group, a group id or a
+sender number, because the gateway owns the account.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/channels/system/messages \
+  -H 'content-type: application/json' \
+  -d '{"message":"deployment finished"}'
+```
+
+```json
+{ "channel": "system", "timestamp": "1758518400000" }
+```
+
+`GET /api/v1/channels` lists the channels currently resolved to a group, which is the quickest way
+to check configuration. It returns names only.
+
+| Status | Meaning |
+| --- | --- |
+| `200` | Sent. The timestamp identifies the message for a later reaction, receipt or edit |
+| `400` | The message was missing or empty |
+| `404` | No such channel, or the role serving this request is not the gateway |
+| `502` | The signal-cli wrapper could not be reached; retry |
+
+`404` covers both an unknown channel and a non-gateway role, because a pod that does not run the
+gateway does not route these paths at all. The unknown-channel body lists the configured channels.
+
 ## Deployment
 
 Two first-class targets, sharing one configuration shape:

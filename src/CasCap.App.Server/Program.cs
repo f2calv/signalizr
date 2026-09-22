@@ -38,14 +38,22 @@ if (enabledFeatures.Contains(FeatureNames.Gateway) || enabledFeatures.Contains(F
     builder.Services.AddSingleton<IChannelResolver, ChannelResolver>();
 }
 
+if (enabledFeatures.Contains(FeatureNames.Gateway))
+    builder.Services.AddSingleton<IMessageGateway, MessageGateway>();
+
 if (enabledFeatures.Contains(FeatureNames.DemoClient))
     builder.Services.AddSingleton<IBgFeature, DemoClientBgService>();
 
 builder.Services.AddFeatureFlagService(enabledFeatures, addGitMetadataService: true);
 builder.Services.AddHealthChecks();
 
+// Every controller compiles into every image, so a controller whose dependency is registered only
+// for one role would throw on activation elsewhere. Gating removes it from routing entirely.
+builder.Services.AddControllers().AddFeatureGatedControllers(enabledFeatures);
+
 var app = builder.Build();
 
+app.MapControllers();
 app.MapHealthChecks("/healthz");
 
 // One endpoint per Kubernetes probe type, each running only the checks carrying that tag.

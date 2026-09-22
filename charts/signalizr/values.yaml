@@ -104,6 +104,10 @@ signalizr:
     # Gateway role separately rather than raising replicaCount here.
     CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
     CasCap__SignalCliConfig__BaseAddress: http://signalcli:80
+    # v1/health returns 204, but the client library's expected-status default is [200] and it does
+    # not expose that property for binding, so readiness could never pass. v1/about returns 200 and
+    # answers only once the daemon has loaded account state, which is the same signal.
+    CasCap__SignalCliConfig__HealthCheckUri: v1/about
   # The phone number is personal data and must arrive from a Secret, never from values.
   # Create the Secret out of band with a key matching the environment variable name:
   #   kubectl create secret generic signalizr \

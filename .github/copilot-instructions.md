@@ -16,9 +16,13 @@ The gateway sends over REST, owns the inbound receive stream and fans it out ove
 gRPC subscription. The container image, Helm chart and `CasCap.Signalizr.Client` package all build
 and are exercised in CI.
 
-Nothing has yet run against a registered Signal account, so every Signal-facing path is untested in
-practice. Do not describe it as proven, and do not describe the unbuilt parts — the MCP role, and
-any redelivery or persistence — as though they exist.
+Both directions are proven against one registered account, deployed in a cluster. Scale, long-run
+stability, multiple subscribers and recovery from a wrapper outage are not. Do not describe the
+unbuilt parts — the MCP role, and any redelivery or persistence — as though they exist.
+
+The gateway links to an existing personal account rather than owning a dedicated number, so the
+account's own messages arrive as `syncMessage.sentMessage` rather than `dataMessage`. Anything that
+filters inbound envelopes must handle both, or the gateway goes blind to its owner.
 
 ## Open Source Boundary
 

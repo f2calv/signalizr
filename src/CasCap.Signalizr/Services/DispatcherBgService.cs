@@ -21,13 +21,12 @@ public sealed class DispatcherBgService(
 
         await foreach (var message in queue.DequeueAllAsync(cancellationToken).ConfigureAwait(false))
         {
-            // Receipts, typing indicators and syncs of the account's own sent messages carry no
-            // data message. Delivering them as empty messages would make every consumer filter
-            // them out, so they stop here.
-            if (message.Envelope.DataMessage is null)
-                continue;
-
             var delivery = CreateDelivery(message, channelResolver);
+
+            // Receipts and typing indicators carry no content at all. Skipping them here saves
+            // every consumer from filtering out empty messages.
+            if (delivery is null)
+                continue;
 
             foreach (var failed in subscribers.Broadcast(delivery))
             {
@@ -46,10 +45,23 @@ public sealed class DispatcherBgService(
     /// <remarks>
     /// Separated from the loop so the mapping is testable without a queue or a Signal account. The
     /// identifier is replaced per subscriber during fan-out.
+    /// <para>
+    /// Content comes from the data message, or from a sync message's sent message. The second case
+    /// is not an edge case here: the gateway runs as a <b>linked device</b> on an existing account,
+    /// so anything the account's own primary device sends arrives as a sync rather than as a data
+    /// message. Ignoring those would make the gateway blind to everything its owner types.
+    /// </para>
     /// </remarks>
-    public static InboundDelivery CreateDelivery(SignalReceivedMessage message, IChannelResolver channelResolver)
+    /// <returns><see langword="null"/> when the envelope carries no content, such as a receipt or
+    /// a typing indicator.</returns>
+    public static InboundDelivery? CreateDelivery(
+        SignalReceivedMessage message, IChannelResolver channelResolver)
     {
-        var groupId = message.Envelope.DataMessage?.GroupInfo?.GroupId;
+        var content = message.Envelope.DataMessage ?? message.Envelope.SyncMessage?.SentMessage;
+        if (content is null)
+            return null;
+
+        var groupId = content.GroupInfo?.GroupId;
 
         string? channel = null;
         if (groupId is not null && channelResolver.TryGetChannelName(groupId, out var resolved))
@@ -60,8 +72,8 @@ public sealed class DispatcherBgService(
             DeliveryId = string.Empty,
             Channel = channel,
             Sender = message.Envelope.Source ?? message.Envelope.SourceNumber,
-            Message = message.Envelope.DataMessage?.Message,
-            Timestamp = message.Envelope.DataMessage?.Timestamp ?? message.Envelope.Timestamp
+            Message = content.Message,
+            Timestamp = content.Timestamp ?? message.Envelope.Timestamp
         };
     }
 }

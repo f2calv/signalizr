@@ -82,6 +82,24 @@ to check configuration. It returns names only.
 `404` covers both an unknown channel and a non-gateway role, because a pod that does not run the
 gateway does not route these paths at all. The unknown-channel body lists the configured channels.
 
+## Receiving
+
+The upstream broadcast is lossy by construction: an unbuffered channel with a non-blocking send, so
+a consumer that is not parked inside a receive at that instant misses the message, with no retry and
+no error. Everything below follows from that.
+
+One process owns the receive stream. Its loop does nothing per message except put it on a bounded
+queue — no resolution, no outbound call, no dispatch — because any work done there happens while the
+upstream is not being read.
+
+The queue drops rather than blocks when full. Blocking the writer would push back onto the receive
+loop and lose messages upstream, where nothing can count them; dropping loses them here, where the
+count is reported. It drops the oldest, on the basis that a stale message is worth less than a
+current one. Size it with `CasCap:ReceiverConfig:QueueCapacity`.
+
+The consumer that fans messages out over gRPC is not implemented yet. Until it is, the queue fills
+and drops, which the shutdown log reports.
+
 ## Deployment
 
 Two first-class targets, sharing one configuration shape:

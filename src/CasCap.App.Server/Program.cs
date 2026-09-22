@@ -27,7 +27,12 @@ if (enabledFeatures.Contains(FeatureNames.Gateway))
     builder.Services.AddSingleton<IBgFeature, GatewayBgService>();
 
 if (enabledFeatures.Contains(FeatureNames.Receiver))
+{
+    builder.Services.Configure<ReceiverConfig>(
+        builder.Configuration.GetSection(ReceiverConfig.ConfigurationSectionName));
+    builder.Services.AddSingleton<IInboundMessageQueue, InboundMessageQueue>();
     builder.Services.AddSingleton<IBgFeature, ReceiverBgService>();
+}
 
 //Only the roles that talk to Signal need an account, so a DemoClient container needs no phone number.
 if (enabledFeatures.Contains(FeatureNames.Gateway) || enabledFeatures.Contains(FeatureNames.Receiver))

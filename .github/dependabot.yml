@@ -36,3 +36,15 @@ updates:
     schedule:
       interval: weekly
       time: "04:00"
+
+  - package-ecosystem: devcontainers
+    directory: /
+    schedule:
+      interval: weekly
+      time: "04:00"
+
+  - package-ecosystem: helm
+    directory: /charts/signalizr
+    schedule:
+      interval: weekly
+      time: "04:00"

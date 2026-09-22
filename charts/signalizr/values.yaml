@@ -104,6 +104,10 @@ signalizr:
     # Gateway role separately rather than raising replicaCount here.
     CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
     CasCap__SignalCliConfig__BaseAddress: http://signalcli:80
+    # v1/health returns 204, but the client library's expected-status default is [200] and it does
+    # not expose that property for binding, so readiness could never pass. v1/about returns 200 and
+    # answers only once the daemon has loaded account state, which is the same signal.
+    CasCap__SignalCliConfig__HealthCheckUri: v1/about
   # The phone number is personal data and must arrive from a Secret, never from values.
   # Create the Secret out of band with a key matching the environment variable name:
   #   kubectl create secret generic signalizr \
@@ -158,6 +162,10 @@ demo:
   envVars:
     CasCap__FeatureConfig__EnabledFeatures: DemoClient
     CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:80
+    # The gateway serves gRPC on its own port, so this is not derivable from BaseAddress.
+    # Left unset it would default to localhost and the demo would subscribe to itself.
+    CasCap__SignalizrClientConfig__GrpcAddress: http://signalizr:5001
+    CasCap__SignalizrClientConfig__SubscriberName: signalizr-demo
   # The demo client serves no traffic, so it needs no readiness gate; liveness stays on the
   # process-only endpoint.
   startupProbe: false

@@ -12,21 +12,22 @@ public class MessageGatewayTests
 {
     private const string Number = "+10000000000";
     private const string GroupId = "group.dGVzdA==";
+    private const string Text = "hello";
 
     [Fact]
     public void CreateRequest_AddressesTheGroupAndNothingElse()
     {
-        var request = MessageGateway.CreateRequest(Number, GroupId, "hello");
+        var request = MessageGateway.CreateRequest(Number, GroupId, Text);
 
         Assert.Equal(Number, request.Number);
-        Assert.Equal("hello", request.Message);
+        Assert.Equal(Text, request.Message);
         Assert.Equal([GroupId], request.Recipients);
     }
 
     [Fact]
     public void CreateRequest_LeavesEveryOptionalUpstreamFieldUnset()
     {
-        var request = MessageGateway.CreateRequest(Number, GroupId, "hello");
+        var request = MessageGateway.CreateRequest(Number, GroupId, Text);
 
         // The gateway owns the account, so a caller cannot reach these. If one ever becomes
         // settable it must be a deliberate contract change rather than a default that drifted in.
@@ -45,7 +46,7 @@ public class MessageGatewayTests
     }
 
     [Theory]
-    [InlineData("hello")]
+    [InlineData(Text)]
     [InlineData("multi\nline")]
     [InlineData("  leading and trailing  ")]
     [InlineData("emoji and punctuation: hello, world!")]
@@ -61,8 +62,8 @@ public class MessageGatewayTests
     [Fact]
     public void CreateRequest_GivesEachRequestItsOwnTrackingId()
     {
-        var first = MessageGateway.CreateRequest(Number, GroupId, "hello");
-        var second = MessageGateway.CreateRequest(Number, GroupId, "hello");
+        var first = MessageGateway.CreateRequest(Number, GroupId, Text);
+        var second = MessageGateway.CreateRequest(Number, GroupId, Text);
 
         Assert.NotEqual(first.Id, second.Id);
     }

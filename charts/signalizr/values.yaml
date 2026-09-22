@@ -108,6 +108,12 @@ signalizr:
     # not expose that property for binding, so readiness could never pass. v1/about returns 200 and
     # answers only once the daemon has loaded account state, which is the same signal.
     CasCap__SignalCliConfig__HealthCheckUri: v1/about
+    # Channels are declared by Signal group NAME and resolved to ids at startup, so no
+    # account-linked identifier is committed. Matching is exact and ordinal: a name that does not
+    # match a group on the account fails startup rather than routing messages somewhere unintended.
+    # Override these with your own group names.
+    CasCap__ChannelConfig__Channels__system: CasCap.Signalizr System
+    CasCap__ChannelConfig__Channels__demo: CasCap.Signalizr Demo
   # The phone number is personal data and must arrive from a Secret, never from values.
   # Create the Secret out of band with a key matching the environment variable name:
   #   kubectl create secret generic signalizr \

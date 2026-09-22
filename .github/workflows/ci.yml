@@ -71,6 +71,10 @@ jobs:
       #The umbrella chart owns no top-level image value; each workload alias carries its own, so
       #chart-testing must not inject --set image.tag.
       has-image: false
+      #Skipped because the shared workflow mishandles both branches of its chart-testing arguments:
+      #with has-image true helm lint receives '--set image.tag=x' as one argv, and with it false the
+      #empty array expands to a stray argument that swallows the next flag. helm lint still runs.
+      chart-testing-cli-command: skip
       #A pull request proves the chart lints and packages without publishing it.
       push-chart: ${{ github.event_name != 'pull_request' }}
 

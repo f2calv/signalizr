@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>CasCap.Signalizr.Client</PackageId>
+    <Description>Client for the signalizr gateway: send to a named channel over REST, subscribe to inbound messages over gRPC.</Description>
+    <PackageTags>signal;messaging;grpc;gateway</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Net.ClientFactory" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
+    <!-- Build-time only: Grpc.AspNetCore brings the compiler on the server side, but a client
+         package has to ask for it explicitly. -->
+    <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- The published contract lives here and is generated exactly once. "Both" rather than
+       "Client" because the server consumes these same stubs: generating them again in the server
+       project produces duplicate types (CS0436). The unused server base class costs a few KB and
+       removes any chance of the two halves drifting apart. -->
+  <ItemGroup>
+    <Protobuf Include="Protos\inbound.proto" GrpcServices="Both" />
+  </ItemGroup>
+
+</Project>

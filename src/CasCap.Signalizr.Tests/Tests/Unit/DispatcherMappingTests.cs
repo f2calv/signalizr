@@ -36,10 +36,56 @@ public class DispatcherMappingTests
     {
         var delivery = DispatcherBgService.CreateDelivery(CreateMessage(GroupId), Resolver);
 
+        Assert.NotNull(delivery);
         Assert.Equal("system", delivery.Channel);
         Assert.Equal("hello", delivery.Message);
         Assert.Equal(42, delivery.Timestamp);
         Assert.Equal("+10000000000", delivery.Sender);
+    }
+
+    [Fact]
+    public void A_message_the_account_sent_itself_is_delivered()
+    {
+        // The gateway is a linked device, so anything the owner types on their primary device
+        // arrives as a sync rather than a data message. Ignoring these would make the gateway
+        // blind to its own owner.
+        var message = new SignalReceivedMessage
+        {
+            Envelope = new SignalEnvelope
+            {
+                Source = "+10000000000",
+                Timestamp = 1,
+                SyncMessage = new SignalSyncMessage
+                {
+                    SentMessage = new SignalDataMessage
+                    {
+                        Message = "typed on my phone",
+                        Timestamp = 99,
+                        GroupInfo = new SignalGroupInfo { GroupId = GroupId }
+                    }
+                }
+            }
+        };
+
+        var delivery = DispatcherBgService.CreateDelivery(message, Resolver);
+
+        Assert.NotNull(delivery);
+        Assert.Equal("system", delivery.Channel);
+        Assert.Equal("typed on my phone", delivery.Message);
+        Assert.Equal(99, delivery.Timestamp);
+    }
+
+    [Fact]
+    public void An_envelope_with_no_content_is_not_delivered()
+    {
+        // A receipt or typing indicator. Delivering it as an empty message would make every
+        // consumer filter it out.
+        var message = new SignalReceivedMessage
+        {
+            Envelope = new SignalEnvelope { Source = "+10000000000", Timestamp = 1 }
+        };
+
+        Assert.Null(DispatcherBgService.CreateDelivery(message, Resolver));
     }
 
     [Fact]
@@ -48,6 +94,7 @@ public class DispatcherMappingTests
         // Normal, not an error: the account may belong to groups this deployment ignores.
         var delivery = DispatcherBgService.CreateDelivery(CreateMessage("group.b3RoZXI="), Resolver);
 
+        Assert.NotNull(delivery);
         Assert.Null(delivery.Channel);
         Assert.Equal("hello", delivery.Message);
     }
@@ -57,6 +104,7 @@ public class DispatcherMappingTests
     {
         var delivery = DispatcherBgService.CreateDelivery(CreateMessage(groupId: null), Resolver);
 
+        Assert.NotNull(delivery);
         Assert.Null(delivery.Channel);
     }
 
@@ -66,6 +114,7 @@ public class DispatcherMappingTests
         // Left empty on purpose: the registry stamps one identifier per subscriber.
         var delivery = DispatcherBgService.CreateDelivery(CreateMessage(GroupId), Resolver);
 
+        Assert.NotNull(delivery);
         Assert.Equal(string.Empty, delivery.DeliveryId);
     }
 

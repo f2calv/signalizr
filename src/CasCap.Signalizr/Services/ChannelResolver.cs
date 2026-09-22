@@ -37,7 +37,7 @@ public sealed class ChannelResolver(
 
         var resolved = Resolve(channelConfig.Value.Channels, groups);
         Volatile.Write(ref _resolved, resolved);
-        Volatile.Write(ref _byGroupId, Invert(resolved));
+        Volatile.Write(ref _byGroupId, Invert(resolved, groups));
 
         // Group ids are account-linked identifiers, so log the channel names only.
         logger.LogInformation("{ClassName} resolved {ChannelCount} channel(s): {Channels}",
@@ -88,16 +88,35 @@ public sealed class ChannelResolver(
 
     /// <summary>Builds the group-id to channel-name index used by the inbound direction.</summary>
     /// <remarks>
+    /// Indexed under both identifier forms the wrapper uses. <c>GET /v1/groups</c> returns the
+    /// prefixed <c>group.&lt;base64&gt;</c> id, which is what sending requires, but an inbound
+    /// message carries the unprefixed internal id. Indexing only the first means no inbound message
+    /// ever resolves to a channel.
+    /// <para>
     /// Two channel names may point at the same group, which <see cref="Resolve"/> permits because
     /// sending to either is unambiguous. Inbound is not: the last name wins, so the mapping is
     /// deterministic by ordinal name order rather than by dictionary enumeration order.
+    /// </para>
     /// </remarks>
-    public static IReadOnlyDictionary<string, string> Invert(IReadOnlyDictionary<string, string> resolved)
+    public static IReadOnlyDictionary<string, string> Invert(
+        IReadOnlyDictionary<string, string> resolved, IReadOnlyList<SignalGroup> groups)
     {
-        var inverted = new Dictionary<string, string>(resolved.Count, StringComparer.Ordinal);
+        var internalIds = new Dictionary<string, string>(groups.Count, StringComparer.Ordinal);
+        foreach (var group in groups)
+        {
+            if (!string.IsNullOrEmpty(group.InternalId))
+                internalIds[group.Id] = group.InternalId;
+        }
+
+        var inverted = new Dictionary<string, string>(resolved.Count * 2, StringComparer.Ordinal);
 
         foreach (var (channelName, groupId) in resolved.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
             inverted[groupId] = channelName;
+
+            if (internalIds.TryGetValue(groupId, out var internalId))
+                inverted[internalId] = channelName;
+        }
 
         return inverted;
     }

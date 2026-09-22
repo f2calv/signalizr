@@ -68,6 +68,9 @@ jobs:
       chart-registry-username: ${{ github.repository_owner }}
       chart-repository: ${{ github.repository_owner }}/signalizr/charts
       chart-path: ./charts/signalizr
+      #The umbrella chart owns no top-level image value; each workload alias carries its own, so
+      #chart-testing must not inject --set image.tag.
+      has-image: false
       #A pull request proves the chart lints and packages without publishing it.
       push-chart: ${{ github.event_name != 'pull_request' }}
 

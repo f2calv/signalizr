@@ -5,6 +5,7 @@ using CasCap.Constants;
 using CasCap.Extensions;
 using CasCap.Models;
 using CasCap.Services;
+using CasCap.Signalizr.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Serilog;
@@ -54,7 +55,11 @@ if (enabledFeatures.Contains(FeatureNames.Gateway))
     builder.Services.AddSingleton<IMessageGateway, MessageGateway>();
 
 if (enabledFeatures.Contains(FeatureNames.DemoClient))
+{
+    // The demo consumes the gateway like any other client, over its published package.
+    builder.Services.AddSignalizrClient(builder.Configuration);
     builder.Services.AddSingleton<IBgFeature, DemoClientBgService>();
+}
 
 builder.Services.AddFeatureFlagService(enabledFeatures, addGitMetadataService: true);
 builder.Services.AddHealthChecks();

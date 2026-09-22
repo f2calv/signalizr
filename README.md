@@ -3,9 +3,10 @@
 A Signal Messenger **gateway** — a single, controlled owner of one Signal account that other
 applications send through and subscribe to, instead of each one holding its own connection.
 
-> **Status: scaffolding.** This repository currently contains repository conventions only. No
-> application code, container image, chart or package has been written yet. Everything below
-> describes the intended shape, not shipped behaviour.
+> **Status: working, not yet proven against a real account.** The gateway sends over REST, owns the
+> inbound receive stream and fans it out over gRPC; the container image, chart and client package
+> all build and are exercised in CI. What has *not* happened is an end-to-end send or receive
+> against a registered Signal account, so treat the Signal-facing behaviour as untested.
 
 ## Why
 

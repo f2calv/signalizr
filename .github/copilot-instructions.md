@@ -12,8 +12,13 @@ Everything below is specific to this repository.
 
 ## Current Baseline
 
-This repository is scaffolding only — repository conventions, no application code. Do not describe
-unimplemented behaviour as though it exists, in the README, in comments or in commit messages.
+The gateway sends over REST, owns the inbound receive stream and fans it out over a bidirectional
+gRPC subscription. The container image, Helm chart and `CasCap.Signalizr.Client` package all build
+and are exercised in CI.
+
+Nothing has yet run against a registered Signal account, so every Signal-facing path is untested in
+practice. Do not describe it as proven, and do not describe the unbuilt parts — the MCP role, and
+any redelivery or persistence — as though they exist.
 
 ## Open Source Boundary
 

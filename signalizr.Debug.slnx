@@ -16,6 +16,7 @@
   </Folder>
   <Folder Name="/signalizr/">
     <Project Path="src/CasCap.App.Server/CasCap.App.Server.csproj" />
+    <Project Path="src/CasCap.Signalizr.Client/CasCap.Signalizr.Client.csproj" />
     <Project Path="src/CasCap.Signalizr.Tests/CasCap.Signalizr.Tests.csproj" />
     <Project Path="src/CasCap.Signalizr/CasCap.Signalizr.csproj" />
   </Folder>

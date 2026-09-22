@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "_shared": {
+      "description": "Anchor target merged into the signalizr workloads by the GitOps manifest. Passed through to Helm as an ordinary value and otherwise unused.",
+      "type": "object"
+    },
+    "signalcli": {
+      "description": "Upstream signal-cli REST wrapper. Validated by the workload subchart's own schema.",
+      "type": "object",
+      "properties": {
+        "replicaCount": {
+          "description": "The wrapper owns one registered account and one volume, so it cannot be scaled out.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "signalizr": {
+      "description": "The gateway. Validated by the workload subchart's own schema.",
+      "type": "object",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "demo": {
+      "description": "The same image running only the DemoClient role.",
+      "type": "object",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

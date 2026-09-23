@@ -4,10 +4,9 @@ A Signal Messenger **gateway** — a single, controlled owner of one Signal acco
 applications send through and subscribe to, instead of each one holding its own connection.
 
 > **Status: proven end to end, on one account.** Sending and receiving have both been exercised
-> against a registered Signal account: a message sent through the REST surface arrived in the
-> configured group, and a message typed in that group arrived at a subscriber over gRPC with its
-> channel name resolved. What has *not* been exercised is scale, long-running stability, more than
-> one subscriber, or recovery from a wrapper outage.
+> against a registered Signal account. Queue saturation, concurrent subscribers, acknowledgement
+> timeout, slow-subscriber failure, and wrapper-outage recovery now have measured coverage. A
+> 24-hour soak and message-loss measurement across an outage remain unproven.
 
 ## Why
 
@@ -122,6 +121,19 @@ Two limits protect the dispatcher from one slow subscriber, and both fail loudly
 
 Each subscriber receives its own `delivery_id` for the same message, so one subscriber's
 acknowledgement can never clear another's.
+
+## Validation Status
+
+| Scenario | Result |
+| --- | --- |
+| Queue saturation | 10,000 writes into capacity 1,000 produced exactly 9,000 counted drops, retained the newest 1,000, and emitted one warning |
+| Two subscribers | Each received a distinct delivery id; acknowledging one did not release the other's budget |
+| Acknowledgement timeout | A non-acknowledging subscriber ended with `DEADLINE_EXCEEDED` while another subscriber continued |
+| Subscriber queue overrun | The slow stream ended with `RESOURCE_EXHAUSTED`; dispatch remained non-blocking |
+| Wrapper outage | Gateway readiness changed to 503 without a restart; health checks completed in 5–26ms; WebSocket reconnect used bounded backoff |
+| Wrapper recovery | Wrapper ready after 48.7s, gateway ready after 56.1s, and the receive WebSocket reconnected on attempt 9 |
+| Long-running stability | Not yet measured for 24 hours |
+| Message loss during outage | Not yet measured; messages were not deliberately sent while the wrapper was absent |
 
 ### Ports
 

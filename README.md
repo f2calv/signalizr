@@ -143,7 +143,8 @@ Two first-class targets, sharing one configuration shape:
 
 - **Docker Compose** — the quickstart. Brings up the Signal REST wrapper, the gateway and a demo
   client together.
-- **Helm** — an umbrella chart pairing the upstream wrapper with the gateway.
+- **Helm** — a documented [umbrella chart](charts/signalizr/README.md) pairing the upstream wrapper
+  with the gateway.
 
 Configuration is loaded through the standard provider chain, so the same JSON works whether it
 arrives as a mounted file, a projected ConfigMap key, or environment variables.

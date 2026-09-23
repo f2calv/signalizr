@@ -127,7 +127,7 @@ acknowledgement can never clear another's.
 | Scenario | Result |
 | --- | --- |
 | Queue saturation | 10,000 writes into capacity 1,000 produced exactly 9,000 counted drops, retained the newest 1,000, and emitted one warning |
-| Two subscribers | Each received a distinct delivery id; acknowledging one did not release the other's budget |
+| Two subscribers | Two clients on the deployed gRPC endpoint received the same primary-device message with distinct delivery ids and acknowledged independently |
 | Acknowledgement timeout | A non-acknowledging subscriber ended with `DEADLINE_EXCEEDED` while another subscriber continued |
 | Subscriber queue overrun | The slow stream ended with `RESOURCE_EXHAUSTED`; dispatch remained non-blocking |
 | Wrapper outage | Gateway readiness changed to 503 without a restart; health checks completed in 5–26ms; WebSocket reconnect used bounded backoff |

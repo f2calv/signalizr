@@ -68,7 +68,7 @@ jobs:
       chart-registry-username: ${{ github.repository_owner }}
       chart-repository: ${{ github.repository_owner }}/signalizr/charts
       chart-path: ./charts/signalizr
-      #The umbrella chart owns no top-level image value; each workload alias carries its own, so
+      #The umbrella chart owns no top-level image value; each component carries its own, so
       #chart-testing must not inject --set image.tag.
       has-image: false
       #Skipped because the shared workflow mishandles both branches of its chart-testing arguments:

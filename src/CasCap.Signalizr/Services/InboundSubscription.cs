@@ -73,7 +73,8 @@ public sealed class InboundSubscription : IDisposable
     }
 
     /// <summary>Ends the subscription so its reader completes.</summary>
-    public void Complete() => _channel.Writer.TryComplete();
+    /// <param name="error">Optional failure propagated to the reader.</param>
+    public void Complete(Exception? error = null) => _channel.Writer.TryComplete(error);
 
     /// <inheritdoc/>
     public void Dispose()

@@ -64,6 +64,10 @@ public sealed class InboundGrpcService(
             // The client went away or the host is shutting down. Both are ordinary ends to a
             // long-lived subscription, not failures to report.
         }
+        catch (SubscriberFellBehindException ex)
+        {
+            throw new RpcException(new Status(StatusCode.ResourceExhausted, ex.Message));
+        }
         finally
         {
             registry.Unsubscribe(subscription);

@@ -34,7 +34,7 @@ public sealed class DispatcherBgService(
                 // the gRPC stream ends with an error the client can act on.
                 logger.LogWarning("{ClassName} subscriber {Subscriber} is too far behind, disconnecting",
                     nameof(DispatcherBgService), failed.Name);
-                subscribers.Unsubscribe(failed);
+                subscribers.Unsubscribe(failed, new SubscriberFellBehindException(failed.Name));
             }
         }
 

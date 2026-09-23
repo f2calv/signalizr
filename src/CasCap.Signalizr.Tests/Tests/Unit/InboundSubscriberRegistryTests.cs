@@ -77,6 +77,24 @@ public class InboundSubscriberRegistryTests
     }
 
     [Fact]
+    public async Task Failed_unsubscribe_propagates_the_reason_to_the_subscriber()
+    {
+        var registry = CreateRegistry();
+        var subscription = registry.Subscribe("slow");
+        var error = new SubscriberFellBehindException(subscription.Name);
+
+        registry.Unsubscribe(subscription, error);
+
+        var exception = await Assert.ThrowsAsync<SubscriberFellBehindException>(async () =>
+        {
+            await foreach (var _ in subscription.ReadAllAsync(TestContext.Current.CancellationToken))
+            {
+            }
+        });
+        Assert.Same(error, exception);
+    }
+
+    [Fact]
     public void Broadcasting_with_no_subscribers_is_not_an_error()
     {
         var registry = CreateRegistry();

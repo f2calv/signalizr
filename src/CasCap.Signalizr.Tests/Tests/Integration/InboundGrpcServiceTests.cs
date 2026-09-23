@@ -64,11 +64,33 @@ public class InboundGrpcServiceTests
         Assert.False(acknowledging.Call.IsCompleted);
     }
 
-    private static InboundSubscriberRegistry CreateRegistry(int maxOutstanding) =>
+    [Fact]
+    public async Task Subscriber_queue_overrun_returns_resource_exhausted()
+    {
+        var registry = CreateRegistry(maxOutstanding: 10, queueCapacity: 1);
+        var service = CreateService(registry, ackTimeoutMs: 2_000);
+        await using var session = StartSession(service, "slow", pauseWrites: true);
+        await WaitForSubscribersAsync(registry, 1);
+
+        Assert.Empty(registry.Broadcast(CreateDelivery("first")));
+        await session.Response.WaitForWriteAsync(TestContext.Current.CancellationToken);
+        Assert.Empty(registry.Broadcast(CreateDelivery("second")));
+        var failed = Assert.Single(registry.Broadcast(CreateDelivery("third")));
+
+        registry.Unsubscribe(failed, new SubscriberFellBehindException(failed.Name));
+        session.Response.ReleaseWrites();
+
+        var exception = await Assert.ThrowsAsync<RpcException>(
+            () => session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+        Assert.Equal(StatusCode.ResourceExhausted, exception.StatusCode);
+        Assert.Equal(0, registry.Count);
+    }
+
+    private static InboundSubscriberRegistry CreateRegistry(int maxOutstanding, int queueCapacity = 10) =>
         new(NullLogger<InboundSubscriberRegistry>.Instance,
             Options.Create(new SubscriberConfig
             {
-                QueueCapacity = 10,
+                QueueCapacity = queueCapacity,
                 MaxOutstanding = maxOutstanding,
             }));
 
@@ -91,12 +113,13 @@ public class InboundGrpcServiceTests
         return await response.ReadAsync(timeout.Token);
     }
 
-    private static TestSession StartSession(InboundGrpcService service, string name)
+    private static TestSession StartSession(
+        InboundGrpcService service, string name, bool pauseWrites = false)
     {
         var cancellation = new CancellationTokenSource();
         var request = new TestAsyncStreamReader<SubscribeRequest>();
         request.Write(new SubscribeRequest { Hello = new Hello { SubscriberName = name } });
-        var response = new TestServerStreamWriter<InboundMessage>();
+        var response = new TestServerStreamWriter<InboundMessage>(pauseWrites);
         var context = new TestServerCallContext(cancellation.Token);
         var call = service.Subscribe(request, response, context);
         return new TestSession(cancellation, request, response, call);
@@ -180,14 +203,28 @@ public class InboundGrpcServiceTests
     private sealed class TestServerStreamWriter<T> : IServerStreamWriter<T>
     {
         private readonly Channel<T> _channel = Channel.CreateUnbounded<T>();
+        private readonly TaskCompletionSource _writeGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _writeStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TestServerStreamWriter(bool pauseWrites = false)
+        {
+            if (!pauseWrites)
+                _writeGate.TrySetResult();
+        }
 
         public WriteOptions? WriteOptions { get; set; }
 
-        public Task WriteAsync(T message)
+        public async Task WriteAsync(T message)
         {
+            _writeStarted.TrySetResult();
+            await _writeGate.Task;
             _channel.Writer.TryWrite(message);
-            return Task.CompletedTask;
         }
+
+        public void ReleaseWrites() => _writeGate.TrySetResult();
+
+        public Task WaitForWriteAsync(CancellationToken cancellationToken) =>
+            _writeStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), cancellationToken);
 
         public ValueTask<T> ReadAsync(CancellationToken cancellationToken) =>
             _channel.Reader.ReadAsync(cancellationToken);

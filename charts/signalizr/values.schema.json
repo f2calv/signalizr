@@ -8,16 +8,8 @@
       "type": "object"
     },
     "signalcli": {
-      "description": "Upstream signal-cli REST wrapper. Validated by the workload subchart's own schema.",
-      "type": "object",
-      "properties": {
-        "replicaCount": {
-          "description": "The wrapper owns one registered account and one volume, so it cannot be scaled out.",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 1
-        }
-      }
+      "description": "Upstream signal-cli REST wrapper. Validated by the signalcli subchart and its workload dependency.",
+      "type": "object"
     },
     "signalizr": {
       "description": "The gateway. Validated by the workload subchart's own schema.",

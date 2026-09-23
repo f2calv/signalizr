@@ -25,10 +25,9 @@ appVersion: "0.1.0"
 
 dependencies:
   # The upstream signal-cli REST wrapper. Owns the registered account and its on-disk state.
-  - name: workload
-    version: 1.0.3
+  - name: signalcli
+    version: 1.0.0
     repository: oci://ghcr.io/f2calv/charts
-    alias: signalcli
 
   # The gateway itself: Gateway and Receiver roles from one image.
   - name: workload

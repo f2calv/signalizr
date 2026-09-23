@@ -10,9 +10,7 @@ public sealed class ChannelResolver(
     private IReadOnlyDictionary<string, string> _resolved =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-    // Group ids are opaque and case-sensitive, unlike the channel names callers type.
-    private IReadOnlyDictionary<string, string> _byGroupId =
-        new Dictionary<string, string>(StringComparer.Ordinal);
+    private IReadOnlyList<KeyValuePair<SignalGroup, string>> _groups = [];
 
     /// <inheritdoc/>
     public IReadOnlyCollection<string> ChannelNames => Volatile.Read(ref _resolved).Keys.ToArray();
@@ -23,7 +21,11 @@ public sealed class ChannelResolver(
 
     /// <inheritdoc/>
     public bool TryGetChannelName(string groupId, out string channelName)
-        => Volatile.Read(ref _byGroupId).TryGetValue(groupId, out channelName!);
+    {
+        var match = Volatile.Read(ref _groups).FirstOrDefault(pair => pair.Key.Matches(groupId));
+        channelName = match.Value ?? string.Empty;
+        return match.Key is not null;
+    }
 
     /// <inheritdoc/>
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
@@ -37,7 +39,7 @@ public sealed class ChannelResolver(
 
         var resolved = Resolve(channelConfig.Value.Channels, groups);
         Volatile.Write(ref _resolved, resolved);
-        Volatile.Write(ref _byGroupId, Invert(resolved, groups));
+        Volatile.Write(ref _groups, BuildInboundLookup(resolved, groups));
 
         // Group ids are account-linked identifiers, so log the channel names only.
         logger.LogInformation("{ClassName} resolved {ChannelCount} channel(s): {Channels}",
@@ -86,38 +88,24 @@ public sealed class ChannelResolver(
         return resolved;
     }
 
-    /// <summary>Builds the group-id to channel-name index used by the inbound direction.</summary>
+    /// <summary>Builds the group-to-channel lookup used by the inbound direction.</summary>
     /// <remarks>
-    /// Indexed under both identifier forms the wrapper uses. <c>GET /v1/groups</c> returns the
-    /// prefixed <c>group.&lt;base64&gt;</c> id, which is what sending requires, but an inbound
-    /// message carries the unprefixed internal id. Indexing only the first means no inbound message
-    /// ever resolves to a channel.
+    /// <see cref="SignalGroup.Matches(string?)"/> owns the distinction between the send and inbound
+    /// identifier forms, so this consumer treats group identifiers as opaque.
     /// <para>
     /// Two channel names may point at the same group, which <see cref="Resolve"/> permits because
-    /// sending to either is unambiguous. Inbound is not: the last name wins, so the mapping is
-    /// deterministic by ordinal name order rather than by dictionary enumeration order.
+    /// sending to either is unambiguous. Inbound is not: the last name wins, so entries are stored
+    /// in descending ordinal name order and the first match is deterministic.
     /// </para>
     /// </remarks>
-    public static IReadOnlyDictionary<string, string> Invert(
+    public static IReadOnlyList<KeyValuePair<SignalGroup, string>> BuildInboundLookup(
         IReadOnlyDictionary<string, string> resolved, IReadOnlyList<SignalGroup> groups)
     {
-        var internalIds = new Dictionary<string, string>(groups.Count, StringComparer.Ordinal);
-        foreach (var group in groups)
-        {
-            if (!string.IsNullOrEmpty(group.InternalId))
-                internalIds[group.Id] = group.InternalId;
-        }
-
-        var inverted = new Dictionary<string, string>(resolved.Count * 2, StringComparer.Ordinal);
-
-        foreach (var (channelName, groupId) in resolved.OrderBy(pair => pair.Key, StringComparer.Ordinal))
-        {
-            inverted[groupId] = channelName;
-
-            if (internalIds.TryGetValue(groupId, out var internalId))
-                inverted[internalId] = channelName;
-        }
-
-        return inverted;
+        return resolved
+            .GroupBy(pair => pair.Value, StringComparer.Ordinal)
+            .Select(entries => new KeyValuePair<SignalGroup, string>(
+                groups.Single(group => string.Equals(group.Id, entries.Key, StringComparison.Ordinal)),
+                entries.OrderBy(pair => pair.Key, StringComparer.Ordinal).Last().Key))
+            .ToArray();
     }
 }

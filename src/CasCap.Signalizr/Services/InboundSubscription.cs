@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 
 namespace CasCap.Services;
@@ -12,6 +13,7 @@ public sealed class InboundSubscription : IDisposable
 {
     private readonly Channel<InboundDelivery> _channel;
     private readonly SemaphoreSlim _budget;
+    private readonly ConcurrentDictionary<string, byte> _outstanding = new(StringComparer.Ordinal);
 
     internal InboundSubscription(string name, int queueCapacity, int maxOutstanding)
     {
@@ -45,27 +47,29 @@ public sealed class InboundSubscription : IDisposable
     /// <see langword="false"/> when the budget did not free up in time, meaning the subscriber is
     /// receiving but not acknowledging.
     /// </returns>
-    public async Task<bool> TryReserveAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        => await _budget.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
-
-    /// <summary>Returns one unit of the budget on acknowledgement.</summary>
-    /// <remarks>
-    /// Tolerates an unknown or duplicated identifier: a subscriber that acknowledges twice is
-    /// confused rather than malicious, and releasing beyond the initial count would grow the budget
-    /// rather than restore it.
-    /// </remarks>
-    public void Acknowledge()
+    public async Task<bool> TryReserveAsync(
+        string deliveryId, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            _budget.Release();
-        }
-        catch (SemaphoreFullException)
-        {
-            // A duplicated acknowledgement. Swallowed on purpose: releasing beyond the initial
-            // count would grow the budget rather than restore it, which is the one outcome worse
-            // than ignoring the duplicate.
-        }
+        if (!await _budget.WaitAsync(timeout, cancellationToken).ConfigureAwait(false))
+            return false;
+
+        if (_outstanding.TryAdd(deliveryId, 0))
+            return true;
+
+        _budget.Release();
+        return false;
+    }
+
+    /// <summary>Returns the budget reserved for one delivery.</summary>
+    /// <param name="deliveryId">The identifier assigned to this subscriber's delivery.</param>
+    /// <returns><see langword="true"/> when the delivery was outstanding.</returns>
+    public bool Acknowledge(string deliveryId)
+    {
+        if (!_outstanding.TryRemove(deliveryId, out _))
+            return false;
+
+        _budget.Release();
+        return true;
     }
 
     /// <summary>Ends the subscription so its reader completes.</summary>

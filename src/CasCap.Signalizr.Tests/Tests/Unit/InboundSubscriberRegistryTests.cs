@@ -91,31 +91,33 @@ public class InboundSubscriberRegistryTests
         var subscription = registry.Subscribe("a");
         var instant = TimeSpan.FromMilliseconds(50);
 
-        Assert.True(await subscription.TryReserveAsync(instant, TestContext.Current.CancellationToken));
-        Assert.True(await subscription.TryReserveAsync(instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync("first", instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync("second", instant, TestContext.Current.CancellationToken));
 
         // Two delivered and none acknowledged: the third must wait rather than pile on more work.
-        Assert.False(await subscription.TryReserveAsync(instant, TestContext.Current.CancellationToken));
+        Assert.False(await subscription.TryReserveAsync("third", instant, TestContext.Current.CancellationToken));
 
-        subscription.Acknowledge();
+        Assert.True(subscription.Acknowledge("first"));
 
-        Assert.True(await subscription.TryReserveAsync(instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync("third", instant, TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task A_duplicate_acknowledgement_does_not_inflate_the_budget()
+    public async Task Unknown_and_duplicate_acknowledgements_do_not_release_other_deliveries()
     {
-        var registry = CreateRegistry(maxOutstanding: 1);
+        var registry = CreateRegistry(maxOutstanding: 2);
         var subscription = registry.Subscribe("confused");
         var instant = TimeSpan.FromMilliseconds(50);
 
-        Assert.True(await subscription.TryReserveAsync(instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync("first", instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync("second", instant, TestContext.Current.CancellationToken));
 
-        subscription.Acknowledge();
-        subscription.Acknowledge();
+        Assert.True(subscription.Acknowledge("first"));
+        Assert.False(subscription.Acknowledge("first"));
+        Assert.False(subscription.Acknowledge("unknown"));
 
-        Assert.True(await subscription.TryReserveAsync(instant, TestContext.Current.CancellationToken));
-        Assert.False(await subscription.TryReserveAsync(instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync("third", instant, TestContext.Current.CancellationToken));
+        Assert.False(await subscription.TryReserveAsync("fourth", instant, TestContext.Current.CancellationToken));
     }
 
     private static async Task<InboundDelivery> ReadOneAsync(InboundSubscription subscription)

@@ -95,8 +95,8 @@ Compose target a fork that rots.
 
 ## Build and Deploy Scripts
 
-`build.ps1`, `build.sh` and `deploy.ps1` are byte-identical across the account's repositories. Every
-repository-specific value is derived, not declared — the image name comes from the repository
-directory, the buildx builder name from the image name, and sibling dependencies from
-`Dockerfile.Debug`. Never reintroduce a hardcoded default; a change here must be synchronised across
-the sibling repositories and verified by hash.
+`build.ps1`, `build.sh` and `deploy.ps1` are thin entry points for the public account-level `.github`
+repository's `container-workflows` skill. The central PowerShell scripts own build and deployment
+behavior and the single Pester suite; Bash entry points invoke PowerShell instead of duplicating the
+implementation. Keep repository-specific values derived from the caller or supplied through the
+gitignored `deploy.local.psd1`. Change shared behavior and tests centrally, never in a root shim.

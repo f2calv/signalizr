@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UserSecretsId>3f8a1c74-6b2e-4d59-9a0f-7c5e1b83d264</UserSecretsId>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -30,10 +32,8 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <!-- IDE0079 - Remove unnecessary suppression -->
-    <!-- IDE0042 - Variable declaration can be deconstructed -->
     <!-- NETSDK1233 - Targeting .NET 10.0 or higher in Visual Studio 2022 XX.XX is not supported. -->
-    <NoWarn>IDE0079;IDE0042;NETSDK1233</NoWarn>
+    <NoWarn>NETSDK1233</NoWarn>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- NU190x report advisories in transitive dependencies. They stay visible as warnings rather
          than being suppressed or made fatal, because the warning is the only signal that an upstream

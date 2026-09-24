@@ -56,8 +56,6 @@ public sealed class InboundGrpcService(
                         $"No acknowledgement within {ackTimeout}. The subscriber is receiving but not acknowledging."));
                 }
 
-                // The Grpc.Core compatibility contract does not support cancellable server writes;
-                // cancellation closes the call through ServerCallContext instead.
                 await responseStream.WriteAsync(ToMessage(delivery)).ConfigureAwait(false);
             }
         }

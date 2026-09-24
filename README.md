@@ -242,8 +242,12 @@ The independent [dashboard chart](charts/signalizr-dashboards/README.md) publish
 ## Observability
 
 Signalizr uses the shared Serilog-owned logging pipeline and native OpenTelemetry exporters. The
-host registers the `CasCap.Signalizr` and `CasCap.Api.SignalCli` meters and activity sources. OTLP
-is enabled by setting `AppConfig:OtlpExporterEndpoint`.
+host registers its application meter and activity source from `AppConfig:MetricNamePrefix`
+(`signalizr` by default), plus the stable `CasCap.Api.SignalCli` library sources. `OtelServiceName`
+sets the exported resource service name independently. OTLP is enabled by setting
+`AppConfig:OtlpExporterEndpoint`.
+
+Count-like instruments use unit `1`; durations use `ms`. Every instrument carries a description.
 
 The core metrics cover process-queue receive/drop/depth, durable persistence count/latency/backlog,
 active subscribers, delivery/acknowledgement/timeouts, pruning, SignalCli frame outcomes,

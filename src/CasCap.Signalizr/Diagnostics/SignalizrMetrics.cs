@@ -6,13 +6,7 @@ namespace CasCap.Diagnostics;
 /// <summary>Low-cardinality metrics and traces for durable Signalizr delivery.</summary>
 public sealed class SignalizrMetrics : IDisposable
 {
-    /// <summary>Meter name registered by the Signalizr host.</summary>
-    public const string MeterName = "CasCap.Signalizr";
-
-    /// <summary>Activity source name registered by the Signalizr host.</summary>
-    public const string ActivitySourceName = MeterName;
-
-    private readonly Meter _meter = new(MeterName);
+    private readonly Meter _meter;
     private readonly Counter<long> _acknowledged;
     private readonly Counter<long> _acknowledgementTimeouts;
     private readonly Counter<long> _delivered;
@@ -25,25 +19,37 @@ public sealed class SignalizrMetrics : IDisposable
     private readonly UpDownCounter<long> _subscribers;
     private long _storedMessages;
 
-    /// <summary>Initializes Signalizr metric instruments.</summary>
-    public SignalizrMetrics()
+    /// <summary>Initializes Signalizr instruments on the configured application source.</summary>
+    public SignalizrMetrics(IOptions<AppConfig>? appConfig = null)
     {
-        _acknowledged = _meter.CreateCounter<long>("signalizr.subscriber.acknowledged");
-        _acknowledgementTimeouts = _meter.CreateCounter<long>("signalizr.subscriber.acknowledgement_timeouts");
-        _delivered = _meter.CreateCounter<long>("signalizr.subscriber.delivered");
-        _dropped = _meter.CreateCounter<long>("signalizr.inbound.dropped");
-        _persisted = _meter.CreateCounter<long>("signalizr.inbound.persisted");
-        _pruned = _meter.CreateCounter<long>("signalizr.inbound.pruned");
+        var prefix = appConfig?.Value.MetricNamePrefix ?? new AppConfig().MetricNamePrefix;
+        _meter = new Meter(prefix);
+        _acknowledged = _meter.CreateCounter<long>(
+            $"{prefix}.subscriber.acknowledged", "1", "Durable subscriber acknowledgements.");
+        _acknowledgementTimeouts = _meter.CreateCounter<long>(
+            $"{prefix}.subscriber.acknowledgement_timeouts", "1", "Subscribers disconnected after acknowledgement timeout.");
+        _delivered = _meter.CreateCounter<long>(
+            $"{prefix}.subscriber.delivered", "1", "Messages delivered to subscriber streams.");
+        _dropped = _meter.CreateCounter<long>(
+            $"{prefix}.inbound.dropped", "1", "Inbound messages displaced from the bounded process queue.");
+        _persisted = _meter.CreateCounter<long>(
+            $"{prefix}.inbound.persisted", "1", "Inbound messages committed to durable storage.");
+        _pruned = _meter.CreateCounter<long>(
+            $"{prefix}.inbound.pruned", "1", "Persisted messages removed by retention.");
         _persistenceDuration = _meter.CreateHistogram<double>(
-            "signalizr.inbound.persistence_duration",
-            unit: "ms");
-        _queueDepth = _meter.CreateUpDownCounter<long>("signalizr.inbound.queue_depth");
-        _received = _meter.CreateCounter<long>("signalizr.inbound.received");
-        _subscribers = _meter.CreateUpDownCounter<long>("signalizr.subscribers.active");
+            $"{prefix}.inbound.persistence_duration", "ms", "EF Core inbound-message persistence duration.");
+        _queueDepth = _meter.CreateUpDownCounter<long>(
+            $"{prefix}.inbound.queue_depth", "1", "Current messages in the bounded inbound process queue.");
+        _received = _meter.CreateCounter<long>(
+            $"{prefix}.inbound.received", "1", "Inbound messages accepted into the process queue.");
+        _subscribers = _meter.CreateUpDownCounter<long>(
+            $"{prefix}.subscribers.active", "1", "Current connected durable subscribers.");
         _meter.CreateObservableGauge(
-            "signalizr.inbound.stored_messages",
-            () => Interlocked.Read(ref _storedMessages));
-        ActivitySource = new ActivitySource(ActivitySourceName);
+            $"{prefix}.inbound.stored_messages",
+            () => Interlocked.Read(ref _storedMessages),
+            "1",
+            "Current persisted inbound messages available for replay.");
+        ActivitySource = new ActivitySource(prefix);
     }
 
     /// <summary>Activity source for persistence and delivery spans.</summary>

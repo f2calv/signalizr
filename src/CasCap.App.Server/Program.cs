@@ -30,10 +30,10 @@ builder.InitializeOpenTelemetry(
     appConfig,
     new GitMetadata(),
     configureMetrics: metrics => metrics
-        .AddMeter(SignalizrMetrics.MeterName)
+        .AddMeter(appConfig.MetricNamePrefix)
         .AddMeter(SignalCliTelemetry.MeterName),
     configureTracing: tracing => tracing
-        .AddSource(SignalizrMetrics.ActivitySourceName)
+        .AddSource(appConfig.MetricNamePrefix)
         .AddSource(SignalCliTelemetry.ActivitySourceName));
 
 var featureConfig = builder.Configuration

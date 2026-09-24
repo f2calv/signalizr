@@ -38,6 +38,24 @@ jobs:
       solution-name: signalizr.Release.slnx
       dotnet-test-args: '["--filter-not-trait", "Category=Integration"]'
 
+  package:
+    runs-on: ubuntu-latest
+    needs: [versioning, build]
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    permissions:
+      contents: read
+      id-token: write #NuGet Trusted Publishing
+      packages: write #GitHub Packages publication
+    steps:
+      - uses: f2calv/gha-dotnet-nuget@v2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          nuget-user: ${{ github.repository_owner }}
+          configuration: Release
+          version: ${{ needs.versioning.outputs.version }}
+          solution-name: signalizr.Release.slnx
+          dotnet-test-args: --filter-not-trait Category=Integration
+
   image:
     needs: [versioning, build]
     permissions:
@@ -93,11 +111,12 @@ jobs:
       #with has-image true helm lint receives '--set image.tag=x' as one argv, and with it false the
       #empty array expands to a stray argument that swallows the next flag. helm lint still runs.
       chart-testing-cli-command: skip
-      #A pull request proves the chart lints and packages without publishing it.
-      push-chart: ${{ github.event_name != 'pull_request' }}
+      #Chart publication is intentionally separate from the application/NuGet release. The chart
+      #package currently has independent GHCR ownership; this job still validates and packages it.
+      push-chart: false
 
   release:
-    needs: [lint, versioning, build, image, dashboards, chart]
+    needs: [lint, versioning, build, package, image, dashboards, chart]
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     uses: f2calv/gha-workflows/.github/workflows/gha-release-versioning.yml@v1
     permissions:

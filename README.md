@@ -166,7 +166,9 @@ was written to the socket, which is the upstream wrapper's defect reproduced one
 `SubscriberName` is a stable durable identity, not a display label. Only one live stream may use an
 identity; a duplicate connection receives `ALREADY_EXISTS`. A new identity starts at the current
 message tail. Reconnecting an existing identity resumes after its last contiguously acknowledged
-message, so an unacknowledged delivery is replayed and consumers must tolerate duplicates.
+message, so an unacknowledged delivery is replayed and consumers must tolerate duplicates. Clients
+must configure the identity explicitly; machine names and generated GUIDs are unsuitable because
+they create a fresh cursor after restart.
 
 Two limits bound one stream without blocking persistence or other subscribers:
 

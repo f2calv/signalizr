@@ -85,6 +85,7 @@ services:
       CasCap__FeatureConfig__EnabledFeatures: DemoClient
       CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:8080
       CasCap__SignalizrClientConfig__GrpcAddress: http://signalizr:5001
+      CasCap__SignalizrClientConfig__SubscriberName: signalizr-demo
       ASPNETCORE_ENVIRONMENT: Development
     restart: unless-stopped
 

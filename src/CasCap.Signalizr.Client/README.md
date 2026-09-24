@@ -32,6 +32,12 @@ Binding `CasCap:SignalizrClientConfig`:
 Two addresses because the gateway serves REST and gRPC on separate ports: a plaintext endpoint
 cannot negotiate protocols without TLS, so one port answers HTTP/1.1 and another HTTP/2.
 
+`SubscriberName` is the durable cursor key, not a process-instance identifier. Configure one name
+per logical consumer and keep it stable across restarts. Do not append `Environment.MachineName`, a
+pod name, process ID, or generated GUID: each new value creates a new cursor that begins at the
+current tail, losing replay from the previous identity. Only one live stream may own a durable name;
+use a stable replica identity only when each replica intentionally needs its own copy and cursor.
+
 ## Send
 
 ```csharp

@@ -21,7 +21,10 @@ public sealed record SignalizrClientConfig
     public string GrpcAddress { get; init; } = "http://localhost:5001";
 
     /// <summary>Stable subscriber identity used as the durable acknowledgement cursor key.</summary>
-    /// <remarks>Only one live stream may use a subscriber name at a time.</remarks>
-    [Required(AllowEmptyStrings = false)]
-    public string SubscriberName { get; init; } = "signalizr-client";
+    /// <remarks>
+    /// Configure one logical name per durable consumer. It must remain unchanged across restarts;
+    /// machine names and generated identifiers create new cursors and defeat replay.
+    /// </remarks>
+    [Required, MinLength(1)]
+    public string SubscriberName { get; init; } = string.Empty;
 }

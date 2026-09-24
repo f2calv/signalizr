@@ -1,9 +1,13 @@
-using CasCap.Exceptions;
+using CasCap.Data;
+using CasCap.Data.Entities;
+using CasCap.Diagnostics;
 using CasCap.Grpc;
 using CasCap.Models;
 using CasCap.Models.Dtos;
 using CasCap.Services;
 using Grpc.Core;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using System.Threading.Channels;
@@ -19,35 +23,35 @@ public class InboundGrpcServiceTests
     [Fact]
     public async Task Acknowledgement_timeout_returns_deadline_exceeded()
     {
-        var registry = CreateRegistry(maxOutstanding: 1);
-        var service = CreateService(registry, ackTimeoutMs: 100);
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 100);
         await using var session = StartSession(service, "non-acknowledging");
-        await WaitForSubscribersAsync(registry, 1);
+        await WaitForSubscribersAsync(fixture.Registry, 1);
 
-        Assert.Empty(registry.Broadcast(CreateDelivery("first")));
+        await fixture.AddMessageAsync("first");
         _ = await ReadResponseAsync(session.Response);
-        Assert.Empty(registry.Broadcast(CreateDelivery(SecondMessage)));
+        await fixture.AddMessageAsync(SecondMessage);
 
         var exception = await Assert.ThrowsAsync<RpcException>(
             () => session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
 
         Assert.Equal(StatusCode.DeadlineExceeded, exception.StatusCode);
-        Assert.Equal(0, registry.Count);
+        Assert.Equal(0, fixture.Registry.Count);
     }
 
     [Fact]
     public async Task Two_subscribers_acknowledge_independently()
     {
-        var registry = CreateRegistry(maxOutstanding: 1);
-        var service = CreateService(registry, ackTimeoutMs: 250);
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 250);
         await using var acknowledging = StartSession(service, "acknowledging");
         await using var stalled = StartSession(service, "stalled");
-        await WaitForSubscribersAsync(registry, 2);
+        await WaitForSubscribersAsync(fixture.Registry, 2);
 
-        Assert.Empty(registry.Broadcast(CreateDelivery("first")));
+        await fixture.AddMessageAsync("first");
         var acknowledgedFirst = await ReadResponseAsync(acknowledging.Response);
         var stalledFirst = await ReadResponseAsync(stalled.Response);
-        Assert.NotEqual(acknowledgedFirst.DeliveryId, stalledFirst.DeliveryId);
+        Assert.Equal(acknowledgedFirst.DeliveryId, stalledFirst.DeliveryId);
 
         acknowledging.Request.Write(new SubscribeRequest
         {
@@ -57,7 +61,7 @@ public class InboundGrpcServiceTests
             request => request.PayloadCase is SubscribeRequest.PayloadOneofCase.Ack,
             TestContext.Current.CancellationToken);
 
-        Assert.Empty(registry.Broadcast(CreateDelivery(SecondMessage)));
+        await fixture.AddMessageAsync(SecondMessage);
         var acknowledgedSecond = await ReadResponseAsync(acknowledging.Response);
         Assert.Equal(SecondMessage, acknowledgedSecond.Message);
 
@@ -68,47 +72,29 @@ public class InboundGrpcServiceTests
     }
 
     [Fact]
-    public async Task Subscriber_queue_overrun_returns_resource_exhausted()
+    public async Task Duplicate_live_subscriber_identity_returns_already_exists()
     {
-        var registry = CreateRegistry(maxOutstanding: 10, queueCapacity: 1);
-        var service = CreateService(registry, ackTimeoutMs: 2_000);
-        await using var session = StartSession(service, "slow", pauseWrites: true);
-        await WaitForSubscribersAsync(registry, 1);
-
-        Assert.Empty(registry.Broadcast(CreateDelivery("first")));
-        await session.Response.WaitForWriteAsync(TestContext.Current.CancellationToken);
-        Assert.Empty(registry.Broadcast(CreateDelivery(SecondMessage)));
-        var failed = Assert.Single(registry.Broadcast(CreateDelivery("third")));
-
-        registry.Unsubscribe(failed, new SubscriberFellBehindException(failed.Name));
-        session.Response.ReleaseWrites();
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 2_000);
+        await using var first = StartSession(service, "duplicate");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+        await using var second = StartSession(service, "duplicate");
 
         var exception = await Assert.ThrowsAsync<RpcException>(
-            () => session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
-        Assert.Equal(StatusCode.ResourceExhausted, exception.StatusCode);
-        Assert.Equal(0, registry.Count);
+            () => second.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+        Assert.Equal(StatusCode.AlreadyExists, exception.StatusCode);
+        Assert.Equal(1, fixture.Registry.Count);
     }
 
-    private static InboundSubscriberRegistry CreateRegistry(int maxOutstanding, int queueCapacity = 10) =>
-        new(NullLogger<InboundSubscriberRegistry>.Instance,
-            Options.Create(new SubscriberConfig
-            {
-                QueueCapacity = queueCapacity,
-                MaxOutstanding = maxOutstanding,
-            }));
-
     private static InboundGrpcService CreateService(
-        InboundSubscriberRegistry registry, int ackTimeoutMs) =>
-        new(NullLogger<InboundGrpcService>.Instance, registry,
+        RegistryFixture fixture, int ackTimeoutMs) =>
+        new(NullLogger<InboundGrpcService>.Instance, fixture.Registry, fixture.Metrics,
             Options.Create(new SubscriberConfig
             {
-                QueueCapacity = 10,
+                ReplayBatchSize = 10,
                 MaxOutstanding = 1,
                 AckTimeoutMs = ackTimeoutMs,
             }));
-
-    private static InboundDelivery CreateDelivery(string message) =>
-        new() { DeliveryId = string.Empty, Channel = "system", Message = message };
 
     private static async Task<InboundMessage> ReadResponseAsync(TestServerStreamWriter<InboundMessage> response)
     {
@@ -134,6 +120,62 @@ public class InboundGrpcServiceTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         while (registry.Count != expected)
             await Task.Delay(10, timeout.Token);
+    }
+
+    private sealed class RegistryFixture : IDisposable
+    {
+        private readonly TestDbContextFactory _dbContextFactory = new();
+
+        public RegistryFixture(int maxOutstanding)
+        {
+            Metrics = new SignalizrMetrics();
+            Registry = new InboundSubscriberRegistry(
+                NullLogger<InboundSubscriberRegistry>.Instance,
+                Options.Create(new SubscriberConfig
+                {
+                    ReplayBatchSize = 10,
+                    MaxOutstanding = maxOutstanding
+                }),
+                TimeProvider.System,
+                Metrics,
+                _dbContextFactory);
+        }
+
+        public SignalizrMetrics Metrics { get; }
+
+        public InboundSubscriberRegistry Registry { get; }
+
+        public async Task AddMessageAsync(string message)
+        {
+            await using var dbContext = await _dbContextFactory.CreateDbContextAsync();
+            var nextMessageId = await dbContext.InboundMessages
+                .Select(candidate => (long?)candidate.Id)
+                .MaxAsync() + 1 ?? 1;
+            dbContext.InboundMessages.Add(new InboundMessageEntity
+            {
+                Id = nextMessageId,
+                Message = message,
+                PersistedAtUtc = DateTimeOffset.UtcNow
+            });
+            await dbContext.SaveChangesAsync();
+            Registry.NotifyMessageAvailable();
+        }
+
+        public void Dispose() => Metrics.Dispose();
+    }
+
+    private sealed class TestDbContextFactory : IDbContextFactory<SignalizrDbContext>
+    {
+        private readonly DbContextOptions<SignalizrDbContext> _options =
+            new DbContextOptionsBuilder<SignalizrDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString(), new InMemoryDatabaseRoot())
+                .Options;
+
+        public SignalizrDbContext CreateDbContext() => new(_options);
+
+        public ValueTask<SignalizrDbContext> CreateDbContextAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(CreateDbContext());
     }
 
     private sealed class TestSession(

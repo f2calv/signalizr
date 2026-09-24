@@ -28,6 +28,7 @@
     <PackageReference Include="CasCap.Common.AspNetCore" />
     <PackageReference Include="CasCap.Common.Configuration" />
     <PackageReference Include="CasCap.Common.Logging.Serilog" />
+    <PackageReference Include="CasCap.Common.OpenTelemetry" />
     <PackageReference Include="CasCap.Common.Services" />
   </ItemGroup>
 
@@ -35,6 +36,7 @@
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.AspNetCore\CasCap.Common.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Configuration\CasCap.Common.Configuration.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Logging.Serilog\CasCap.Common.Logging.Serilog.csproj" />
+    <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.OpenTelemetry\CasCap.Common.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Services\CasCap.Common.Services.csproj" />
   </ItemGroup>
 

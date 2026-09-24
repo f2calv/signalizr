@@ -1,4 +1,6 @@
 using System.Threading.Channels;
+using CasCap.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace CasCap.Services;
 
@@ -6,13 +8,18 @@ namespace CasCap.Services;
 public sealed class InboundMessageQueue : IInboundMessageQueue
 {
     private readonly ILogger<InboundMessageQueue> _logger;
+    private readonly SignalizrMetrics _metrics;
     private readonly Channel<SignalReceivedMessage> _channel;
     private long _dropped;
     private long _enqueued;
 
-    public InboundMessageQueue(ILogger<InboundMessageQueue> logger, IOptions<ReceiverConfig> config)
+    public InboundMessageQueue(
+        ILogger<InboundMessageQueue> logger,
+        IOptions<ReceiverConfig> config,
+        SignalizrMetrics metrics)
     {
         _logger = logger;
+        _metrics = metrics;
 
         var options = new BoundedChannelOptions(config.Value.QueueCapacity)
         {
@@ -40,12 +47,22 @@ public sealed class InboundMessageQueue : IInboundMessageQueue
             return false;
 
         Interlocked.Increment(ref _enqueued);
+        _metrics.RecordReceived();
         return true;
     }
 
     /// <inheritdoc/>
-    public IAsyncEnumerable<SignalReceivedMessage> DequeueAllAsync(CancellationToken cancellationToken = default)
-        => _channel.Reader.ReadAllAsync(cancellationToken);
+    public async IAsyncEnumerable<SignalReceivedMessage> DequeueAllAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (var message in _channel.Reader
+            .ReadAllAsync(cancellationToken)
+            .ConfigureAwait(false))
+        {
+            _metrics.RecordDequeued();
+            yield return message;
+        }
+    }
 
     /// <inheritdoc/>
     public void Complete() => _channel.Writer.TryComplete();
@@ -53,6 +70,7 @@ public sealed class InboundMessageQueue : IInboundMessageQueue
     private void OnDropped(SignalReceivedMessage message)
     {
         var dropped = Interlocked.Increment(ref _dropped);
+        _metrics.RecordDropped();
 
         // Only the first drop is logged: by the time messages are being dropped the consumer is
         // already behind, and a line per drop would compete with it for the same thread pool.

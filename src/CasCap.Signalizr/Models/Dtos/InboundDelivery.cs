@@ -1,13 +1,13 @@
 namespace CasCap.Models.Dtos;
 
-/// <summary>One inbound message queued for one subscriber.</summary>
+/// <summary>One persisted inbound message delivered to a subscriber.</summary>
 /// <remarks>
-/// The identifier is per delivery, not per message: two subscribers receiving the same Signal
-/// message each acknowledge their own copy, so one slow subscriber cannot acknowledge another's.
+/// The identifier is the durable message sequence. Acknowledgements remain subscriber-scoped
+/// because each stable subscriber identity owns an independent cursor.
 /// </remarks>
 public sealed record InboundDelivery
 {
-    /// <summary>Unique per delivery attempt to one subscriber.</summary>
+    /// <summary>Durable message sequence represented as an invariant string.</summary>
     public required string DeliveryId { get; init; }
 
     /// <summary>The configured channel name, or <see langword="null"/> when the message did not

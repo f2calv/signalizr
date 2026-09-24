@@ -71,24 +71,9 @@ public sealed class SignalizrClient(
                 cancellationToken)
             .ConfigureAwait(false);
 
-        // Acknowledge the previous message only once the consumer asks for the next one, so an ack
-        // means "processed" rather than "received". A consumer that stops enumerating leaves the
-        // last message unacknowledged, which is the honest outcome.
-        string? unacknowledged = null;
-
         await foreach (var message in call.ResponseStream
             .ReadAllAsync(cancellationToken).ConfigureAwait(false))
         {
-            if (unacknowledged is not null)
-            {
-                await call.RequestStream
-                    .WriteAsync(new SubscribeRequest { Ack = new Ack { DeliveryId = unacknowledged } },
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            unacknowledged = message.DeliveryId;
-
             yield return new SignalizrMessage
             {
                 DeliveryId = message.DeliveryId,
@@ -97,6 +82,14 @@ public sealed class SignalizrClient(
                 Message = message.Message,
                 Timestamp = message.Timestamp
             };
+
+            // Execution resumes here only when the consumer asks for the next item, so this means
+            // "processed" rather than merely "received". Send it before waiting for the next
+            // response: with MaxOutstanding=1 the server cannot send that response until this ack.
+            await call.RequestStream
+                .WriteAsync(new SubscribeRequest { Ack = new Ack { DeliveryId = message.DeliveryId } },
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 

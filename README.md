@@ -3,9 +3,9 @@
 A Signal Messenger **gateway** — a single, controlled owner of one Signal account that other
 applications send through and subscribe to, instead of each one holding its own connection.
 
-> **Status: proven end to end, on one account.** Sending and receiving have both been exercised
-> against a registered Signal account. Queue saturation, concurrent subscribers, acknowledgement
-> timeout, slow-subscriber failure, and wrapper-outage recovery now have measured coverage. A
+> **Status: proven end to end, on one account.** Sending, receiving, concurrent subscribers,
+> acknowledgement timeout, queue saturation, and wrapper-outage recovery have live evidence. The
+> EF-backed replay and telemetry changes are covered locally and await deployment validation. A
 > 24-hour soak and message-loss measurement across an outage remain unproven.
 
 ## Why
@@ -41,6 +41,7 @@ A single container image, with the role selected by feature flag:
 
 | Feature | Default | Role |
 | --- | --- | --- |
+| `DbMigrator` | off | Applies pending EF Core migrations, then exits |
 | `Gateway` | on | REST send surface, gRPC subscription surface, named-channel resolution |
 | `Receiver` | on | Owns the single receive stream and fans out to subscribers |
 | `DemoClient` | off | Sample thin client, for evaluating the gateway without writing one |
@@ -98,9 +99,11 @@ loop and lose messages upstream, where nothing can count them; dropping loses th
 count is reported. It drops the oldest, on the basis that a stale message is worth less than a
 current one. Size it with `CasCap:ReceiverConfig:QueueCapacity`.
 
-A separate dispatcher drains that queue and fans each message out to connected subscribers. Keeping
-it separate is the point: resolving the channel and delivering to subscribers is per-message work,
-and doing it in the receive loop would stop the upstream being read.
+A separate dispatcher drains that queue, resolves the channel, and persists the message through EF
+Core before waking subscribers. Keeping it separate is the point: database work never blocks the
+upstream receive loop. Once `SaveChangesAsync` succeeds, subscriber delivery is at least once within
+the configured retention window. Anything lost by the upstream wrapper or displaced from the
+bounded process queue before persistence cannot be replayed; both boundaries are observable.
 
 ## Subscribing
 
@@ -111,25 +114,48 @@ Bidirectional rather than server-streaming because the acknowledgement is what m
 observable. A fire-and-forget stream would let the server treat a message as delivered the moment it
 was written to the socket, which is the upstream wrapper's defect reproduced one layer up.
 
-Two limits protect the dispatcher from one slow subscriber, and both fail loudly:
+`SubscriberName` is a stable durable identity, not a display label. Only one live stream may use an
+identity; a duplicate connection receives `ALREADY_EXISTS`. A new identity starts at the current
+message tail. Reconnecting an existing identity resumes after its last contiguously acknowledged
+message, so an unacknowledged delivery is replayed and consumers must tolerate duplicates.
+
+Two limits bound one stream without blocking persistence or other subscribers:
 
 | Setting | Effect when exceeded |
 | --- | --- |
-| `CasCap:SubscriberConfig:QueueCapacity` | The subscriber is disconnected rather than having messages dropped |
+| `CasCap:SubscriberConfig:ReplayBatchSize` | Limits rows loaded from persistence per replay query |
 | `CasCap:SubscriberConfig:MaxOutstanding` | Delivery pauses until acknowledgements arrive |
 | `CasCap:SubscriberConfig:AckTimeoutMs` | The stream ends with `DEADLINE_EXCEEDED` |
 
-Each subscriber receives its own `delivery_id` for the same message, so one subscriber's
-acknowledgement can never clear another's.
+The same persisted message has the same `delivery_id` for every subscriber, but acknowledgements
+advance independent durable cursors. One subscriber can never acknowledge another's work.
+
+## Durability and retention
+
+`CasCap:DatabaseConfig:Provider` supports `InMemory`, `Sqlite`, and `Postgres`. InMemory is test-only
+when `DurabilityRequired` is enabled. SQLite is the public clone-and-run default and stores its file
+on the chart-owned PVC. PostgreSQL is the recommended first production provider because its rows and
+cursors can be inspected while the service runs.
+
+Relational migrations are applied by the one-shot `DbMigrator` role. Production receivers set
+`MigrateOnStartup` to `false`, avoiding migration races during rollout.
+
+Retention has two bounds:
+
+- Messages acknowledged by every registered subscriber are removed after
+  `AcknowledgedMessageRetentionHours`, default 24 hours.
+- All message content is removed after `MessageRetentionDays`, default 30 days, even when an
+  abandoned subscriber never advances. At-least-once replay is therefore bounded to this window.
 
 ## Validation Status
 
 | Scenario | Result |
 | --- | --- |
 | Queue saturation | 10,000 writes into capacity 1,000 produced exactly 9,000 counted drops, retained the newest 1,000, and emitted one warning |
-| Two subscribers | Two clients on the deployed gRPC endpoint received the same primary-device message with distinct delivery ids and acknowledged independently |
+| Two subscribers | Two clients on the deployed gRPC endpoint received and acknowledged independently; EF-backed cursors add deterministic replay coverage locally |
 | Acknowledgement timeout | A non-acknowledging subscriber ended with `DEADLINE_EXCEEDED` while another subscriber continued |
-| Subscriber queue overrun | The slow stream ended with `RESOURCE_EXHAUSTED`; dispatch remained non-blocking |
+| Durable replay | Local tests prove unacknowledged replay, acknowledged suppression, independent cursors, duplicate-identity rejection, and ordered acknowledgements |
+| Retention | Local tests prove 24-hour globally acknowledged cleanup and the hard 30-day message-content cap |
 | Wrapper outage | Gateway readiness changed to 503 without a restart; health checks completed in 5–26ms; WebSocket reconnect used bounded backoff |
 | Wrapper recovery | Wrapper ready after 48.7s, gateway ready after 56.1s, and the receive WebSocket reconnected on attempt 9 |
 | Long-running stability | Not yet measured for 24 hours |
@@ -157,6 +183,21 @@ Two first-class targets, sharing one configuration shape:
   client together.
 - **Helm** — a documented [umbrella chart](charts/signalizr/README.md) pairing the upstream wrapper
   with the gateway.
+
+The independent [dashboard chart](charts/signalizr-dashboards/README.md) publishes the
+`charts/signalizr-dashboards` OCI package for deployment into a Grafana monitoring namespace.
+
+## Observability
+
+Signalizr uses the shared Serilog-owned logging pipeline and native OpenTelemetry exporters. The
+host registers the `CasCap.Signalizr` and `CasCap.Api.SignalCli` meters and activity sources. OTLP
+is enabled by setting `AppConfig:OtlpExporterEndpoint`.
+
+The core metrics cover process-queue receive/drop/depth, durable persistence count/latency/backlog,
+active subscribers, delivery/acknowledgement/timeouts, pruning, SignalCli frame outcomes,
+reconnections, staleness, and buffered-message depth. Labels are bounded outcomes only; phone
+numbers, subscriber names, senders, channels, group identifiers, and message content never become
+metric labels or trace attributes.
 
 Configuration is loaded through the standard provider chain, so the same JSON works whether it
 arrives as a mounted file, a projected ConfigMap key, or environment variables.

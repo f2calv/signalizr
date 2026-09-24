@@ -52,7 +52,7 @@ public class FeatureConfigTests
     public void ValidNames_ContainsEveryDeclaredFeature()
     {
         Assert.Equal(
-            [FeatureNames.DemoClient, FeatureNames.Gateway, FeatureNames.Mcp, FeatureNames.Receiver],
+            [FeatureNames.DbMigrator, FeatureNames.DemoClient, FeatureNames.Gateway, FeatureNames.Mcp, FeatureNames.Receiver],
             FeatureNames.ValidNames.OrderBy(n => n, StringComparer.Ordinal));
     }
 }

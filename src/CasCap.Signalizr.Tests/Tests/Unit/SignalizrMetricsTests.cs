@@ -40,4 +40,3 @@ public sealed class SignalizrMetricsTests
         Assert.Equal(prefix, metrics.ActivitySource.Name);
     }
 }
-

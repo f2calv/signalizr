@@ -140,7 +140,7 @@ public sealed class DurableMessagePrunerServiceTests : IDisposable
         public SignalizrDbContext CreateDbContext() => new(_options);
 
         public ValueTask<SignalizrDbContext> CreateDbContextAsync(
-            CancellationToken cancellationToken = default) =>
+            CancellationToken _ = default) =>
             ValueTask.FromResult(CreateDbContext());
 
         public void Dispose() => _connection.Dispose();

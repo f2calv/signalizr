@@ -170,7 +170,7 @@ public class InboundGrpcServiceTests
         public SignalizrDbContext CreateDbContext() => new(_options);
 
         public ValueTask<SignalizrDbContext> CreateDbContextAsync(
-            CancellationToken cancellationToken = default) =>
+            CancellationToken _ = default) =>
             ValueTask.FromResult(CreateDbContext());
     }
 

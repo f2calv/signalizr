@@ -16,6 +16,8 @@ namespace CasCap.Tests;
 /// <summary>Covers durable subscriber registration, replay, and acknowledgement cursors.</summary>
 public sealed class InboundSubscriberRegistryTests
 {
+    private const string DurableSubscriberName = "durable";
+
     [Fact]
     public async Task Subscribing_and_unsubscribing_tracks_the_count()
     {
@@ -53,13 +55,13 @@ public sealed class InboundSubscriberRegistryTests
     public async Task Unacknowledged_message_is_replayed_after_reconnect()
     {
         using var fixture = new RegistryFixture();
-        var first = await fixture.Registry.SubscribeAsync("durable", TestContext.Current.CancellationToken);
+        var first = await fixture.Registry.SubscribeAsync(DurableSubscriberName, TestContext.Current.CancellationToken);
         await fixture.AddMessageAsync("replay-me");
         fixture.Registry.NotifyMessageAvailable();
         var firstAttempt = await ReadOneAsync(first);
         fixture.Registry.Unsubscribe(first);
 
-        var second = await fixture.Registry.SubscribeAsync("durable", TestContext.Current.CancellationToken);
+        var second = await fixture.Registry.SubscribeAsync(DurableSubscriberName, TestContext.Current.CancellationToken);
         var replay = await ReadOneAsync(second);
 
         Assert.Equal(firstAttempt.DeliveryId, replay.DeliveryId);
@@ -70,7 +72,7 @@ public sealed class InboundSubscriberRegistryTests
     public async Task Acknowledged_message_is_not_replayed_after_reconnect()
     {
         using var fixture = new RegistryFixture();
-        var first = await fixture.Registry.SubscribeAsync("durable", TestContext.Current.CancellationToken);
+        var first = await fixture.Registry.SubscribeAsync(DurableSubscriberName, TestContext.Current.CancellationToken);
         await fixture.AddMessageAsync("ack-me");
         fixture.Registry.NotifyMessageAvailable();
         var acknowledged = await ReadOneAsync(first);
@@ -80,7 +82,7 @@ public sealed class InboundSubscriberRegistryTests
             acknowledged.DeliveryId, TestContext.Current.CancellationToken));
         fixture.Registry.Unsubscribe(first);
 
-        var second = await fixture.Registry.SubscribeAsync("durable", TestContext.Current.CancellationToken);
+        var second = await fixture.Registry.SubscribeAsync(DurableSubscriberName, TestContext.Current.CancellationToken);
         await fixture.AddMessageAsync("next");
         fixture.Registry.NotifyMessageAvailable();
         var delivery = await ReadOneAsync(second);
@@ -230,7 +232,7 @@ public sealed class InboundSubscriberRegistryTests
         public SignalizrDbContext CreateDbContext() => new(_options);
 
         public ValueTask<SignalizrDbContext> CreateDbContextAsync(
-            CancellationToken cancellationToken = default) =>
+            CancellationToken _ = default) =>
             ValueTask.FromResult(CreateDbContext());
     }
 }

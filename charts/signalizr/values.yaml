@@ -118,7 +118,7 @@ signalizr:
       cpu: 500m
       memory: 256Mi
 
-# One-shot EF Core migration workload. Environments select kind: Job and add hook annotations.
+# One-shot EF Core migration workload. Environments set replicaCount: 1 and add hook annotations.
 migrate:
   replicaCount: 0
   kind: Job

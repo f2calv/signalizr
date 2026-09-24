@@ -35,7 +35,8 @@ The public default uses SQLite at `/var/lib/signalizr/signalizr.db` on a 1 GiB R
 Override `CasCap__DatabaseConfig__Provider` and supply
 `CasCap__DatabaseConfig__ConnectionString` from a Secret to use PostgreSQL. Set
 `CasCap__DatabaseConfig__MigrateOnStartup=false` when the `migrate` alias runs as an Argo CD PreSync
-Job.
+Job. The alias is dormant by default; set `migrate.replicaCount=1` in the environment values so the
+Job is rendered on every schema-bearing sync.
 
 The image runs as uid 1654; the default pod security context sets `fsGroup: 1654` so a fresh PVC is
 writable without a privileged init container.

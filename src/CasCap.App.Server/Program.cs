@@ -65,6 +65,7 @@ if (enabledFeatures.Contains(FeatureNames.Receiver))
         builder.Configuration.GetSection(SubscriberConfig.ConfigurationSectionName));
     builder.Services.AddSingleton<IInboundMessageQueue, InboundMessageQueue>();
     builder.Services.AddSingleton<IInboundSubscriberRegistry, InboundSubscriberRegistry>();
+    builder.Services.AddSingleton<InboundAttachmentService>();
     builder.Services.AddSingleton<IBgFeature, ReceiverBgService>();
     // Separate from the receive loop: per-message work belongs here, where it cannot stop the
     // upstream being read.

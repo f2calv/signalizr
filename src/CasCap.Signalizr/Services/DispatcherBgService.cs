@@ -17,6 +17,8 @@ public sealed class DispatcherBgService(
     IChannelResolver channelResolver,
     TimeProvider timeProvider,
     SignalizrMetrics metrics,
+    ISignalCliClient signalCliClient,
+    IOptions<ReceiverConfig> receiverConfig,
     IDbContextFactory<SignalizrDbContext> dbContextFactory) : IBgFeature
 {
     /// <inheritdoc/>
@@ -38,19 +40,67 @@ public sealed class DispatcherBgService(
 
             using var activity = metrics.ActivitySource.StartActivity("signalizr.persist_inbound");
             var startedAt = timeProvider.GetTimestamp();
+            var notification = (IReceivedNotification)message;
+            var sourceAttachments = notification.Attachments?
+                .Where(attachment => !string.IsNullOrWhiteSpace(attachment.Id))
+                .ToArray() ?? [];
             await using (var dbContext = await dbContextFactory
                 .CreateDbContextAsync(cancellationToken)
                 .ConfigureAwait(false))
             {
-                dbContext.InboundMessages.Add(new InboundMessageEntity
+                var entity = new InboundMessageEntity
                 {
                     Channel = delivery.Channel,
                     Sender = delivery.Sender,
                     Message = delivery.Message,
                     Timestamp = delivery.Timestamp,
                     PersistedAtUnixMilliseconds = timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
-                });
+                };
+
+                foreach (var attachment in sourceAttachments)
+                {
+                    if (attachment is Models.Dtos.SignalReceivedAttachment { Size: { } declaredSize }
+                        && declaredSize > receiverConfig.Value.MaxAttachmentBytes)
+                    {
+                        throw new InvalidOperationException(
+                            $"An inbound attachment exceeds the configured {receiverConfig.Value.MaxAttachmentBytes} byte limit.");
+                    }
+
+                    var content = await signalCliClient
+                        .GetAttachment(attachment.Id!, cancellationToken)
+                        .ConfigureAwait(false)
+                        ?? throw new InvalidOperationException("The wrapper returned no attachment content.");
+                    if (content.Length > receiverConfig.Value.MaxAttachmentBytes)
+                    {
+                        throw new InvalidOperationException(
+                            $"An inbound attachment exceeds the configured {receiverConfig.Value.MaxAttachmentBytes} byte limit.");
+                    }
+
+                    entity.Attachments.Add(new InboundAttachmentEntity
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        ContentType = attachment.ContentType,
+                        Filename = (attachment as Models.Dtos.SignalReceivedAttachment)?.Filename,
+                        Content = content
+                    });
+                }
+
+                dbContext.InboundMessages.Add(entity);
                 await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            var deleteFailures = 0;
+            foreach (var attachment in sourceAttachments)
+            {
+                if (!await signalCliClient.DeleteAttachment(attachment.Id!, cancellationToken).ConfigureAwait(false))
+                    deleteFailures++;
+            }
+
+            if (deleteFailures > 0)
+            {
+                logger.LogWarning(
+                    "{ClassName} persisted inbound binaries but failed to delete {FailureCount} wrapper attachment(s)",
+                    nameof(DispatcherBgService), deleteFailures);
             }
 
             metrics.RecordPersisted(timeProvider.GetElapsedTime(startedAt));

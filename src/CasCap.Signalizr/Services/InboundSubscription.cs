@@ -58,6 +58,7 @@ public sealed class InboundSubscription : IDisposable
                 .ConfigureAwait(false);
             var messages = await dbContext.InboundMessages
                 .AsNoTracking()
+                .Include(message => message.Attachments)
                 .Where(message => message.Id > _nextMessageId)
                 .OrderBy(message => message.Id)
                 .Take(_replayBatchSize)
@@ -79,7 +80,14 @@ public sealed class InboundSubscription : IDisposable
                     Channel = message.Channel,
                     Sender = message.Sender,
                     Message = message.Message,
-                    Timestamp = message.Timestamp
+                    Timestamp = message.Timestamp,
+                    Attachments = [.. message.Attachments.Select(attachment => new InboundAttachment
+                    {
+                        Id = attachment.Id,
+                        ContentType = attachment.ContentType,
+                        Filename = attachment.Filename,
+                        Size = attachment.Content.LongLength
+                    })]
                 };
             }
         }

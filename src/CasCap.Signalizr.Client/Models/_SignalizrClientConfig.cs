@@ -20,7 +20,8 @@ public sealed record SignalizrClientConfig
     [Required]
     public string GrpcAddress { get; init; } = "http://localhost:5001";
 
-    /// <summary>Name reported to the gateway for diagnostics. Not unique and never used for routing.</summary>
+    /// <summary>Stable subscriber identity used as the durable acknowledgement cursor key.</summary>
+    /// <remarks>Only one live stream may use a subscriber name at a time.</remarks>
     [Required(AllowEmptyStrings = false)]
     public string SubscriberName { get; init; } = "signalizr-client";
 }

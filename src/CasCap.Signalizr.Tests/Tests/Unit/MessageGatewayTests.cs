@@ -69,6 +69,18 @@ public class MessageGatewayTests
         Assert.NotEqual(first.Id, second.Id);
     }
 
+    [Theory]
+    [InlineData("data:image/png;filename=chart.png;base64,dGVzdA==")]
+    [InlineData("data:audio/ogg;filename=reply.ogg;base64,dGVzdA==")]
+    public void CreateRequest_PassesBinaryAttachmentsThroughVerbatim(string attachment)
+    {
+        string[] attachments = [attachment];
+
+        var request = MessageGateway.CreateRequest(Number, GroupId, Text, attachments);
+
+        Assert.Equal(attachments, request.Base64Attachments);
+    }
+
     [Fact]
     public void UnknownChannelException_NamesTheChannel()
     {

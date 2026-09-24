@@ -42,6 +42,32 @@ namespace CasCap.Data.Migrations
                     table.PrimaryKey("PK_subscriber_cursors", x => x.subscriber_name);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "inbound_attachments",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "text", nullable: false),
+                    inbound_message_id = table.Column<long>(type: "bigint", nullable: false),
+                    content_type = table.Column<string>(type: "text", nullable: true),
+                    filename = table.Column<string>(type: "text", nullable: true),
+                    content = table.Column<byte[]>(type: "bytea", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_inbound_attachments", x => x.id);
+                    table.ForeignKey(
+                        name: "FK_inbound_attachments_inbound_messages_inbound_message_id",
+                        column: x => x.inbound_message_id,
+                        principalTable: "inbound_messages",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_inbound_attachments_inbound_message_id",
+                table: "inbound_attachments",
+                column: "inbound_message_id");
+
             migrationBuilder.CreateIndex(
                 name: "ix_inbound_messages_persisted_at_unix_milliseconds",
                 table: "inbound_messages",
@@ -52,10 +78,13 @@ namespace CasCap.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "inbound_messages");
+                name: "inbound_attachments");
 
             migrationBuilder.DropTable(
                 name: "subscriber_cursors");
+
+            migrationBuilder.DropTable(
+                name: "inbound_messages");
         }
     }
 }

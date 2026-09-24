@@ -105,6 +105,12 @@ upstream receive loop. Once `SaveChangesAsync` succeeds, subscriber delivery is 
 the configured retention window. Anything lost by the upstream wrapper or displaced from the
 bounded process queue before persistence cannot be replayed; both boundaries are observable.
 
+Inbound binary attachments are downloaded from the wrapper before that database commit and exposed
+to subscribers as durable descriptors. Consumers retrieve raw bytes from
+`GET /api/v1/attachments/{attachmentId}`. Attachment content remains available for replay and for
+independent subscribers until retention removes the parent message. The receiver rejects any one
+attachment larger than `CasCap:ReceiverConfig:MaxAttachmentBytes`, default 100 MiB.
+
 ## Subscribing
 
 `Subscribe` is a bidirectional stream on `signalizr.v1.Inbound`. A subscriber sends `Hello` once,
@@ -146,6 +152,9 @@ Retention has two bounds:
   `AcknowledgedMessageRetentionHours`, default 24 hours.
 - All message content is removed after `MessageRetentionDays`, default 30 days, even when an
   abandoned subscriber never advances. At-least-once replay is therefore bounded to this window.
+
+Deleting a retained message cascades to its attachment content. Consumers do not delete attachments
+individually because doing so could break replay or another subscriber.
 
 ## Validation Status
 

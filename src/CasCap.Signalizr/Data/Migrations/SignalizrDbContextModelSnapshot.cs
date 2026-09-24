@@ -22,6 +22,37 @@ namespace CasCap.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("CasCap.Data.Entities.InboundAttachmentEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content");
+
+                    b.Property<string>("ContentType")
+                        .HasColumnType("text")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("Filename")
+                        .HasColumnType("text")
+                        .HasColumnName("filename");
+
+                    b.Property<long>("InboundMessageId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("inbound_message_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InboundMessageId")
+                        .HasDatabaseName("ix_inbound_attachments_inbound_message_id");
+
+                    b.ToTable("inbound_attachments", (string)null);
+                });
+
             modelBuilder.Entity("CasCap.Data.Entities.InboundMessageEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -76,6 +107,22 @@ namespace CasCap.Data.Migrations
                     b.HasKey("SubscriberName");
 
                     b.ToTable("subscriber_cursors", (string)null);
+                });
+
+            modelBuilder.Entity("CasCap.Data.Entities.InboundAttachmentEntity", b =>
+                {
+                    b.HasOne("CasCap.Data.Entities.InboundMessageEntity", "InboundMessage")
+                        .WithMany("Attachments")
+                        .HasForeignKey("InboundMessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InboundMessage");
+                });
+
+            modelBuilder.Entity("CasCap.Data.Entities.InboundMessageEntity", b =>
+                {
+                    b.Navigation("Attachments");
                 });
 #pragma warning restore 612, 618
         }

@@ -22,4 +22,7 @@ public sealed record InboundDelivery
 
     /// <summary>Milliseconds since the Unix epoch, as supplied by the Signal server.</summary>
     public long? Timestamp { get; init; }
+
+    /// <summary>Durable binary attachments associated with this message.</summary>
+    public IReadOnlyList<InboundAttachment> Attachments { get; init; } = [];
 }

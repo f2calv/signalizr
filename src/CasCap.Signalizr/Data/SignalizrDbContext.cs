@@ -9,6 +9,9 @@ public sealed class SignalizrDbContext(DbContextOptions<SignalizrDbContext> opti
     /// <summary>Persisted inbound messages ordered by monotonic identifier.</summary>
     public DbSet<InboundMessageEntity> InboundMessages => Set<InboundMessageEntity>();
 
+    /// <summary>Durable binary content associated with inbound messages.</summary>
+    public DbSet<InboundAttachmentEntity> InboundAttachments => Set<InboundAttachmentEntity>();
+
     /// <summary>Durable per-subscriber acknowledgement cursors.</summary>
     public DbSet<SubscriberCursorEntity> SubscriberCursors => Set<SubscriberCursorEntity>();
 
@@ -28,6 +31,23 @@ public sealed class SignalizrDbContext(DbContextOptions<SignalizrDbContext> opti
                 .HasColumnName("persisted_at_unix_milliseconds");
             entity.HasIndex(message => message.PersistedAtUnixMilliseconds)
                 .HasDatabaseName("ix_inbound_messages_persisted_at_unix_milliseconds");
+        });
+
+        modelBuilder.Entity<InboundAttachmentEntity>(entity =>
+        {
+            entity.ToTable("inbound_attachments");
+            entity.HasKey(attachment => attachment.Id);
+            entity.Property(attachment => attachment.Id).HasColumnName("id");
+            entity.Property(attachment => attachment.InboundMessageId).HasColumnName("inbound_message_id");
+            entity.Property(attachment => attachment.ContentType).HasColumnName("content_type");
+            entity.Property(attachment => attachment.Filename).HasColumnName("filename");
+            entity.Property(attachment => attachment.Content).HasColumnName("content");
+            entity.HasIndex(attachment => attachment.InboundMessageId)
+                .HasDatabaseName("ix_inbound_attachments_inbound_message_id");
+            entity.HasOne(attachment => attachment.InboundMessage)
+                .WithMany(message => message.Attachments)
+                .HasForeignKey(attachment => attachment.InboundMessageId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<SubscriberCursorEntity>(entity =>

@@ -15,7 +15,7 @@ service Inbound {
 
 message SubscribeRequest {
   oneof payload {
-    // Sent once, before anything else, to identify the subscriber in logs and metrics.
+    // Sent once, before anything else, to select the durable subscriber cursor.
     Hello hello = 1;
     // Sent per delivered message.
     Ack ack = 2;
@@ -23,7 +23,7 @@ message SubscribeRequest {
 }
 
 message Hello {
-  // Free-form and non-unique; used for diagnostics only, never for routing.
+  // Stable durable cursor key. Only one live stream may use a name at a time.
   string subscriber_name = 1;
 }
 
@@ -32,8 +32,7 @@ message Ack {
 }
 
 message InboundMessage {
-  // Unique per delivery attempt to one subscriber, not per Signal message: two subscribers
-  // receiving the same message each acknowledge their own delivery.
+  // Durable Signalizr message sequence. Subscriber acknowledgements advance independent cursors.
   string delivery_id = 1;
 
   // The configured channel name, or empty when the message did not arrive on a known channel.
@@ -47,4 +46,14 @@ message InboundMessage {
 
   // Milliseconds since the Unix epoch, as supplied by the Signal server.
   int64 timestamp = 5;
+
+  // Durable descriptors only. Binary content is downloaded through the REST attachment surface.
+  repeated InboundAttachment attachments = 6;
+}
+
+message InboundAttachment {
+  string id = 1;
+  string content_type = 2;
+  string filename = 3;
+  int64 size = 4;
 }

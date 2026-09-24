@@ -117,12 +117,23 @@ public sealed class InboundGrpcService(
         }
     }
 
-    private static InboundMessage ToMessage(InboundDelivery delivery) => new()
+    private static InboundMessage ToMessage(InboundDelivery delivery)
     {
-        DeliveryId = delivery.DeliveryId,
-        Channel = delivery.Channel ?? string.Empty,
-        Sender = delivery.Sender ?? string.Empty,
-        Message = delivery.Message ?? string.Empty,
-        Timestamp = delivery.Timestamp ?? 0
-    };
+        var message = new InboundMessage
+        {
+            DeliveryId = delivery.DeliveryId,
+            Channel = delivery.Channel ?? string.Empty,
+            Sender = delivery.Sender ?? string.Empty,
+            Message = delivery.Message ?? string.Empty,
+            Timestamp = delivery.Timestamp ?? 0
+        };
+        message.Attachments.AddRange(delivery.Attachments.Select(attachment => new CasCap.Grpc.InboundAttachment
+        {
+            Id = attachment.Id,
+            ContentType = attachment.ContentType ?? string.Empty,
+            Filename = attachment.Filename ?? string.Empty,
+            Size = attachment.Size
+        }));
+        return message;
+    }
 }

@@ -20,4 +20,7 @@ public sealed class InboundMessageEntity
 
     /// <summary>Unix milliseconds at which Signalizr persisted the message.</summary>
     public long PersistedAtUnixMilliseconds { get; set; }
+
+    /// <summary>Durable binary attachments downloaded before the wrapper copy is deleted.</summary>
+    public List<InboundAttachmentEntity> Attachments { get; set; } = [];
 }

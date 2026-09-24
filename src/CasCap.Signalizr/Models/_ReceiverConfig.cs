@@ -3,7 +3,7 @@ namespace CasCap.Models;
 /// <summary>Bounds the inbound queue that the receive loop drains into.</summary>
 /// <remarks>
 /// Binds from <c>CasCap:ReceiverConfig</c>, which arrives identically from <c>appsettings.json</c>,
-/// a mounted file, a projected ConfigMap key or <c>CasCap__ReceiverConfig__QueueCapacity</c>.
+/// a mounted file, a projected ConfigMap key or environment variables.
 /// </remarks>
 public sealed record ReceiverConfig
 {
@@ -21,4 +21,8 @@ public sealed record ReceiverConfig
     /// </remarks>
     [Range(1, 1_000_000)]
     public int QueueCapacity { get; init; } = 1_000;
+
+    /// <summary>Maximum persisted size of one inbound binary attachment.</summary>
+    [Range(1_024, 1_073_741_824)]
+    public int MaxAttachmentBytes { get; init; } = 104_857_600;
 }

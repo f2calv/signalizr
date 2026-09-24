@@ -61,6 +61,8 @@ jobs:
     uses: f2calv/gha-workflows/.github/workflows/helm-chart-package.yml@v1
     with:
       tag: ${{ needs.versioning.outputs.version }}
+      image-registry: ghcr.io
+      image-repository: ${{ github.repository_owner }}/signalizr
       chart-registry: ghcr.io
       chart-registry-username: ${{ github.repository_owner }}
       chart-repository: ${{ github.repository_owner }}/charts/signalizr-dashboards

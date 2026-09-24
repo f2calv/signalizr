@@ -146,8 +146,8 @@ public class DispatcherMappingTests
         var lookup = ChannelResolver.BuildInboundLookup(resolved, groups);
 
         var entry = Assert.Single(lookup);
-        Assert.Equal(GroupId, entry.Key.Id);
-        Assert.Equal(InternalId, entry.Key.InternalId);
+        Assert.True(entry.Key.Matches(GroupId));
+        Assert.True(entry.Key.Matches(InternalId));
         Assert.Equal("system", entry.Value);
     }
 }

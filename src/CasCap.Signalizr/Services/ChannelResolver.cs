@@ -22,7 +22,7 @@ public sealed class ChannelResolver(
     /// <inheritdoc/>
     public bool TryGetChannelName(string groupId, out string channelName)
     {
-        var match = Volatile.Read(ref _groups).FirstOrDefault(pair => Matches(pair.Key, groupId));
+        var match = Volatile.Read(ref _groups).FirstOrDefault(pair => pair.Key.Matches(groupId));
         channelName = match.Value ?? string.Empty;
         return match.Key is not null;
     }
@@ -109,8 +109,4 @@ public sealed class ChannelResolver(
             .ToArray();
     }
 
-    // Remove after the CasCap.Api.SignalCli release containing SignalGroup.Matches is consumed.
-    private static bool Matches(SignalGroup group, string groupId) =>
-        string.Equals(group.Id, groupId, StringComparison.Ordinal)
-        || string.Equals(group.InternalId, groupId, StringComparison.Ordinal);
 }

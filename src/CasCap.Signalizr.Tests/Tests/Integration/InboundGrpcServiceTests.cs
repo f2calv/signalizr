@@ -148,14 +148,10 @@ public class InboundGrpcServiceTests
         public async Task AddMessageAsync(string message)
         {
             await using var dbContext = await _dbContextFactory.CreateDbContextAsync();
-            var nextMessageId = await dbContext.InboundMessages
-                .Select(candidate => (long?)candidate.Id)
-                .MaxAsync() + 1 ?? 1;
             dbContext.InboundMessages.Add(new InboundMessageEntity
             {
-                Id = nextMessageId,
                 Message = message,
-                PersistedAtUtc = DateTimeOffset.UtcNow
+                PersistedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             });
             await dbContext.SaveChangesAsync();
             Registry.NotifyMessageAvailable();

@@ -18,6 +18,6 @@ public sealed class InboundMessageEntity
     /// <summary>Milliseconds since the Unix epoch, as supplied by Signal.</summary>
     public long? Timestamp { get; set; }
 
-    /// <summary>UTC time at which Signalizr persisted the message.</summary>
-    public DateTimeOffset PersistedAtUtc { get; set; }
+    /// <summary>Unix milliseconds at which Signalizr persisted the message.</summary>
+    public long PersistedAtUnixMilliseconds { get; set; }
 }

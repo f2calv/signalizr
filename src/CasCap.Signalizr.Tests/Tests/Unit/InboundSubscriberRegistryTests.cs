@@ -124,6 +124,30 @@ public sealed class InboundSubscriberRegistryTests
     }
 
     [Fact]
+    public async Task Concurrent_first_subscriptions_accept_exactly_one_stream()
+    {
+        using var fixture = new RegistryFixture();
+        var attempts = Enumerable.Range(0, 2).Select(async _ =>
+        {
+            try
+            {
+                return await fixture.Registry.SubscribeAsync(
+                    "concurrent", TestContext.Current.CancellationToken);
+            }
+            catch (SubscriberAlreadyConnectedException)
+            {
+                return null;
+            }
+        });
+
+        var results = await Task.WhenAll(attempts);
+
+        Assert.Single(results, subscription => subscription is not null);
+        Assert.Single(results, subscription => subscription is null);
+        Assert.Equal(1, fixture.Registry.Count);
+    }
+
+    [Fact]
     public async Task Delivery_pauses_once_the_outstanding_budget_is_exhausted()
     {
         using var fixture = new RegistryFixture(maxOutstanding: 2);
@@ -185,14 +209,10 @@ public sealed class InboundSubscriberRegistryTests
         public async Task AddMessageAsync(string message)
         {
             await using var dbContext = await _dbContextFactory.CreateDbContextAsync();
-            var nextMessageId = await dbContext.InboundMessages
-                .Select(candidate => (long?)candidate.Id)
-                .MaxAsync() + 1 ?? 1;
             dbContext.InboundMessages.Add(new InboundMessageEntity
             {
-                Id = nextMessageId,
                 Message = message,
-                PersistedAtUtc = DateTimeOffset.UtcNow
+                PersistedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             });
             await dbContext.SaveChangesAsync();
         }

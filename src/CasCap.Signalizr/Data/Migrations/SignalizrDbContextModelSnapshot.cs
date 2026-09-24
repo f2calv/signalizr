@@ -25,8 +25,11 @@ namespace CasCap.Data.Migrations
             modelBuilder.Entity("CasCap.Data.Entities.InboundMessageEntity", b =>
                 {
                     b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<string>("Channel")
                         .HasColumnType("text")
@@ -36,9 +39,9 @@ namespace CasCap.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("message");
 
-                    b.Property<DateTimeOffset>("PersistedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("persisted_at_utc");
+                    b.Property<long>("PersistedAtUnixMilliseconds")
+                        .HasColumnType("bigint")
+                        .HasColumnName("persisted_at_unix_milliseconds");
 
                     b.Property<string>("Sender")
                         .HasColumnType("text")
@@ -50,8 +53,8 @@ namespace CasCap.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PersistedAtUtc")
-                        .HasDatabaseName("ix_inbound_messages_persisted_at_utc");
+                    b.HasIndex("PersistedAtUnixMilliseconds")
+                        .HasDatabaseName("ix_inbound_messages_persisted_at_unix_milliseconds");
 
                     b.ToTable("inbound_messages", (string)null);
                 });

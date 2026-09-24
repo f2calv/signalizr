@@ -19,14 +19,15 @@ public sealed class SignalizrDbContext(DbContextOptions<SignalizrDbContext> opti
         {
             entity.ToTable("inbound_messages");
             entity.HasKey(message => message.Id);
-            entity.Property(message => message.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(message => message.Id).HasColumnName("id").ValueGeneratedOnAdd();
             entity.Property(message => message.Channel).HasColumnName("channel");
             entity.Property(message => message.Sender).HasColumnName("sender");
             entity.Property(message => message.Message).HasColumnName("message");
             entity.Property(message => message.Timestamp).HasColumnName("timestamp");
-            entity.Property(message => message.PersistedAtUtc).HasColumnName("persisted_at_utc");
-            entity.HasIndex(message => message.PersistedAtUtc)
-                .HasDatabaseName("ix_inbound_messages_persisted_at_utc");
+            entity.Property(message => message.PersistedAtUnixMilliseconds)
+                .HasColumnName("persisted_at_unix_milliseconds");
+            entity.HasIndex(message => message.PersistedAtUnixMilliseconds)
+                .HasDatabaseName("ix_inbound_messages_persisted_at_unix_milliseconds");
         });
 
         modelBuilder.Entity<SubscriberCursorEntity>(entity =>

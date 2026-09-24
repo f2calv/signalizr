@@ -37,13 +37,16 @@ public sealed class DurableMessagePrunerService(
             .ConfigureAwait(false);
         var now = timeProvider.GetUtcNow();
         var acknowledgedCutoff = now
-            .AddHours(-databaseConfig.Value.AcknowledgedMessageRetentionHours);
-        var hardCutoff = now.AddDays(-databaseConfig.Value.MessageRetentionDays);
+            .AddHours(-databaseConfig.Value.AcknowledgedMessageRetentionHours)
+            .ToUnixTimeMilliseconds();
+        var hardCutoff = now
+            .AddDays(-databaseConfig.Value.MessageRetentionDays)
+            .ToUnixTimeMilliseconds();
         var query = dbContext.InboundMessages.Where(message =>
-            message.PersistedAtUtc < hardCutoff
+            message.PersistedAtUnixMilliseconds < hardCutoff
             || (minimumAcknowledgedId != null
                 && message.Id <= minimumAcknowledgedId
-                && message.PersistedAtUtc < acknowledgedCutoff));
+                && message.PersistedAtUnixMilliseconds < acknowledgedCutoff));
         int deleted;
         if (databaseConfig.Value.Provider is DatabaseProvider.InMemory)
         {

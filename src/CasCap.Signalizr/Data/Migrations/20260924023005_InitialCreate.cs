@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -15,12 +16,13 @@ namespace CasCap.Data.Migrations
                 name: "inbound_messages",
                 columns: table => new
                 {
-                    id = table.Column<long>(type: "bigint", nullable: false),
+                    id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     channel = table.Column<string>(type: "text", nullable: true),
                     sender = table.Column<string>(type: "text", nullable: true),
                     message = table.Column<string>(type: "text", nullable: true),
                     timestamp = table.Column<long>(type: "bigint", nullable: true),
-                    persisted_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    persisted_at_unix_milliseconds = table.Column<long>(type: "bigint", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -41,9 +43,9 @@ namespace CasCap.Data.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "ix_inbound_messages_persisted_at_utc",
+                name: "ix_inbound_messages_persisted_at_unix_milliseconds",
                 table: "inbound_messages",
-                column: "persisted_at_utc");
+                column: "persisted_at_unix_milliseconds");
         }
 
         /// <inheritdoc />

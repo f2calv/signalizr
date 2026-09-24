@@ -42,20 +42,13 @@ public sealed class DispatcherBgService(
                 .CreateDbContextAsync(cancellationToken)
                 .ConfigureAwait(false))
             {
-                // The Receiver role is deliberately single-owner, so one dispatcher assigns the
-                // provider-neutral monotonic sequence without a database-specific identity type.
-                var nextMessageId = await dbContext.InboundMessages
-                    .Select(message => (long?)message.Id)
-                    .MaxAsync(cancellationToken)
-                    .ConfigureAwait(false) + 1 ?? 1;
                 dbContext.InboundMessages.Add(new InboundMessageEntity
                 {
-                    Id = nextMessageId,
                     Channel = delivery.Channel,
                     Sender = delivery.Sender,
                     Message = delivery.Message,
                     Timestamp = delivery.Timestamp,
-                    PersistedAtUtc = timeProvider.GetUtcNow()
+                    PersistedAtUnixMilliseconds = timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
                 });
                 await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             }

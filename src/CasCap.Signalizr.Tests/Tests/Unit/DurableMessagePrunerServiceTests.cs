@@ -2,8 +2,8 @@ using CasCap.Data;
 using CasCap.Data.Entities;
 using CasCap.Diagnostics;
 using CasCap.Services;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -21,8 +21,18 @@ public sealed class DurableMessagePrunerServiceTests : IDisposable
     public async Task Hard_retention_deletes_unacknowledged_messages_older_than_thirty_days()
     {
         await SeedAsync(
-            new InboundMessageEntity { Id = 1, Message = "expired", PersistedAtUtc = _now.AddDays(-31) },
-            new InboundMessageEntity { Id = 2, Message = "retained", PersistedAtUtc = _now.AddDays(-29) });
+            new InboundMessageEntity
+            {
+                Id = 1,
+                Message = "expired",
+                PersistedAtUnixMilliseconds = _now.AddDays(-31).ToUnixTimeMilliseconds()
+            },
+            new InboundMessageEntity
+            {
+                Id = 2,
+                Message = "retained",
+                PersistedAtUnixMilliseconds = _now.AddDays(-29).ToUnixTimeMilliseconds()
+            });
         var service = CreateService();
 
         await service.PruneOnceAsync(TestContext.Current.CancellationToken);
@@ -38,8 +48,18 @@ public sealed class DurableMessagePrunerServiceTests : IDisposable
     public async Task Acknowledged_retention_deletes_only_rows_behind_every_cursor()
     {
         await SeedAsync(
-            new InboundMessageEntity { Id = 1, Message = "acknowledged", PersistedAtUtc = _now.AddHours(-25) },
-            new InboundMessageEntity { Id = 2, Message = "not-everywhere", PersistedAtUtc = _now.AddHours(-25) });
+            new InboundMessageEntity
+            {
+                Id = 1,
+                Message = "acknowledged",
+                PersistedAtUnixMilliseconds = _now.AddHours(-25).ToUnixTimeMilliseconds()
+            },
+            new InboundMessageEntity
+            {
+                Id = 2,
+                Message = "not-everywhere",
+                PersistedAtUnixMilliseconds = _now.AddHours(-25).ToUnixTimeMilliseconds()
+            });
         await using (var dbContext = await _dbContextFactory
             .CreateDbContextAsync(TestContext.Current.CancellationToken))
         {
@@ -91,24 +111,38 @@ public sealed class DurableMessagePrunerServiceTests : IDisposable
     }
 
     /// <inheritdoc/>
-    public void Dispose() => _metrics.Dispose();
+    public void Dispose()
+    {
+        _dbContextFactory.Dispose();
+        _metrics.Dispose();
+    }
 
     private sealed class FixedTimeProvider(DateTimeOffset value) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => value;
     }
 
-    private sealed class TestDbContextFactory : IDbContextFactory<SignalizrDbContext>
+    private sealed class TestDbContextFactory : IDbContextFactory<SignalizrDbContext>, IDisposable
     {
-        private readonly DbContextOptions<SignalizrDbContext> _options =
-            new DbContextOptionsBuilder<SignalizrDbContext>()
-                .UseInMemoryDatabase(Guid.NewGuid().ToString(), new InMemoryDatabaseRoot())
+        private readonly SqliteConnection _connection = new("Data Source=:memory:");
+        private readonly DbContextOptions<SignalizrDbContext> _options;
+
+        public TestDbContextFactory()
+        {
+            _connection.Open();
+            _options = new DbContextOptionsBuilder<SignalizrDbContext>()
+                .UseSqlite(_connection)
                 .Options;
+            using var dbContext = CreateDbContext();
+            dbContext.Database.EnsureCreated();
+        }
 
         public SignalizrDbContext CreateDbContext() => new(_options);
 
         public ValueTask<SignalizrDbContext> CreateDbContextAsync(
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(CreateDbContext());
+
+        public void Dispose() => _connection.Dispose();
     }
 }

@@ -21,6 +21,12 @@ signalcli:
 # The gateway. Send and Subscribe surfaces plus the single receive owner.
 signalizr:
   replicaCount: 1
+  # The Receiver is single-owner. Never overlap old and new pods during rollout.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   fullnameOverride: signalizr
   image:
     repository: ghcr.io/f2calv/signalizr

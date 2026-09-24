@@ -3,5 +3,5 @@
     ManifestPath      = 'path/to/application.yaml'
     PodAnnotationName = 'signalizr.example.com/deployed-version'
     ChartPath         = 'charts/signalizr'
-    ChartRepository   = 'f2calv/signalizr/charts/signalizr'
+    ChartRepository   = 'f2calv/charts/signalizr'
 }

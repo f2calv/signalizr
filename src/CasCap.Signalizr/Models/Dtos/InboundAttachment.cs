@@ -3,7 +3,7 @@ namespace CasCap.Models.Dtos;
 /// <summary>Descriptor for durable inbound binary content.</summary>
 public sealed record InboundAttachment
 {
-    /// <summary>Opaque identifier used to download or delete the bytes.</summary>
+    /// <summary>Opaque identifier used to download the bytes.</summary>
     public required string Id { get; init; }
 
     /// <summary>MIME content type supplied by Signal.</summary>

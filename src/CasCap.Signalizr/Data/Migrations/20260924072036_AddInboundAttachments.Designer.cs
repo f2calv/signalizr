@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CasCap.Data.Migrations
 {
     [DbContext(typeof(SignalizrDbContext))]
-    [Migration("20260924062208_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260924072036_AddInboundAttachments")]
+    partial class AddInboundAttachments
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

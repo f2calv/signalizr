@@ -232,7 +232,10 @@ public sealed class InboundSubscriberRegistryTests
         public SignalizrDbContext CreateDbContext() => new(_options);
 
         public ValueTask<SignalizrDbContext> CreateDbContextAsync(
-            CancellationToken _ = default) =>
-            ValueTask.FromResult(CreateDbContext());
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(CreateDbContext());
+        }
     }
 }

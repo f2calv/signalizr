@@ -31,12 +31,18 @@ dependencies:
 
   # The gateway itself: Gateway and Receiver roles from one image.
   - name: workload
-    version: 1.0.3
+    version: 1.1.0
     repository: oci://ghcr.io/f2calv/charts
     alias: signalizr
 
+  # One-shot EF Core migration job. Dormant by default.
+  - name: workload
+    version: 1.1.0
+    repository: oci://ghcr.io/f2calv/charts
+    alias: migrate
+
   # The same image running only the DemoClient role. Disabled by default.
   - name: workload
-    version: 1.0.3
+    version: 1.1.0
     repository: oci://ghcr.io/f2calv/charts
     alias: demo

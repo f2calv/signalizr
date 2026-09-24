@@ -12,4 +12,14 @@ public sealed record SendMessageRequest
     [Required(AllowEmptyStrings = false)]
     [StringLength(4096, MinimumLength = 1)]
     public required string Message { get; init; }
+
+    /// <summary>Optional upstream-compatible binary data-URI attachments.</summary>
+    /// <remarks>
+    /// Each value uses the signal-cli REST API format, for example
+    /// <c>data:image/png;filename=chart.png;base64,...</c> or
+    /// <c>data:audio/ogg;filename=reply.ogg;base64,...</c>. Addressing and account fields remain
+    /// gateway-owned.
+    /// </remarks>
+    [MaxLength(10)]
+    public IReadOnlyList<string>? Base64Attachments { get; init; }
 }

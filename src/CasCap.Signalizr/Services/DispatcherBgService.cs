@@ -1,3 +1,5 @@
+using CasCap.Diagnostics;
+
 namespace CasCap.Services;
 
 /// <summary>Drains the inbound queue and fans each message out to connected subscribers.</summary>
@@ -9,7 +11,10 @@ public sealed class DispatcherBgService(
     ILogger<DispatcherBgService> logger,
     IInboundMessageQueue queue,
     IInboundSubscriberRegistry subscribers,
-    IChannelResolver channelResolver) : IBgFeature
+    IChannelResolver channelResolver,
+    TimeProvider timeProvider,
+    SignalizrMetrics metrics,
+    InboundMessagePersistenceService persistenceSvc) : IBgFeature
 {
     /// <inheritdoc/>
     public string FeatureName => FeatureNames.Receiver;
@@ -28,14 +33,12 @@ public sealed class DispatcherBgService(
             if (delivery is null)
                 continue;
 
-            foreach (var failed in subscribers.Broadcast(delivery))
-            {
-                // Disconnect rather than drop: a subscriber that cannot keep up must find out, and
-                // the gRPC stream ends with an error the client can act on.
-                logger.LogWarning("{ClassName} subscriber {Subscriber} is too far behind, disconnecting",
-                    nameof(DispatcherBgService), failed.Name);
-                subscribers.Unsubscribe(failed, new SubscriberFellBehindException(failed.Name));
-            }
+            using var activity = metrics.ActivitySource.StartActivity("signalizr.persist_inbound");
+            var startedAt = timeProvider.GetTimestamp();
+            await persistenceSvc.PersistAsync(message, delivery, cancellationToken).ConfigureAwait(false);
+
+            metrics.RecordPersisted(timeProvider.GetElapsedTime(startedAt));
+            subscribers.NotifyMessageAvailable();
         }
 
         logger.LogInformation("{ClassName} stopped", nameof(DispatcherBgService));

@@ -20,7 +20,11 @@ public sealed record SignalizrClientConfig
     [Required]
     public string GrpcAddress { get; init; } = "http://localhost:5001";
 
-    /// <summary>Name reported to the gateway for diagnostics. Not unique and never used for routing.</summary>
-    [Required(AllowEmptyStrings = false)]
-    public string SubscriberName { get; init; } = "signalizr-client";
+    /// <summary>Stable subscriber identity used as the durable acknowledgement cursor key.</summary>
+    /// <remarks>
+    /// Configure one logical name per durable consumer. It must remain unchanged across restarts;
+    /// machine names and generated identifiers create new cursors and defeat replay.
+    /// </remarks>
+    [Required, MinLength(1)]
+    public string SubscriberName { get; init; } = string.Empty;
 }

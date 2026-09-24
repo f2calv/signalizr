@@ -1,18 +1,40 @@
 using CasCap.Abstractions;
 using CasCap.Common.Abstractions;
 using CasCap.Common.Extensions;
+using CasCap.Common.Models;
 using CasCap.Constants;
+using CasCap.Diagnostics;
 using CasCap.Extensions;
 using CasCap.Models;
 using CasCap.Services;
 using CasCap.Signalizr.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
 var logger = builder.InitializeSerilog(nameof(Program));
+
+var appConfig = builder.Configuration
+    .GetSection(AppConfig.ConfigurationSectionName)
+    .Get<AppConfig>() ?? new AppConfig();
+builder.Services.AddOptionsWithValidateOnStart<AppConfig>()
+    .BindConfiguration(AppConfig.ConfigurationSectionName)
+    .ValidateDataAnnotations();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<SignalizrMetrics>();
+builder.InitializeOpenTelemetry(
+    appConfig,
+    new GitMetadata(),
+    configureMetrics: metrics => metrics
+        .AddMeter(appConfig.MetricNamePrefix)
+        .AddMeter(SignalCliTelemetry.MeterName),
+    configureTracing: tracing => tracing
+        .AddSource(appConfig.MetricNamePrefix)
+        .AddSource(SignalCliTelemetry.ActivitySourceName));
 
 var featureConfig = builder.Configuration
     .GetSection(FeatureConfig.ConfigurationSectionName)
@@ -25,17 +47,26 @@ var enabledFeatures = featureConfig.GetEnabledFeatures();
 logger.LogInformation("{AppName} starting with features {@Features}",
     AppDomain.CurrentDomain.FriendlyName, enabledFeatures);
 
+if (enabledFeatures.Contains(FeatureNames.DbMigrator))
+{
+    builder.Services.AddSignalizrDataLayer(builder.Configuration, addRuntimeServices: false);
+    builder.Services.AddSingleton<IBgFeature, DbMigratorBgService>();
+}
+
 if (enabledFeatures.Contains(FeatureNames.Gateway))
     builder.Services.AddSingleton<IBgFeature, GatewayBgService>();
 
 if (enabledFeatures.Contains(FeatureNames.Receiver))
 {
+    builder.Services.AddSignalizrDataLayer(builder.Configuration);
     builder.Services.Configure<ReceiverConfig>(
         builder.Configuration.GetSection(ReceiverConfig.ConfigurationSectionName));
     builder.Services.Configure<SubscriberConfig>(
         builder.Configuration.GetSection(SubscriberConfig.ConfigurationSectionName));
     builder.Services.AddSingleton<IInboundMessageQueue, InboundMessageQueue>();
     builder.Services.AddSingleton<IInboundSubscriberRegistry, InboundSubscriberRegistry>();
+    builder.Services.AddSingleton<InboundAttachmentService>();
+    builder.Services.AddSingleton<InboundMessagePersistenceService>();
     builder.Services.AddSingleton<IBgFeature, ReceiverBgService>();
     // Separate from the receive loop: per-message work belongs here, where it cannot stop the
     // upstream being read.

@@ -1,11 +1,17 @@
-# Quickstart: the Signal REST wrapper, the gateway, and a demo client - one command, no cluster.
+# SQLite quickstart: a one-shot migrator, the Signal REST wrapper, the gateway, and a demo client.
 #
 # The wrapper needs a registered Signal account before anything can be sent. Follow the upstream
 # registration/linking steps first: https://github.com/bbernhard/signal-cli-rest-api
 #
 #   cp .env.example .env     # then edit, it holds a phone number and is gitignored
-#   docker compose up
+#   docker compose up --build
 name: signalizr
+
+x-signalizr-image: &signalizr-image
+  image: signalizr:local
+  build:
+    context: .
+    dockerfile: Dockerfile
 
 services:
   signal-cli-rest-api:
@@ -18,33 +24,55 @@ services:
       - signal-cli-data:/home/.local/share/signal-cli
     restart: unless-stopped
 
+  # Schema barrier: exits successfully only after all SQLite migrations are applied.
+  signalizr-migrate:
+    <<: *signalizr-image
+    environment:
+      CasCap__FeatureConfig__EnabledFeatures: DbMigrator
+      CasCap__DatabaseConfig__Provider: Sqlite
+      CasCap__DatabaseConfig__ConnectionString: Data Source=/var/lib/signalizr/signalizr.db
+      CasCap__DatabaseConfig__MigrateOnStartup: "false"
+    volumes:
+      - signalizr-data:/var/lib/signalizr
+    restart: "no"
+
   # Default role: the gateway surface plus the single receive owner.
   signalizr:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *signalizr-image
     depends_on:
-      - signal-cli-rest-api
+      signal-cli-rest-api:
+        condition: service_started
+      signalizr-migrate:
+        condition: service_completed_successfully
     environment:
       CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
       CasCap__SignalCliConfig__BaseAddress: http://signal-cli-rest-api:8080
       # Personal data: keep the real value in .env, never in this file.
       CasCap__SignalCliConfig__PhoneNumber: ${SIGNALIZR_PHONE_NUMBER:-+10000000000}
+      CasCap__DatabaseConfig__Provider: Sqlite
+      CasCap__DatabaseConfig__ConnectionString: Data Source=/var/lib/signalizr/signalizr.db
+      CasCap__DatabaseConfig__MigrateOnStartup: "false"
       ASPNETCORE_ENVIRONMENT: Development
     ports:
       - "8080:8080"
+      - "5001:5001"
+    volumes:
+      - signalizr-data:/var/lib/signalizr
     restart: unless-stopped
 
   # Same image, second role - selected purely by the feature flag.
   signalizr-demo-client:
-    image: signalizr-signalizr
+    image: signalizr:local
     depends_on:
       - signalizr
     environment:
       CasCap__FeatureConfig__EnabledFeatures: DemoClient
       CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:8080
+      CasCap__SignalizrClientConfig__GrpcAddress: http://signalizr:5001
+      CasCap__SignalizrClientConfig__SubscriberName: signalizr-demo
       ASPNETCORE_ENVIRONMENT: Development
     restart: unless-stopped
 
 volumes:
   signal-cli-data:
+  signalizr-data:

@@ -1,0 +1,94 @@
+# PostgreSQL example: the migrator waits for database health and must complete before the receiver.
+#
+# The credentials below are local-only defaults. Override them through the environment when needed.
+#
+#   cp .env.example .env
+#   docker compose --file docker-compose.postgres.yml up --build
+name: signalizr-postgres
+
+x-signalizr-image: &signalizr-image
+  image: signalizr:local
+  build:
+    context: .
+    dockerfile: Dockerfile
+
+x-postgres-environment: &postgres-environment
+  POSTGRES_DB: signalizr
+  POSTGRES_USER: signalizr
+  POSTGRES_PASSWORD: ${SIGNALIZR_POSTGRES_PASSWORD:-signalizr}
+
+x-signalizr-database: &signalizr-database
+  CasCap__DatabaseConfig__Provider: Postgres
+  CasCap__DatabaseConfig__ConnectionString: Host=postgres;Database=signalizr;Username=signalizr;Password=${SIGNALIZR_POSTGRES_PASSWORD:-signalizr}
+  CasCap__DatabaseConfig__MigrateOnStartup: "false"
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      <<: *postgres-environment
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready --username=$$POSTGRES_USER --dbname=$$POSTGRES_DB" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  signal-cli-rest-api:
+    image: bbernhard/signal-cli-rest-api:0.100
+    environment:
+      MODE: json-rpc
+    ports:
+      - "8180:8080"
+    volumes:
+      - signal-cli-data:/home/.local/share/signal-cli
+    restart: unless-stopped
+
+  signalizr-migrate:
+    <<: *signalizr-image
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *signalizr-database
+      CasCap__FeatureConfig__EnabledFeatures: DbMigrator
+    restart: "no"
+
+  signalizr:
+    <<: *signalizr-image
+    depends_on:
+      signal-cli-rest-api:
+        condition: service_started
+      signalizr-migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *signalizr-database
+      CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
+      CasCap__SignalCliConfig__BaseAddress: http://signal-cli-rest-api:8080
+      CasCap__SignalCliConfig__PhoneNumber: ${SIGNALIZR_PHONE_NUMBER:-+10000000000}
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "8080:8080"
+      - "5001:5001"
+    restart: unless-stopped
+
+  signalizr-demo-client:
+    image: signalizr:local
+    depends_on:
+      signalizr:
+        condition: service_started
+    environment:
+      CasCap__FeatureConfig__EnabledFeatures: DemoClient
+      CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:8080
+      CasCap__SignalizrClientConfig__GrpcAddress: http://signalizr:5001
+      CasCap__SignalizrClientConfig__SubscriberName: signalizr-demo
+      ASPNETCORE_ENVIRONMENT: Development
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  signal-cli-data:

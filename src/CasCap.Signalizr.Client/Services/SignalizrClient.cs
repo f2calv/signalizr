@@ -15,12 +15,22 @@ public sealed class SignalizrClient(
     IOptions<SignalizrClientConfig> config) : ISignalizrClient
 {
     /// <inheritdoc/>
+    public Task<string> SendAsync(
+        string channel,
+        string message,
+        CancellationToken cancellationToken = default) =>
+        SendAsync(channel, message, base64Attachments: null, cancellationToken);
+
+    /// <inheritdoc/>
     public async Task<string> SendAsync(
-        string channel, string message, CancellationToken cancellationToken = default)
+        string channel,
+        string message,
+        IReadOnlyList<string>? base64Attachments,
+        CancellationToken cancellationToken = default)
     {
         var response = await httpClient
             .PostAsJsonAsync($"api/v1/channels/{Uri.EscapeDataString(channel)}/messages",
-                new { message }, cancellationToken)
+                new { message, base64Attachments }, cancellationToken)
             .ConfigureAwait(false);
 
         if (response.StatusCode is HttpStatusCode.NotFound)
@@ -39,6 +49,14 @@ public sealed class SignalizrClient(
         return result?.Timestamp
             ?? throw new HttpRequestException("The gateway returned no timestamp for the send.");
     }
+
+    /// <inheritdoc/>
+    public Task<byte[]> GetAttachmentAsync(
+        string attachmentId,
+        CancellationToken cancellationToken = default) =>
+        httpClient.GetByteArrayAsync(
+            $"api/v1/attachments/{Uri.EscapeDataString(attachmentId)}",
+            cancellationToken);
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<string>> GetChannelsAsync(CancellationToken cancellationToken = default)
@@ -71,32 +89,32 @@ public sealed class SignalizrClient(
                 cancellationToken)
             .ConfigureAwait(false);
 
-        // Acknowledge the previous message only once the consumer asks for the next one, so an ack
-        // means "processed" rather than "received". A consumer that stops enumerating leaves the
-        // last message unacknowledged, which is the honest outcome.
-        string? unacknowledged = null;
-
         await foreach (var message in call.ResponseStream
             .ReadAllAsync(cancellationToken).ConfigureAwait(false))
         {
-            if (unacknowledged is not null)
-            {
-                await call.RequestStream
-                    .WriteAsync(new SubscribeRequest { Ack = new Ack { DeliveryId = unacknowledged } },
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            unacknowledged = message.DeliveryId;
-
             yield return new SignalizrMessage
             {
                 DeliveryId = message.DeliveryId,
                 Channel = string.IsNullOrEmpty(message.Channel) ? null : message.Channel,
                 Sender = string.IsNullOrEmpty(message.Sender) ? null : message.Sender,
                 Message = message.Message,
-                Timestamp = message.Timestamp
+                Timestamp = message.Timestamp,
+                Attachments = [.. message.Attachments.Select(attachment => new SignalizrAttachment
+                {
+                    Id = attachment.Id,
+                    ContentType = string.IsNullOrEmpty(attachment.ContentType) ? null : attachment.ContentType,
+                    Filename = string.IsNullOrEmpty(attachment.Filename) ? null : attachment.Filename,
+                    Size = attachment.Size
+                })]
             };
+
+            // Execution resumes here only when the consumer asks for the next item, so this means
+            // "processed" rather than merely "received". Send it before waiting for the next
+            // response: with MaxOutstanding=1 the server cannot send that response until this ack.
+            await call.RequestStream
+                .WriteAsync(new SubscribeRequest { Ack = new Ack { DeliveryId = message.DeliveryId } },
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 

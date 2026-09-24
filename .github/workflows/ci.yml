@@ -54,8 +54,26 @@ jobs:
       smoke-test: |
         ! docker run --rm -e CasCap__FeatureConfig__EnabledFeatures=NotAFeature $IMAGE
 
+  dashboards:
+    needs: [versioning]
+    permissions:
+      contents: read
+    uses: f2calv/gha-workflows/.github/workflows/helm-chart-package.yml@v1
+    with:
+      tag: ${{ needs.versioning.outputs.version }}
+      image-registry: ghcr.io
+      image-repository: ${{ github.repository_owner }}/signalizr
+      chart-registry: ghcr.io
+      chart-registry-username: ${{ github.repository_owner }}
+      chart-repository: ${{ github.repository_owner }}/charts/signalizr-dashboards
+      chart-path: ./charts/signalizr-dashboards
+      has-image: false
+      chart-testing-cli-command: skip
+      #Dashboard releases use their own Chart.yaml version and deployment workflow.
+      push-chart: false
+
   chart:
-    needs: [versioning, image]
+    needs: [versioning, image, dashboards]
     permissions:
       contents: read
       packages: write #push the OCI chart to ghcr.io
@@ -66,7 +84,7 @@ jobs:
       image-repository: signalizr
       chart-registry: ghcr.io
       chart-registry-username: ${{ github.repository_owner }}
-      chart-repository: ${{ github.repository_owner }}/signalizr/charts
+      chart-repository: ${{ github.repository_owner }}/charts/signalizr
       chart-path: ./charts/signalizr
       #The umbrella chart owns no top-level image value; each component carries its own, so
       #chart-testing must not inject --set image.tag.
@@ -79,7 +97,7 @@ jobs:
       push-chart: ${{ github.event_name != 'pull_request' }}
 
   release:
-    needs: [lint, versioning, build, image, chart]
+    needs: [lint, versioning, build, image, dashboards, chart]
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     uses: f2calv/gha-workflows/.github/workflows/gha-release-versioning.yml@v1
     permissions:

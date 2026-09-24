@@ -109,9 +109,9 @@ public class DispatcherMappingTests
     }
 
     [Fact]
-    public void The_delivery_id_is_assigned_during_fan_out_not_mapping()
+    public void The_delivery_id_is_assigned_after_persistence_not_mapping()
     {
-        // Left empty on purpose: the registry stamps one identifier per subscriber.
+        // Left empty on purpose: EF assigns the durable sequence during persistence.
         var delivery = DispatcherBgService.CreateDelivery(CreateMessage(GroupId), Resolver);
 
         Assert.NotNull(delivery);

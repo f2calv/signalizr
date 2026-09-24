@@ -14,7 +14,11 @@ public sealed class MessageGateway(
         if (!channelResolver.TryGetGroupId(channelName, out var groupId))
             throw new UnknownChannelException(channelName);
 
-        var message = CreateRequest(signalCliConfig.Value.PhoneNumber, groupId, request.Message);
+        var message = CreateRequest(
+            signalCliConfig.Value.PhoneNumber,
+            groupId,
+            request.Message,
+            request.Base64Attachments);
 
         // A null response means the wrapper accepted nothing we can identify the message by, which
         // is indistinguishable from a failed send, so it must not be reported as success.
@@ -33,11 +37,16 @@ public sealed class MessageGateway(
     /// <remarks>
     /// Separated from the call so the translation is testable without stubbing the whole client.
     /// </remarks>
-    public static SignalMessageRequest CreateRequest(string number, string groupId, string message)
+    public static SignalMessageRequest CreateRequest(
+        string number,
+        string groupId,
+        string message,
+        IReadOnlyList<string>? base64Attachments = null)
         => new()
         {
             Number = number,
             Recipients = [groupId],
-            Message = message
+            Message = message,
+            Base64Attachments = base64Attachments?.ToArray()
         };
 }

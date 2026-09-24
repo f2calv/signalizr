@@ -3,12 +3,13 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="CasCap.Api.SignalCli" Version="0.11.3" />
+    <PackageVersion Include="CasCap.Api.SignalCli" Version="0.11.4" />
     <PackageVersion Include="CasCap.Common.Abstractions" Version="4.14.1" />
     <PackageVersion Include="CasCap.Common.AspNetCore" Version="4.14.1" />
     <PackageVersion Include="CasCap.Common.Configuration" Version="4.14.1" />
     <PackageVersion Include="CasCap.Common.Extensions" Version="4.14.1" />
     <PackageVersion Include="CasCap.Common.Logging.Serilog" Version="4.14.1" />
+    <PackageVersion Include="CasCap.Common.OpenTelemetry" Version="4.14.1" />
     <PackageVersion Include="CasCap.Common.Services" Version="4.14.1" />
     <PackageVersion Include="CasCap.Common.Testing" Version="4.14.1" />
   </ItemGroup>
@@ -18,11 +19,16 @@
     <PackageVersion Include="Grpc.Net.Client" Version="2.84.0" />
     <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.84.0" />
     <PackageVersion Include="Grpc.Tools" Version="2.84.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.2" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="xunit.v3" Version="4.0.1" />
   </ItemGroup>
 </Project>

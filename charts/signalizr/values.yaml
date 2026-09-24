@@ -21,6 +21,12 @@ signalcli:
 # The gateway. Send and Subscribe surfaces plus the single receive owner.
 signalizr:
   replicaCount: 1
+  # The Receiver is single-owner. Never overlap old and new pods during rollout.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   fullnameOverride: signalizr
   image:
     repository: ghcr.io/f2calv/signalizr
@@ -56,6 +62,23 @@ signalizr:
     # Override these with your own group names.
     CasCap__ChannelConfig__Channels__system: CasCap.Signalizr System
     CasCap__ChannelConfig__Channels__demo: CasCap.Signalizr Demo
+  # The chiseled .NET image runs as APP_UID 1654. fsGroup makes a fresh PVC writable without
+  # granting root privileges or adding an init container.
+  podSecurityContext:
+    fsGroup: 1654
+    fsGroupChangePolicy: OnRootMismatch
+  persistentVolumeClaims:
+    - name: signalizr-data
+      accessModes:
+        - ReadWriteOnce
+      storage: 1Gi
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: signalizr-data
+  volumeMounts:
+    - name: data
+      mountPath: /var/lib/signalizr
   # The phone number is personal data and must arrive from a Secret, never from values.
   # Create the Secret out of band with a key matching the environment variable name:
   #   kubectl create secret generic signalizr \
@@ -94,6 +117,30 @@ signalizr:
     limits:
       cpu: 500m
       memory: 256Mi
+
+# One-shot EF Core migration workload. Environments set replicaCount: 1 and add hook annotations.
+migrate:
+  replicaCount: 0
+  kind: Job
+  fullnameOverride: signalizr-migrate
+  image:
+    repository: ghcr.io/f2calv/signalizr
+    pullPolicy: IfNotPresent
+    tag: ""
+  service:
+    enabled: false
+  envVars:
+    CasCap__FeatureConfig__EnabledFeatures: DbMigrator
+  startupProbe: false
+  readinessProbe: false
+  livenessProbe: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
 
 # The same image running only the DemoClient role, for evaluating a live gateway.
 # Disabled by default: set replicaCount to 1 to enable it.

@@ -1,3 +1,4 @@
+using CasCap.Diagnostics;
 using CasCap.Models;
 using CasCap.Models.Dtos;
 using CasCap.Services;
@@ -12,12 +13,15 @@ namespace CasCap.Tests;
 /// Covers the buffer between the receive loop and the dispatcher. Its whole purpose is to never
 /// block the writer, so the tests assert that it drops rather than waits, and that it says so.
 /// </summary>
-public class InboundMessageQueueTests
+public sealed class InboundMessageQueueTests : IDisposable
 {
-    private static InboundMessageQueue CreateQueue(
+    private readonly SignalizrMetrics _metrics = new();
+
+    private InboundMessageQueue CreateQueue(
         int capacity, ILogger<InboundMessageQueue>? logger = null)
         => new(logger ?? NullLogger<InboundMessageQueue>.Instance,
-            Options.Create(new ReceiverConfig { QueueCapacity = capacity }));
+            Options.Create(new ReceiverConfig { QueueCapacity = capacity }),
+            _metrics);
 
     private static SignalReceivedMessage CreateMessage(long timestamp)
         => new() { Envelope = new SignalEnvelope { Timestamp = timestamp } };
@@ -130,6 +134,9 @@ public class InboundMessageQueueTests
         Assert.Equal(Sent, retained[^1]);
         Assert.Single(logger.Messages, message => message.Level is LogLevel.Warning);
     }
+
+    /// <inheritdoc/>
+    public void Dispose() => _metrics.Dispose();
 
     private sealed class RecordingLogger<T> : ILogger<T>
     {

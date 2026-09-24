@@ -32,10 +32,30 @@ Binding `CasCap:SignalizrClientConfig`:
 Two addresses because the gateway serves REST and gRPC on separate ports: a plaintext endpoint
 cannot negotiate protocols without TLS, so one port answers HTTP/1.1 and another HTTP/2.
 
+`SubscriberName` is the durable cursor key, not a process-instance identifier. Configure one name
+per logical consumer and keep it stable across restarts. Do not append `Environment.MachineName`, a
+pod name, process ID, or generated GUID: each new value creates a new cursor that begins at the
+current tail, losing replay from the previous identity. Only one live stream may own a durable name;
+use a stable replica identity only when each replica intentionally needs its own copy and cursor.
+
 ## Send
 
 ```csharp
 var timestamp = await client.SendAsync("system", "deployment finished", cancellationToken);
+```
+
+Binary attachments use signal-cli-compatible data URIs and are MIME-agnostic:
+
+```csharp
+string[] attachments =
+[
+  $"data:audio/ogg;filename=reply.ogg;base64,{Convert.ToBase64String(audioBytes)}"
+];
+var timestamp = await client.SendAsync(
+  "system",
+  "voice reply",
+  attachments,
+  cancellationToken);
 ```
 
 Channels are addressed by name. The gateway owns the Signal account, so a caller never names a
@@ -47,6 +67,12 @@ group, a group id or a sender number. A `404` means the channel is not configure
 ```csharp
 await foreach (var message in client.SubscribeAsync(cancellationToken))
 {
+  foreach (var attachment in message.Attachments)
+  {
+    var content = await client.GetAttachmentAsync(attachment.Id, cancellationToken);
+    await ProcessAsync(attachment.ContentType, content, cancellationToken);
+  }
+
     // Process it. Asking for the next message acknowledges this one.
 }
 ```
@@ -54,6 +80,10 @@ await foreach (var message in client.SubscribeAsync(cancellationToken))
 Each message is acknowledged when the consumer asks for the next one, so an acknowledgement means
 "the previous message was processed" rather than "it arrived". A consumer that stops enumerating
 leaves the last message unacknowledged, which is correct: it may not have been processed.
+
+The stream carries attachment descriptors rather than binary content. `GetAttachmentAsync` downloads
+the raw bytes over REST. Content remains available until gateway retention removes the parent
+message, preserving replay and independent-subscriber semantics.
 
 The gateway pauses delivery once too many messages are unacknowledged, and disconnects a subscriber
 that stops acknowledging altogether. Neither silently drops anything.

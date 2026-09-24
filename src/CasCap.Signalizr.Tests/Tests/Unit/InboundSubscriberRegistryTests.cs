@@ -13,6 +13,8 @@ namespace CasCap.Tests;
 /// </summary>
 public class InboundSubscriberRegistryTests
 {
+    private const string FirstDeliveryId = "first";
+
     private static InboundSubscriberRegistry CreateRegistry(int queueCapacity = 10, int maxOutstanding = 4)
         => new(NullLogger<InboundSubscriberRegistry>.Instance,
             Options.Create(new SubscriberConfig { QueueCapacity = queueCapacity, MaxOutstanding = maxOutstanding }));
@@ -85,12 +87,10 @@ public class InboundSubscriberRegistryTests
 
         registry.Unsubscribe(subscription, error);
 
-        var exception = await Assert.ThrowsAsync<SubscriberFellBehindException>(async () =>
-        {
-            await foreach (var _ in subscription.ReadAllAsync(TestContext.Current.CancellationToken))
-            {
-            }
-        });
+        await using var reader = subscription.ReadAllAsync(TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        var exception = await Assert.ThrowsAsync<SubscriberFellBehindException>(
+            () => reader.MoveNextAsync().AsTask());
         Assert.Same(error, exception);
     }
 
@@ -109,13 +109,13 @@ public class InboundSubscriberRegistryTests
         var subscription = registry.Subscribe("a");
         var instant = TimeSpan.FromMilliseconds(50);
 
-        Assert.True(await subscription.TryReserveAsync("first", instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync(FirstDeliveryId, instant, TestContext.Current.CancellationToken));
         Assert.True(await subscription.TryReserveAsync("second", instant, TestContext.Current.CancellationToken));
 
         // Two delivered and none acknowledged: the third must wait rather than pile on more work.
         Assert.False(await subscription.TryReserveAsync("third", instant, TestContext.Current.CancellationToken));
 
-        Assert.True(subscription.Acknowledge("first"));
+        Assert.True(subscription.Acknowledge(FirstDeliveryId));
 
         Assert.True(await subscription.TryReserveAsync("third", instant, TestContext.Current.CancellationToken));
     }
@@ -127,11 +127,11 @@ public class InboundSubscriberRegistryTests
         var subscription = registry.Subscribe("confused");
         var instant = TimeSpan.FromMilliseconds(50);
 
-        Assert.True(await subscription.TryReserveAsync("first", instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync(FirstDeliveryId, instant, TestContext.Current.CancellationToken));
         Assert.True(await subscription.TryReserveAsync("second", instant, TestContext.Current.CancellationToken));
 
-        Assert.True(subscription.Acknowledge("first"));
-        Assert.False(subscription.Acknowledge("first"));
+        Assert.True(subscription.Acknowledge(FirstDeliveryId));
+        Assert.False(subscription.Acknowledge(FirstDeliveryId));
         Assert.False(subscription.Acknowledge("unknown"));
 
         Assert.True(await subscription.TryReserveAsync("third", instant, TestContext.Current.CancellationToken));

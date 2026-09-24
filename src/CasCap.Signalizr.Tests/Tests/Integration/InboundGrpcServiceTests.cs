@@ -13,6 +13,8 @@ namespace CasCap.Tests;
 /// <summary>Service-level tests for the bidirectional inbound gRPC contract.</summary>
 public class InboundGrpcServiceTests
 {
+    private const string SecondMessage = "second";
+
     [Fact]
     public async Task Acknowledgement_timeout_returns_deadline_exceeded()
     {
@@ -23,7 +25,7 @@ public class InboundGrpcServiceTests
 
         Assert.Empty(registry.Broadcast(CreateDelivery("first")));
         _ = await ReadResponseAsync(session.Response);
-        Assert.Empty(registry.Broadcast(CreateDelivery("second")));
+        Assert.Empty(registry.Broadcast(CreateDelivery(SecondMessage)));
 
         var exception = await Assert.ThrowsAsync<RpcException>(
             () => session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
@@ -54,9 +56,9 @@ public class InboundGrpcServiceTests
             request => request.PayloadCase is SubscribeRequest.PayloadOneofCase.Ack,
             TestContext.Current.CancellationToken);
 
-        Assert.Empty(registry.Broadcast(CreateDelivery("second")));
+        Assert.Empty(registry.Broadcast(CreateDelivery(SecondMessage)));
         var acknowledgedSecond = await ReadResponseAsync(acknowledging.Response);
-        Assert.Equal("second", acknowledgedSecond.Message);
+        Assert.Equal(SecondMessage, acknowledgedSecond.Message);
 
         var exception = await Assert.ThrowsAsync<RpcException>(
             () => stalled.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
@@ -74,7 +76,7 @@ public class InboundGrpcServiceTests
 
         Assert.Empty(registry.Broadcast(CreateDelivery("first")));
         await session.Response.WaitForWriteAsync(TestContext.Current.CancellationToken);
-        Assert.Empty(registry.Broadcast(CreateDelivery("second")));
+        Assert.Empty(registry.Broadcast(CreateDelivery(SecondMessage)));
         var failed = Assert.Single(registry.Broadcast(CreateDelivery("third")));
 
         registry.Unsubscribe(failed, new SubscriberFellBehindException(failed.Name));
@@ -161,12 +163,14 @@ public class InboundGrpcServiceTests
         }
     }
 
-    private sealed class TestAsyncStreamReader<T> : IAsyncStreamReader<T>
+    private sealed class TestAsyncStreamReader<T> : IAsyncStreamReader<T> where T : class
     {
         private readonly Channel<T> _channel = Channel.CreateUnbounded<T>();
         private readonly Channel<T> _observed = Channel.CreateUnbounded<T>();
+        private T? _current;
 
-        public T Current { get; private set; } = default!;
+        public T Current => _current
+            ?? throw new InvalidOperationException("MoveNext must succeed before Current is read.");
 
         public void Write(T item) => _channel.Writer.TryWrite(item);
 
@@ -178,7 +182,7 @@ public class InboundGrpcServiceTests
             {
                 if (_channel.Reader.TryRead(out var item))
                 {
-                    Current = item;
+                    _current = item;
                     _observed.Writer.TryWrite(item);
                     return true;
                 }
@@ -192,9 +196,9 @@ public class InboundGrpcServiceTests
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(2));
 
-            await foreach (var item in _observed.Reader.ReadAllAsync(timeout.Token))
+            while (await _observed.Reader.WaitToReadAsync(timeout.Token))
             {
-                if (predicate(item))
+                if (_observed.Reader.TryRead(out var item) && predicate(item))
                     return;
             }
         }

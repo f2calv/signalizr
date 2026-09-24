@@ -1,3 +1,4 @@
+using CasCap.Exceptions;
 using CasCap.Models;
 using CasCap.Models.Dtos;
 using CasCap.Services;

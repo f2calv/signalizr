@@ -1,4 +1,4 @@
-namespace CasCap.Models;
+namespace CasCap.Exceptions;
 
 /// <summary>Thrown when a subscriber cannot accept deliveries as quickly as they arrive.</summary>
 public sealed class SubscriberFellBehindException(string subscriberName)

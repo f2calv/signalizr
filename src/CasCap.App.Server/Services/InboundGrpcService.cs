@@ -1,4 +1,5 @@
 using CasCap.Abstractions;
+using CasCap.Exceptions;
 using CasCap.Grpc;
 using CasCap.Models;
 using CasCap.Models.Dtos;

@@ -1,4 +1,4 @@
-namespace CasCap.Signalizr.Client;
+namespace CasCap.Signalizr.Client.Exceptions;
 
 /// <summary>Thrown when a gateway does not run the role needed to serve a request.</summary>
 /// <remarks>

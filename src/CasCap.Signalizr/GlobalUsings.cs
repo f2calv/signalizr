@@ -1,6 +1,7 @@
 global using CasCap.Abstractions;
 global using CasCap.Common.Abstractions;
 global using CasCap.Constants;
+global using CasCap.Exceptions;
 global using CasCap.Models;
 global using CasCap.Models.Dtos;
 global using Microsoft.Extensions.Logging;

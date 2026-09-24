@@ -1,6 +1,7 @@
 using CasCap.Common.Abstractions;
 using CasCap.Constants;
 using CasCap.Signalizr.Client;
+using CasCap.Signalizr.Client.Exceptions;
 
 namespace CasCap.Services;
 

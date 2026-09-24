@@ -1,4 +1,4 @@
-namespace CasCap.Models;
+namespace CasCap.Exceptions;
 
 /// <summary>Thrown when a caller addresses a channel that is not configured or not yet resolved.</summary>
 /// <remarks>

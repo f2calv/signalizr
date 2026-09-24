@@ -119,8 +119,9 @@ public class DispatcherMappingTests
     }
 
     [Fact]
-    public void Two_channel_names_for_one_group_invert_deterministically()
+    public void Two_channel_names_for_one_group_resolve_inbound_deterministically()
     {
+        var group = new SignalGroup { Id = GroupId, Name = "system" };
         var resolved = new Dictionary<string, string>
         {
             ["zulu"] = GroupId,
@@ -129,14 +130,12 @@ public class DispatcherMappingTests
 
         // Sending to either name is unambiguous, receiving is not, so the inbound name is chosen
         // by ordinal order rather than by dictionary enumeration order.
-        Assert.Equal("zulu", ChannelResolver.Invert(resolved, [])[GroupId]);
+        Assert.Equal("zulu", Assert.Single(ChannelResolver.BuildInboundLookup(resolved, [group])).Value);
     }
 
     [Fact]
-    public void Inversion_indexes_both_group_identifier_forms()
+    public void Inbound_lookup_matches_both_group_identifier_forms()
     {
-        // GET /v1/groups returns the prefixed id, which sending needs, but an inbound message
-        // carries the unprefixed internal id. Indexing only the first means nothing ever resolves.
         const string InternalId = "dGVzdA==";
         var groups = new List<SignalGroup>
         {
@@ -144,21 +143,11 @@ public class DispatcherMappingTests
         };
         var resolved = new Dictionary<string, string> { ["system"] = GroupId };
 
-        var inverted = ChannelResolver.Invert(resolved, groups);
+        var lookup = ChannelResolver.BuildInboundLookup(resolved, groups);
 
-        Assert.Equal("system", inverted[GroupId]);
-        Assert.Equal("system", inverted[InternalId]);
-    }
-
-    [Fact]
-    public void Inversion_tolerates_a_group_without_an_internal_id()
-    {
-        var groups = new List<SignalGroup> { new() { Id = GroupId, Name = "system" } };
-        var resolved = new Dictionary<string, string> { ["system"] = GroupId };
-
-        var inverted = ChannelResolver.Invert(resolved, groups);
-
-        Assert.Equal("system", inverted[GroupId]);
-        Assert.Single(inverted);
+        var entry = Assert.Single(lookup);
+        Assert.True(entry.Key.Matches(GroupId));
+        Assert.True(entry.Key.Matches(InternalId));
+        Assert.Equal("system", entry.Value);
     }
 }

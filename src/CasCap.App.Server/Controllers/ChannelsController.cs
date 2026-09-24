@@ -1,6 +1,7 @@
 using CasCap.Abstractions;
 using CasCap.Common.Abstractions;
 using CasCap.Constants;
+using CasCap.Exceptions;
 using CasCap.Models;
 using CasCap.Models.Dtos;
 using Microsoft.AspNetCore.Mvc;

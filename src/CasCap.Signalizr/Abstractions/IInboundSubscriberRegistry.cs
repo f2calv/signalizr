@@ -12,7 +12,9 @@ public interface IInboundSubscriberRegistry
     InboundSubscription Subscribe(string subscriberName);
 
     /// <summary>Removes a subscriber and completes its queue.</summary>
-    void Unsubscribe(InboundSubscription subscription);
+    /// <param name="subscription">The subscription to remove.</param>
+    /// <param name="error">Optional failure reported to the subscriber's stream.</param>
+    void Unsubscribe(InboundSubscription subscription, Exception? error = null);
 
     /// <summary>
     /// Offers a delivery to every connected subscriber.

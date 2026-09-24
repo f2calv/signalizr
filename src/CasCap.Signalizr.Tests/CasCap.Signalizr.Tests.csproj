@@ -23,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CasCap.App.Server\CasCap.App.Server.csproj" />
     <ProjectReference Include="..\CasCap.Signalizr\CasCap.Signalizr.csproj" />
   </ItemGroup>
 

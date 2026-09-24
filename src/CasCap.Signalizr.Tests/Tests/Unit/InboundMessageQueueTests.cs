@@ -1,6 +1,7 @@
 using CasCap.Models;
 using CasCap.Models.Dtos;
 using CasCap.Services;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -13,8 +14,9 @@ namespace CasCap.Tests;
 /// </summary>
 public class InboundMessageQueueTests
 {
-    private static InboundMessageQueue CreateQueue(int capacity)
-        => new(NullLogger<InboundMessageQueue>.Instance,
+    private static InboundMessageQueue CreateQueue(
+        int capacity, ILogger<InboundMessageQueue>? logger = null)
+        => new(logger ?? NullLogger<InboundMessageQueue>.Instance,
             Options.Create(new ReceiverConfig { QueueCapacity = capacity }));
 
     private static SignalReceivedMessage CreateMessage(long timestamp)
@@ -103,5 +105,46 @@ public class InboundMessageQueueTests
         {
             await enumerator.DisposeAsync();
         }
+    }
+
+    [Fact]
+    public async Task Ten_thousand_message_burst_reports_exact_queue_loss()
+    {
+        const int Capacity = 1_000;
+        const int Sent = 10_000;
+        var logger = new RecordingLogger<InboundMessageQueue>();
+        var queue = CreateQueue(Capacity, logger);
+
+        for (var index = 1; index <= Sent; index++)
+            Assert.True(queue.TryEnqueue(CreateMessage(index)));
+
+        queue.Complete();
+        var retained = new List<long?>();
+        await foreach (var message in queue.DequeueAllAsync(TestContext.Current.CancellationToken))
+            retained.Add(message.Envelope.Timestamp);
+
+        Assert.Equal(Sent, queue.EnqueuedCount);
+        Assert.Equal(Sent - Capacity, queue.DroppedCount);
+        Assert.Equal(Capacity, retained.Count);
+        Assert.Equal(Sent - Capacity + 1, retained[0]);
+        Assert.Equal(Sent, retained[^1]);
+        Assert.Single(logger.Messages, message => message.Level is LogLevel.Warning);
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Messages.Add((logLevel, formatter(state, exception)));
     }
 }

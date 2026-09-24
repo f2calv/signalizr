@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using CasCap.Grpc;
+using CasCap.Signalizr.Client.Exceptions;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
 

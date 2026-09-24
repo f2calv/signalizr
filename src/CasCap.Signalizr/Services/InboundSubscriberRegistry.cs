@@ -25,12 +25,12 @@ public sealed class InboundSubscriberRegistry(
     }
 
     /// <inheritdoc/>
-    public void Unsubscribe(InboundSubscription subscription)
+    public void Unsubscribe(InboundSubscription subscription, Exception? error = null)
     {
         if (!_subscriptions.TryRemove(subscription, out _))
             return;
 
-        subscription.Complete();
+        subscription.Complete(error);
 
         logger.LogInformation("{ClassName} subscriber {Subscriber} disconnected, {Count} remaining",
             nameof(InboundSubscriberRegistry), subscription.Name, _subscriptions.Count);

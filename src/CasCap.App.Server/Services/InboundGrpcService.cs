@@ -1,4 +1,5 @@
 using CasCap.Abstractions;
+using CasCap.Exceptions;
 using CasCap.Grpc;
 using CasCap.Models;
 using CasCap.Models.Dtos;
@@ -40,21 +41,23 @@ public sealed class InboundGrpcService(
 
         using var subscription = registry.Subscribe(name);
         var ackTimeout = TimeSpan.FromMilliseconds(config.Value.AckTimeoutMs);
+        using var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         // Acknowledgements arrive independently of deliveries, so they are read concurrently.
-        var acknowledgements = ReadAcknowledgementsAsync(requestStream, subscription, cancellationToken);
+        var acknowledgements = ReadAcknowledgementsAsync(requestStream, subscription, streamCancellation.Token);
 
         try
         {
             await foreach (var delivery in subscription.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (!await subscription.TryReserveAsync(ackTimeout, cancellationToken).ConfigureAwait(false))
+                if (!await subscription.TryReserveAsync(
+                    delivery.DeliveryId, ackTimeout, cancellationToken).ConfigureAwait(false))
                 {
                     throw new RpcException(new Status(StatusCode.DeadlineExceeded,
                         $"No acknowledgement within {ackTimeout}. The subscriber is receiving but not acknowledging."));
                 }
 
-                await responseStream.WriteAsync(ToMessage(delivery), cancellationToken).ConfigureAwait(false);
+                await responseStream.WriteAsync(ToMessage(delivery)).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -62,9 +65,14 @@ public sealed class InboundGrpcService(
             // The client went away or the host is shutting down. Both are ordinary ends to a
             // long-lived subscription, not failures to report.
         }
+        catch (SubscriberFellBehindException ex)
+        {
+            throw new RpcException(new Status(StatusCode.ResourceExhausted, ex.Message));
+        }
         finally
         {
             registry.Unsubscribe(subscription);
+            await streamCancellation.CancelAsync().ConfigureAwait(false);
             await acknowledgements.ConfigureAwait(false);
         }
     }
@@ -79,7 +87,7 @@ public sealed class InboundGrpcService(
             while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
             {
                 if (requestStream.Current.PayloadCase is SubscribeRequest.PayloadOneofCase.Ack)
-                    subscription.Acknowledge();
+                    subscription.Acknowledge(requestStream.Current.Ack.DeliveryId);
             }
         }
         catch (OperationCanceledException)

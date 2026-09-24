@@ -34,7 +34,7 @@ public sealed class DispatcherBgService(
                 // the gRPC stream ends with an error the client can act on.
                 logger.LogWarning("{ClassName} subscriber {Subscriber} is too far behind, disconnecting",
                     nameof(DispatcherBgService), failed.Name);
-                subscribers.Unsubscribe(failed);
+                subscribers.Unsubscribe(failed, new SubscriberFellBehindException(failed.Name));
             }
         }
 
@@ -45,35 +45,28 @@ public sealed class DispatcherBgService(
     /// <remarks>
     /// Separated from the loop so the mapping is testable without a queue or a Signal account. The
     /// identifier is replaced per subscriber during fan-out.
-    /// <para>
-    /// Content comes from the data message, or from a sync message's sent message. The second case
-    /// is not an edge case here: the gateway runs as a <b>linked device</b> on an existing account,
-    /// so anything the account's own primary device sends arrives as a sync rather than as a data
-    /// message. Ignoring those would make the gateway blind to everything its owner types.
-    /// </para>
     /// </remarks>
     /// <returns><see langword="null"/> when the envelope carries no content, such as a receipt or
     /// a typing indicator.</returns>
     public static InboundDelivery? CreateDelivery(
         SignalReceivedMessage message, IChannelResolver channelResolver)
     {
-        var content = message.Envelope.DataMessage ?? message.Envelope.SyncMessage?.SentMessage;
-        if (content is null)
+        var notification = (IReceivedNotification)message;
+        if (!notification.HasContent)
             return null;
 
-        var groupId = content.GroupInfo?.GroupId;
-
         string? channel = null;
-        if (groupId is not null && channelResolver.TryGetChannelName(groupId, out var resolved))
+        if (notification.GroupId is not null
+            && channelResolver.TryGetChannelName(notification.GroupId, out var resolved))
             channel = resolved;
 
         return new InboundDelivery
         {
             DeliveryId = string.Empty,
             Channel = channel,
-            Sender = message.Envelope.Source ?? message.Envelope.SourceNumber,
-            Message = content.Message,
-            Timestamp = content.Timestamp ?? message.Envelope.Timestamp
+            Sender = notification.Sender,
+            Message = notification.Message,
+            Timestamp = notification.Timestamp ?? message.Envelope.Timestamp
         };
     }
 }

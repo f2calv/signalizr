@@ -19,7 +19,7 @@ public sealed record DatabaseConfig : IAppConfig, IValidatableObject
     public string? ConnectionString { get; init; }
 
     /// <summary>Whether pending EF Core migrations are applied during startup.</summary>
-    /// <remarks>Defaults to <see langword="true"/> for the single-replica receiver deployment.</remarks>
+    /// <remarks>Defaults to <see langword="true"/> for direct, single-process development runs.</remarks>
     public bool MigrateOnStartup { get; init; } = true;
 
     /// <summary>Whether startup must reject the non-durable InMemory provider.</summary>

@@ -5,8 +5,51 @@ applications send through and subscribe to, instead of each one holding its own 
 
 > **Status: proven end to end, on one account.** Sending, receiving, concurrent subscribers,
 > acknowledgement timeout, queue saturation, and wrapper-outage recovery have live evidence. The
-> EF-backed replay and telemetry changes are covered locally and await deployment validation. A
-> 24-hour soak and message-loss measurement across an outage remain unproven.
+> EF-backed replay, PostgreSQL migration, and telemetry paths are deployed and verified. A 24-hour
+> soak and message-loss measurement across an outage remain unproven.
+
+## Quick Start
+
+Copy the local environment template and supply the Signal account number linked to the wrapper:
+
+```bash
+cp .env.example .env
+```
+
+The default Compose project uses SQLite on a named volume:
+
+```bash
+docker compose up --build
+```
+
+The PostgreSQL example uses local-only credentials by default and publishes PostgreSQL on port
+5432 for inspection:
+
+```bash
+docker compose --file docker-compose.postgres.yml up --build
+```
+
+Both examples run `signalizr-migrate` as a one-shot schema barrier. The receiver sets
+`MigrateOnStartup=false` and starts only after the migrator exits successfully. This mirrors the
+production PreSync lifecycle and prevents multiple receiver replicas from racing to migrate. A
+direct, single-process development run may retain the `MigrateOnStartup=true` default for
+convenience; do not use startup migration when several application instances can start together.
+
+Inspect the completed migration container with:
+
+```bash
+docker compose ps --all signalizr-migrate
+docker compose logs signalizr-migrate
+```
+
+Add `--file docker-compose.postgres.yml` to either command when using the PostgreSQL example.
+
+`DbMigrator` supports SQLite and PostgreSQL. It deliberately rejects InMemory, which creates its
+schema with `EnsureCreated` and is test-only when durability is required.
+
+Stopping Compose preserves database volumes. `docker compose down --volumes` removes all local
+Signal and database state and is therefore destructive; use the same `--file` option for the
+PostgreSQL project.
 
 ## Why
 
@@ -189,7 +232,7 @@ opens the gRPC port, because only it holds the inbound stream.
 Two first-class targets, sharing one configuration shape:
 
 - **Docker Compose** — the quickstart. Brings up the Signal REST wrapper, the gateway and a demo
-  client together.
+  client together, with SQLite by default and a separate PostgreSQL example.
 - **Helm** — a documented [umbrella chart](charts/signalizr/README.md) pairing the upstream wrapper
   with the gateway.
 

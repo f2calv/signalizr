@@ -51,6 +51,8 @@ case "${TARGETARCH}${TARGETVARIANT}" in
     *) echo "unsupported platform: linux/${TARGETARCH}/${TARGETVARIANT}" >&2; exit 1 ;;
 esac
 dotnet publish "src/$WORKLOAD/$WORKLOAD.csproj" -c "$CONFIGURATION" -o /app/publish -r "$RID" --self-contained false
+mkdir -p /app/state
+touch /app/state/.keep
 EOF
 
 # ------------------------------------------------------------------------------
@@ -67,6 +69,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS final
 WORKDIR /app
 
 COPY --link --from=build /app/publish .
+COPY --link --from=build --chown=$APP_UID:$APP_UID /app/state /var/lib/signalizr
 
 # -- Provenance ----------------------------------------------------------------
 # Supplied by the CI workflow (.github/workflows/ci.yml) or by build.ps1/build.sh.

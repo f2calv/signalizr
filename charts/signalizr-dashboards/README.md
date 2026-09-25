@@ -1,39 +1,85 @@
 # Signalizr Grafana dashboards
 
-This chart publishes Signalizr delivery and SignalCli transport dashboards for Grafana sidecar discovery.
-
-## Chart behaviour
-
-Standalone dashboard JSON files live under `dashboards/`, one per dashboard. The template emits one ConfigMap per file with the `grafana_dashboard` discovery label and the configured Grafana folder annotation.
-
-Set `enabled: false` to render no resources. Datasource UIDs are injected through exact replacement of `{{ .Values.datasources.prometheus }}`. Dashboard JSON is never passed through Helm `tpl`, preserving Grafana legend tokens.
+Publishes Signalizr delivery and SignalCli transport dashboards as sidecar-discoverable ConfigMaps.
+The chart is independent of the [`signalizr`](../signalizr/README.md) application chart and is
+versioned by its own `Chart.yaml`. It is published to
+`oci://ghcr.io/f2calv/charts/signalizr-dashboards`.
 
 ## Install
 
 ### Helm
 
-```shell
-helm upgrade --install signalizr-dashboards \
-  oci://ghcr.io/example/charts/signalizr-dashboards \
-  --version 0.1.0 \
-  --namespace my-namespace --create-namespace
+Install the dashboards into the namespace your Grafana sidecar watches:
+
+```bash
+helm install signalizr-dashboards oci://ghcr.io/f2calv/charts/signalizr-dashboards --version 0.1.1 \
+  --namespace my-namespace --create-namespace \
+  --set-string datasources.prometheus=prometheus
+```
+
+Upgrade to the latest stable chart published in GHCR:
+
+```bash
+helm upgrade --install signalizr-dashboards oci://ghcr.io/f2calv/charts/signalizr-dashboards \
+  --namespace my-namespace --create-namespace \
+  --set-string datasources.prometheus=prometheus
 ```
 
 ### Argo CD Application
 
-Use a dedicated Application targeting the monitoring namespace and set `dashboardFolder` and the Prometheus datasource UID through `valuesObject`.
+[Argo CD](https://argo-cd.readthedocs.io/) can consume the same OCI package directly:
 
-The deployment workflow reads the private GitOps target from `GITOPS_REPOSITORY`,
-`SIGNALIZR_DASHBOARD_MANIFEST_PATH`, `SIGNALIZR_DASHBOARD_NAMESPACE`, and
-`SIGNALIZR_DASHBOARD_ENVIRONMENT` repository variables.
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: signalizr-dashboards
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    namespace: my-namespace
+    server: https://kubernetes.default.svc
+  source:
+    repoURL: ghcr.io/f2calv
+    chart: charts/signalizr-dashboards
+    targetRevision: 0.1.1
+    helm:
+      valuesObject:
+        dashboardFolder: Signalizr
+        datasources:
+          prometheus: prometheus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
 
 ## Configuration
 
-| Value | Default | Purpose |
+| Value | Default | Notes |
 | --- | --- | --- |
-| `enabled` | `true` | Renders dashboard ConfigMaps. |
-| `dashboardFolder` | `Signalizr` | Grafana folder annotation. |
-| `datasources.prometheus` | `prometheus` | Prometheus datasource UID. |
+| `enabled` | `true` | Set `false` to render no dashboards |
+| `dashboardFolder` | `Signalizr` | Written to the `grafana_folder` annotation |
+| `datasources.prometheus` | `prometheus` | Prometheus datasource UID |
+
+Each file under `dashboards/` becomes a ConfigMap named `grafana-dashboard-<file>` with the
+`grafana_dashboard: "1"` label, and the datasource UID is substituted into the JSON. Grafana must
+run the dashboard sidecar with `folderAnnotation: grafana_folder` for the folder to apply.
+
+### Default Values
+
+```yaml
+# Renders the dashboard ConfigMaps.
+enabled: true
+
+# Grafana folder annotation.
+dashboardFolder: Signalizr
+
+# Datasource UIDs substituted into the dashboard JSON.
+datasources:
+  prometheus: prometheus
+```
 
 ## Dashboards
 
@@ -43,5 +89,7 @@ The deployment workflow reads the private GitOps target from `GITOPS_REPOSITORY`
 
 ## Related Projects
 
-- [Signalizr](https://github.com/f2calv/signalizr)
 - [Grafana dashboard provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/#dashboards)
+- [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack)
+  runs the Grafana sidecar that discovers these ConfigMaps.
+- [signalizr](../signalizr/README.md) deploys the gateway these dashboards observe.

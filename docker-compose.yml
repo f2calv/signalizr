@@ -5,6 +5,11 @@
 #
 #   cp .env.example .env     # then edit, it holds a phone number and is gitignored
 #   docker compose up --build
+#
+# Endpoints:
+#   signal-cli REST  : http://localhost:8180
+#   Signalizr REST   : http://localhost:8080
+#   Signalizr gRPC   : localhost:5001 (plaintext HTTP/2)
 name: signalizr
 
 x-signalizr-image: &signalizr-image

@@ -100,3 +100,19 @@ repository's `container-workflows` skill. The central PowerShell scripts own bui
 behavior and the single Pester suite; Bash entry points invoke PowerShell instead of duplicating the
 implementation. Keep repository-specific values derived from the caller or supplied through the
 gitignored `deploy.local.psd1`. Change shared behavior and tests centrally, never in a root shim.
+
+## Helm Charts
+
+`charts/signalizr` is packaged and validated by `ci.yml` under the application version, but not
+pushed; publication is separate while the package keeps its own GHCR ownership. Its `Chart.yaml`
+version is a placeholder. `charts/signalizr-dashboards` is versioned by its own `Chart.yaml`: a
+default-branch change under that directory runs `deploy-dashboards.yml`, which publishes that
+version and bumps the dashboard Application in the private GitOps repository named by the
+`GITOPS_REPOSITORY`, `SIGNALIZR_DASHBOARD_MANIFEST_PATH`, `SIGNALIZR_DASHBOARD_NAMESPACE` and
+`SIGNALIZR_DASHBOARD_ENVIRONMENT` repository variables. Bump the dashboard chart version with every
+packaged change, including README-only edits. For local iteration, `deploy.ps1 -OnlyCharts`
+publishes a disposable development version without rolling application pods.
+
+Every chart keeps chart-testing fixtures under `ci/`, and the `helm` job in `ci.yml` lints the chart
+against each of them. Dashboard JSON is never passed through Helm `tpl`, because Grafana legend
+tokens use the same double-brace syntax; datasource UIDs are substituted with exact `replace` calls.

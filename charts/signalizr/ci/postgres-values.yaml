@@ -1,0 +1,23 @@
+# PostgreSQL install: migrations run as a pre-sync Job, the gateway skips them on startup, and
+# the demo client subscribes over gRPC.
+signalizr:
+  envVars:
+    CasCap__DatabaseConfig__Provider: Postgres
+    CasCap__DatabaseConfig__MigrateOnStartup: "false"
+  envSecrets:
+    CasCap__SignalCliConfig__PhoneNumber: signalizr
+    CasCap__DatabaseConfig__ConnectionString: signalizr-postgres
+  persistentVolumeClaims: []
+  volumes: []
+  volumeMounts: []
+migrate:
+  envVars:
+    CasCap__DatabaseConfig__Provider: Postgres
+  envSecrets:
+    CasCap__DatabaseConfig__ConnectionString: signalizr-postgres
+  job:
+    annotations:
+      argocd.argoproj.io/hook: PreSync
+      argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+demo:
+  replicaCount: 1

@@ -1,10 +1,4 @@
 # syntax=docker/dockerfile:1
-# check=skip=CopyIgnoredFile
-#
-# CopyIgnoredFile is skipped deliberately: .dockerignore re-excludes bin/ and obj/ beneath the
-# deps/** allow-list that Dockerfile.Debug relies on, so the broad COPY instructions below
-# legitimately step over ignored files.
-#
 # Multi-architecture image, built from a single Dockerfile. Structure follows
 # https://github.com/f2calv/multi-arch-container-dotnet
 #
@@ -15,11 +9,11 @@
 # Stage 1 of 2: build
 #
 # Pinned to $BUILDPLATFORM and CROSS-COMPILES to $TARGETPLATFORM; emulating the
-# target under QEMU instead is typically 10-50x slower.
+# target under QEMU instead is often an order of magnitude slower.
 # ------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /repo
-COPY ["Directory.Build.props", "Directory.Packages.props", "global.json", "appsettings.json", "./"]
+COPY ["Directory.Build.props", "Directory.Packages.props", "global.json", "./"]
 
 ARG WORKLOAD=CasCap.App.Server
 ARG CONFIGURATION=Release
@@ -27,21 +21,25 @@ ARG CONFIGURATION=Release
 # -- Dependency layer ----------------------------------------------------------
 # Cached until a csproj/props or package version changes. Copy every project manifest first
 # (--parents preserves directory structure) so editing source (.cs) files reuses the cached
-# restore. Restore is platform-agnostic, so keep it before ARG TARGETARCH to share it across
-# architectures.
+# restore; appsettings.json arrives with the sources because restore never reads it. Restore is
+# platform-agnostic, so keep it before ARG TARGETARCH to share it across architectures, and
+# restore every runtime identifier so each platform's publish runs offline with --no-restore.
+# Configuration is passed because Release and Debug resolve different package references.
 COPY --parents src/**/*.csproj ./
 RUN --mount=type=cache,target=/root/.nuget/packages,sharing=locked \
-    dotnet restore "src/$WORKLOAD/$WORKLOAD.csproj"
+    dotnet restore "src/$WORKLOAD/$WORKLOAD.csproj" -p:Configuration="$CONFIGURATION" \
+        "-p:RuntimeIdentifiers=\"linux-x64;linux-arm64;linux-arm\""
 
 # -- Compile layer -------------------------------------------------------------
 COPY . .
 
 # buildx injects TARGETARCH/TARGETVARIANT automatically:
 #   linux/amd64 -> amd64, linux/arm64 -> arm64, linux/arm/v7 -> arm + v7
-# Concatenating the two gives a single flat token to switch on.
+# Concatenating the two gives a single flat token to switch on. The publish only reads packages
+# the restore already wrote, so the platform legs share the cache and need no network.
 ARG TARGETARCH
 ARG TARGETVARIANT
-RUN --mount=type=cache,target=/root/.nuget/packages,sharing=locked <<EOF
+RUN --network=none --mount=type=cache,target=/root/.nuget/packages,sharing=shared <<EOF
 set -eux
 # https://learn.microsoft.com/dotnet/core/rid-catalog
 case "${TARGETARCH}${TARGETVARIANT}" in
@@ -50,7 +48,8 @@ case "${TARGETARCH}${TARGETVARIANT}" in
     armv7) RID=linux-arm   ;;
     *) echo "unsupported platform: linux/${TARGETARCH}/${TARGETVARIANT}" >&2; exit 1 ;;
 esac
-dotnet publish "src/$WORKLOAD/$WORKLOAD.csproj" -c "$CONFIGURATION" -o /app/publish -r "$RID" --self-contained false
+dotnet publish "src/$WORKLOAD/$WORKLOAD.csproj" -c "$CONFIGURATION" -o /app/publish -r "$RID" \
+    --self-contained false --no-restore
 mkdir -p /app/state
 touch /app/state/.keep
 EOF
@@ -89,7 +88,7 @@ ENV GITHUB_RUN_ID=$GITHUB_RUN_ID
 ARG GITHUB_RUN_NUMBER=0
 ENV GITHUB_RUN_NUMBER=$GITHUB_RUN_NUMBER
 
-EXPOSE 8080
+EXPOSE 8080 5001
 
 # https://github.com/opencontainers/image-spec/blob/main/annotations.md
 LABEL org.opencontainers.image.title="signalizr" \

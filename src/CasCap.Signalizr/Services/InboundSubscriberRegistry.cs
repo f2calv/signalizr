@@ -12,7 +12,8 @@ public sealed class InboundSubscriberRegistry(
     IOptions<SubscriberConfig> config,
     TimeProvider timeProvider,
     SignalizrMetrics metrics,
-    IDbContextFactory<SignalizrDbContext> dbContextFactory) : IInboundSubscriberRegistry
+    IDbContextFactory<SignalizrDbContext> dbContextFactory,
+    IOperatorNotifier operatorNotifier) : IInboundSubscriberRegistry
 {
     private readonly ConcurrentDictionary<string, InboundSubscription> _subscriptions =
         new(StringComparer.Ordinal);
@@ -80,6 +81,7 @@ public sealed class InboundSubscriberRegistry(
             metrics.RecordSubscriberConnected();
             logger.LogInformation("{ClassName} subscriber connected, {Count} total",
                 nameof(InboundSubscriberRegistry), _subscriptions.Count);
+            operatorNotifier.Notify($"{subscriberName} connected ({_subscriptions.Count} subscriber(s))");
 
             return subscription;
         }
@@ -102,6 +104,9 @@ public sealed class InboundSubscriberRegistry(
 
         logger.LogInformation("{ClassName} subscriber disconnected, {Count} remaining",
             nameof(InboundSubscriberRegistry), _subscriptions.Count);
+        // The exception type only: its message can carry details from the transport.
+        operatorNotifier.Notify($"{subscription.Name} disconnected ({_subscriptions.Count} remaining)"
+            + (error is null ? string.Empty : $", {error.GetType().Name}"));
     }
 
     /// <inheritdoc/>

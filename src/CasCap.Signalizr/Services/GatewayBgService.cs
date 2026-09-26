@@ -10,7 +10,8 @@ public sealed class GatewayBgService(
     IOptions<SignalCliConfig> signalCliConfig,
     IOptions<GatewayConfig> gatewayConfig,
     ISignalCliClient client,
-    IChannelResolver channels) : IBgFeature
+    IChannelResolver channels,
+    IOperatorNotifier operatorNotifier) : IBgFeature
 {
     /// <inheritdoc/>
     public string FeatureName => FeatureNames.Gateway;
@@ -20,6 +21,7 @@ public sealed class GatewayBgService(
     {
         await ResolveChannelsAsync(cancellationToken).ConfigureAwait(false);
         await ApplyProfileAsync(cancellationToken).ConfigureAwait(false);
+        operatorNotifier.Notify($"gateway started with {channels.ChannelNames.Count} channel(s): {string.Join(", ", channels.ChannelNames)}");
 
         logger.LogInformation("{ClassName} started with {ClientType}",
             nameof(GatewayBgService), client.GetType().Name);

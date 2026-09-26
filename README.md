@@ -157,6 +157,24 @@ These operations return `404` and `502` on the same terms as sending.
 The account profile is shared by every channel, so no consumer can change it. The gateway applies
 `CasCap:GatewayConfig:ProfileName` at startup instead, when it is set.
 
+## Operator notices
+
+With `CasCap:OperatorNotificationConfig:NotificationsEnabled` set, the gateway posts its own
+operational events to the account's "Note to Self" conversation:
+
+- the gateway starting, with the channels it resolved;
+- a subscriber connecting or disconnecting, by subscriber name;
+- a subscriber that stopped acknowledging and was disconnected;
+- throttling: the inbound queue dropping messages, at most once per `ThrottleNoticeIntervalMs`;
+- a flood warning when one channel sends more than `CasCap:GatewayConfig:SendRateWarningPerMinute`
+  messages within a minute.
+
+Notices carry subscriber names, channel names and counts only. They are off by default because on an
+account linked to a person's phone, "Note to Self" is that person's own conversation.
+
+The flood warning only detects a burst; the gateway does not delay or reject sends. Producers that
+can burst, such as trade alerting, should keep their own throttle until a gateway send budget exists.
+
 ## Receiving
 
 The upstream broadcast is lossy by construction: an unbuffered channel with a non-blocking send, so

@@ -1,12 +1,20 @@
+using System.Collections.Concurrent;
+
 namespace CasCap.Services;
 
 /// <inheritdoc cref="IMessageGateway"/>
 public sealed class MessageGateway(
     ILogger<MessageGateway> logger,
+    IOptions<SignalCliConfig> signalCliConfig,
+    IOptions<GatewayConfig> gatewayConfig,
+    TimeProvider timeProvider,
     ISignalCliClient client,
     IChannelResolver channelResolver,
-    IOptions<SignalCliConfig> signalCliConfig) : IMessageGateway
+    IOperatorNotifier operatorNotifier) : IMessageGateway
 {
+    private static readonly TimeSpan SendRateInterval = TimeSpan.FromMinutes(1);
+
+    private readonly ConcurrentDictionary<string, SendRateWindow> _sendRates = new(StringComparer.OrdinalIgnoreCase);
     /// <inheritdoc/>
     public async Task<SendMessageResponse> SendAsync(
         string channelName, SendMessageRequest request, CancellationToken cancellationToken = default)
@@ -28,6 +36,7 @@ public sealed class MessageGateway(
         // the caller's content, neither of which belongs in a log.
         logger.LogInformation("{ClassName} sent a message to channel {Channel}",
             nameof(MessageGateway), channelName);
+        TrackSendRate(channelName);
 
         return new SendMessageResponse { Channel = channelName, Timestamp = response.Timestamp };
     }
@@ -101,6 +110,43 @@ public sealed class MessageGateway(
         }, cancellationToken).ConfigureAwait(false), "poll closure");
     }
 
+    /// <summary>Warns once per channel per minute when sends exceed the configured rate.</summary>
+    /// <remarks>
+    /// A fixed one-minute window: cheap, and precise enough to say "this channel is flooding".
+    /// </remarks>
+    // TODO: enforce a per-channel and per-account send budget (queue or reject with 429) once the
+    // warnings show real production rates. Detection comes first so a limit is not guessed; until
+    // then producers such as CAS keep their own throttles.
+    private void TrackSendRate(string channelName)
+    {
+        var threshold = gatewayConfig.Value.SendRateWarningPerMinute;
+        if (threshold <= 0)
+            return;
+
+        var window = _sendRates.GetOrAdd(channelName, _ => new SendRateWindow());
+        int count;
+        lock (window.Gate)
+        {
+            var now = timeProvider.GetTimestamp();
+            if (window.StartedAt == 0 || timeProvider.GetElapsedTime(window.StartedAt, now) >= SendRateInterval)
+            {
+                window.StartedAt = now;
+                window.Count = 0;
+                window.Warned = false;
+            }
+
+            count = ++window.Count;
+            if (count <= threshold || window.Warned)
+                return;
+            window.Warned = true;
+        }
+
+        logger.LogWarning("{ClassName} channel {Channel} exceeded {Threshold} sends within a minute, a possible flood",
+            nameof(MessageGateway), channelName, threshold);
+        operatorNotifier.Notify($"flood warning: channel {channelName} sent more than {threshold} messages within a minute; " +
+            "Signal may start rate-limiting the account");
+    }
+
     private string ResolveGroupId(string channelName) =>
         channelResolver.TryGetGroupId(channelName, out var groupId)
             ? groupId
@@ -112,6 +158,14 @@ public sealed class MessageGateway(
     {
         if (!accepted)
             throw new HttpRequestException($"The signal-cli wrapper rejected the {operation}.");
+    }
+
+    private sealed class SendRateWindow
+    {
+        public readonly Lock Gate = new();
+        public long StartedAt;
+        public int Count;
+        public bool Warned;
     }
 
     /// <summary>Builds the upstream send request for one group.</summary>

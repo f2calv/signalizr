@@ -5,6 +5,7 @@ using CasCap.Grpc;
 using CasCap.Models;
 using CasCap.Models.Dtos;
 using CasCap.Services;
+using CasCap.Tests.Fakes;
 using Grpc.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -94,7 +95,8 @@ public class InboundGrpcServiceTests
                 ReplayBatchSize = 10,
                 MaxOutstanding = 1,
                 AckTimeoutMs = ackTimeoutMs,
-            }));
+            }),
+            fixture.Notifier);
 
     private static async Task<InboundMessage> ReadResponseAsync(TestServerStreamWriter<InboundMessage> response)
     {
@@ -138,10 +140,13 @@ public class InboundGrpcServiceTests
                 }),
                 TimeProvider.System,
                 Metrics,
-                _dbContextFactory);
+                _dbContextFactory,
+                Notifier);
         }
 
         public SignalizrMetrics Metrics { get; }
+
+        public FakeOperatorNotifier Notifier { get; } = new();
 
         public InboundSubscriberRegistry Registry { get; }
 

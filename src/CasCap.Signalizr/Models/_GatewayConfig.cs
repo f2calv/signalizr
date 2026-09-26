@@ -20,4 +20,15 @@ public sealed record GatewayConfig
     /// </summary>
     [MaxLength(256)]
     public string? ProfileName { get; init; }
+
+    /// <summary>
+    /// Sends per channel within one minute above which the gateway warns of a possible flood, or
+    /// <c>0</c> to disable the check.
+    /// </summary>
+    /// <remarks>
+    /// Detection only: sends are never delayed or rejected. The warning goes to the log and to the
+    /// operator notices, once per channel per minute.
+    /// </remarks>
+    [Range(0, 10_000)]
+    public int SendRateWarningPerMinute { get; init; } = 30;
 }

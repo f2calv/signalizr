@@ -25,4 +25,14 @@ public sealed record SignalizrMessage
 
     /// <summary>Durable binary attachments associated with this message.</summary>
     public IReadOnlyList<SignalizrAttachment> Attachments { get; init; } = [];
+
+    /// <summary>Whether the gateway's own account sent this message.</summary>
+    /// <remarks>
+    /// On an account linked to a person's phone, the owner's own messages are marked too, so a
+    /// consumer serving the owner must not discard them on this flag alone.
+    /// </remarks>
+    public bool FromSelf { get; init; }
+
+    /// <summary>The poll vote this message carries, or <see langword="null"/>.</summary>
+    public SignalizrPollVote? PollVote { get; init; }
 }

@@ -18,6 +18,18 @@ public sealed class InboundMessageEntity
     /// <summary>Milliseconds since the Unix epoch, as supplied by Signal.</summary>
     public long? Timestamp { get; set; }
 
+    /// <summary>Whether the gateway's own account sent the message.</summary>
+    public bool FromSelf { get; set; }
+
+    /// <summary>The voted poll's Signal timestamp, when the message is a poll vote.</summary>
+    public long? PollVoteTimestamp { get; set; }
+
+    /// <summary>
+    /// The selected answer indexes as comma-separated integers, when the message is a poll vote.
+    /// </summary>
+    /// <remarks>Text rather than an array type so the same migrations apply to SQLite and PostgreSQL.</remarks>
+    public string? PollVoteOptionIndexes { get; set; }
+
     /// <summary>Unix milliseconds at which Signalizr persisted the message.</summary>
     public long PersistedAtUnixMilliseconds { get; set; }
 

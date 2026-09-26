@@ -5,6 +5,7 @@ using CasCap.Exceptions;
 using CasCap.Models;
 using CasCap.Models.Dtos;
 using CasCap.Services;
+using CasCap.Tests.Fakes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -203,10 +204,13 @@ public sealed class InboundSubscriberRegistryTests
                 }),
                 TimeProvider.System,
                 _metrics,
-                _dbContextFactory);
+                _dbContextFactory,
+                Notifier);
         }
 
         public InboundSubscriberRegistry Registry { get; }
+
+        public FakeOperatorNotifier Notifier { get; } = new();
 
         public async Task AddMessageAsync(string message)
         {

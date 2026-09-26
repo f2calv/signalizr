@@ -2,6 +2,7 @@ using CasCap.Diagnostics;
 using CasCap.Models;
 using CasCap.Models.Dtos;
 using CasCap.Services;
+using CasCap.Tests.Fakes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -16,12 +17,16 @@ namespace CasCap.Tests;
 public sealed class InboundMessageQueueTests : IDisposable
 {
     private readonly SignalizrMetrics _metrics = new();
+    private readonly FakeOperatorNotifier _notifier = new();
 
     private InboundMessageQueue CreateQueue(
         int capacity, ILogger<InboundMessageQueue>? logger = null)
         => new(logger ?? NullLogger<InboundMessageQueue>.Instance,
             Options.Create(new ReceiverConfig { QueueCapacity = capacity }),
-            _metrics);
+            Options.Create(new OperatorNotificationConfig()),
+            TimeProvider.System,
+            _metrics,
+            _notifier);
 
     private static SignalReceivedMessage CreateMessage(long timestamp)
         => new() { Envelope = new SignalEnvelope { Timestamp = timestamp } };
@@ -57,6 +62,19 @@ public sealed class InboundMessageQueueTests : IDisposable
 
         Assert.Equal(4, queue.EnqueuedCount);
         Assert.Equal(2, queue.DroppedCount);
+    }
+
+    [Fact]
+    public void A_full_queue_notifies_the_operator_once_per_interval()
+    {
+        var queue = CreateQueue(1);
+
+        // Four drops inside one throttle interval produce one notice, not four.
+        for (var i = 1; i <= 5; i++)
+            queue.TryEnqueue(CreateMessage(i));
+
+        var notice = Assert.Single(_notifier.Notices);
+        Assert.Contains("throttling in effect", notice, StringComparison.Ordinal);
     }
 
     [Fact]

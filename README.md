@@ -5,8 +5,9 @@ applications send through and subscribe to, instead of each one holding its own 
 
 > **Status: proven end to end, on one account.** Sending, receiving, concurrent subscribers,
 > acknowledgement timeout, queue saturation, and wrapper-outage recovery have live evidence. The
-> EF-backed replay, PostgreSQL migration, and telemetry paths are deployed and verified. A 24-hour
-> soak and message-loss measurement across an outage remain unproven.
+> EF-backed replay, PostgreSQL migration, and telemetry paths are deployed and verified. Long-run
+> stability and message loss across an outage remain unmeasured; the planned 24-hour soak was
+> skipped in favour of production use.
 
 ## Quick Start
 
@@ -94,7 +95,7 @@ A single container image, with the role selected by feature flag:
 
 | Surface | Transport | Rationale |
 | --- | --- | --- |
-| Send | REST | `curl`-able, webhook-able, and usable without generating a client |
+| Send and channel interactions | REST | `curl`-able, webhook-able, and usable without generating a client |
 | Inbound subscription | gRPC bidirectional streaming | Long-lived and typed, with an ack channel so delivery is not fire-and-forget |
 
 Send is not duplicated across both transports.
@@ -126,6 +127,58 @@ to check configuration. It returns names only.
 
 `404` covers both an unknown channel and a non-gateway role, because a pod that does not run the
 gateway does not route these paths at all. The unknown-channel body lists the configured channels.
+
+## Channel interactions
+
+The same channel addressing covers the rest of what a chat needs, so a consumer never talks to the
+wrapper directly:
+
+| Operation | Request | Success |
+| --- | --- | --- |
+| Set a reaction | `POST /api/v1/channels/{channel}/reactions` | `204` |
+| Remove a reaction | `DELETE /api/v1/channels/{channel}/reactions` | `204` |
+| React to a delivered message | `POST` / `DELETE /api/v1/channels/{channel}/messages/{deliveryId}/reactions` | `204` |
+| Show typing | `PUT /api/v1/channels/{channel}/typing` | `204` |
+| Clear typing | `DELETE /api/v1/channels/{channel}/typing` | `204` |
+| Create a poll | `POST /api/v1/channels/{channel}/polls` | `200` with `{ "channel", "pollId" }` |
+| Close a poll | `DELETE /api/v1/channels/{channel}/polls/{pollId}` | `204` |
+
+A reaction body names the target by its timestamp and, for an inbound message, the sender it was
+delivered with. Omit `targetAuthor` to react to a message the gateway sent:
+
+```json
+{ "reaction": "✅", "targetTimestamp": 1758518400000, "targetAuthor": "<delivered sender>" }
+```
+
+A delivered message can instead be addressed by its `delivery_id`, with a body of just `{ "reaction" }`: the gateway looks up the sender and timestamp itself. That needs the Receiver role in the same process, returning `501` otherwise, and `404` once retention has removed the message.
+
+Starting typing takes a lease rather than sending one indicator. The gateway refreshes it every `CasCap:GatewayConfig:TypingRefreshIntervalMs` until it is cleared, and clears it itself after `TypingMaxDurationMs`, so a consumer that fails or disconnects before clearing cannot leave it showing. Leases are per gateway process.
+
+A poll body carries `question`, `answers` and optionally `allowMultipleSelections`. Votes arrive on
+the subscription as messages carrying a `poll_vote`, whose poll timestamp is the `pollId`.
+
+These operations return `404` and `502` on the same terms as sending.
+
+The account profile is shared by every channel, so no consumer can change it. The gateway applies
+`CasCap:GatewayConfig:ProfileName` at startup instead, when it is set.
+
+## Operator notices
+
+With `CasCap:OperatorNotificationConfig:NotificationsEnabled` set, the gateway posts its own
+operational events to the account's "Note to Self" conversation:
+
+- the gateway starting, with the channels it resolved;
+- a subscriber connecting or disconnecting, by subscriber name;
+- a subscriber that stopped acknowledging and was disconnected;
+- throttling: the inbound queue dropping messages, at most once per `ThrottleNoticeIntervalMs`;
+- a flood warning when one channel sends more than `CasCap:GatewayConfig:SendRateWarningPerMinute`
+  messages within a minute.
+
+Notices carry subscriber names, channel names and counts only. They are off by default because on an
+account linked to a person's phone, "Note to Self" is that person's own conversation.
+
+The flood warning only detects a burst; the gateway does not delay or reject sends. Producers that
+can burst, such as trade alerting, should keep their own throttle until a gateway send budget exists.
 
 ## Receiving
 
@@ -212,7 +265,7 @@ individually because doing so could break replay or another subscriber.
 | Retention | Local tests prove 24-hour globally acknowledged cleanup and the hard 30-day message-content cap |
 | Wrapper outage | Gateway readiness changed to 503 without a restart; health checks completed in 5–26ms; WebSocket reconnect used bounded backoff |
 | Wrapper recovery | Wrapper ready after 48.7s, gateway ready after 56.1s, and the receive WebSocket reconnected on attempt 9 |
-| Long-running stability | Not yet measured for 24 hours |
+| Long-running stability | Not measured; the planned 24-hour soak was skipped in favour of production use |
 | Message loss during outage | Not yet measured; messages were not deliberately sent while the wrapper was absent |
 
 ### Ports

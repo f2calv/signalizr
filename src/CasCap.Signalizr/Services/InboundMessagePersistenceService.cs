@@ -30,6 +30,11 @@ public sealed class InboundMessagePersistenceService(
             Sender = delivery.Sender,
             Message = delivery.Message,
             Timestamp = delivery.Timestamp,
+            FromSelf = delivery.FromSelf,
+            PollVoteTimestamp = delivery.PollVote?.PollTimestamp,
+            PollVoteOptionIndexes = delivery.PollVote is { } vote
+                ? InboundPollVote.FormatOptionIndexes(vote.OptionIndexes)
+                : null,
             PersistedAtUnixMilliseconds = timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
         };
 

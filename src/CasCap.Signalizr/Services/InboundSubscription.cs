@@ -81,6 +81,14 @@ public sealed class InboundSubscription : IDisposable
                     Sender = message.Sender,
                     Message = message.Message,
                     Timestamp = message.Timestamp,
+                    FromSelf = message.FromSelf,
+                    PollVote = message.PollVoteTimestamp is { } pollTimestamp
+                        ? new InboundPollVote
+                        {
+                            PollTimestamp = pollTimestamp,
+                            OptionIndexes = InboundPollVote.ParseOptionIndexes(message.PollVoteOptionIndexes)
+                        }
+                        : null,
                     Attachments = [.. message.Attachments.Select(attachment => new InboundAttachment
                     {
                         Id = attachment.Id,

@@ -2,13 +2,12 @@ using CasCap.Abstractions;
 using CasCap.Common.Abstractions;
 using CasCap.Constants;
 using CasCap.Exceptions;
-using CasCap.Models;
 using CasCap.Models.Dtos;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CasCap.Controllers;
 
-/// <summary>The gateway send surface, addressed by channel name.</summary>
+/// <summary>The gateway channel surface, addressed by channel name.</summary>
 /// <remarks>
 /// REST rather than gRPC so it stays callable with curl and from a webhook, with no generated
 /// client. Gated to the Gateway role, so a Receiver or DemoClient pod returns 404 here instead of
@@ -35,12 +34,115 @@ public sealed class ChannelsController(
     [ProducesResponseType<SendMessageResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
-    public async Task<ActionResult<SendMessageResponse>> SendMessage(
+    public Task<ActionResult> SendMessage(
         string channel, [FromBody] SendMessageRequest request, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () => Ok(await messageGateway.SendAsync(channel, request, cancellationToken)));
+
+    /// <summary>Sets a reaction on a message in a channel, replacing any earlier one.</summary>
+    [HttpPost("{channel}/reactions")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public Task<ActionResult> SetReaction(
+        string channel, [FromBody] ChannelReactionRequest request, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () =>
+        {
+            await messageGateway.SetReactionAsync(channel, request, cancellationToken);
+            return NoContent();
+        });
+
+    /// <summary>Removes a reaction from a message in a channel.</summary>
+    [HttpDelete("{channel}/reactions")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public Task<ActionResult> RemoveReaction(
+        string channel, [FromBody] ChannelReactionRequest request, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () =>
+        {
+            await messageGateway.RemoveReactionAsync(channel, request, cancellationToken);
+            return NoContent();
+        });
+
+    /// <summary>Sets a reaction on a delivered message, addressed by its delivery identifier.</summary>
+    [HttpPost("{channel}/messages/{deliveryId}/reactions")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public Task<ActionResult> SetDeliveryReaction(
+        string channel, string deliveryId, [FromBody] DeliveryReactionRequest request, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () =>
+        {
+            await messageGateway.SetDeliveryReactionAsync(channel, deliveryId, request.Reaction, cancellationToken);
+            return NoContent();
+        });
+
+    /// <summary>Removes a reaction from a delivered message, addressed by its delivery identifier.</summary>
+    [HttpDelete("{channel}/messages/{deliveryId}/reactions")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public Task<ActionResult> RemoveDeliveryReaction(
+        string channel, string deliveryId, [FromBody] DeliveryReactionRequest request, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () =>
+        {
+            await messageGateway.RemoveDeliveryReactionAsync(channel, deliveryId, request.Reaction, cancellationToken);
+            return NoContent();
+        });
+
+    /// <summary>Shows the typing indicator in a channel and holds it until cleared or expired.</summary>
+    [HttpPut("{channel}/typing")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public Task<ActionResult> StartTyping(string channel, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () =>
+        {
+            await messageGateway.StartTypingAsync(channel, cancellationToken);
+            return NoContent();
+        });
+
+    /// <summary>Clears the typing indicator in a channel.</summary>
+    [HttpDelete("{channel}/typing")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public Task<ActionResult> StopTyping(string channel, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () =>
+        {
+            await messageGateway.StopTypingAsync(channel, cancellationToken);
+            return NoContent();
+        });
+
+    /// <summary>Creates a poll in a channel.</summary>
+    [HttpPost("{channel}/polls")]
+    [ProducesResponseType<ChannelPollResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public Task<ActionResult> CreatePoll(
+        string channel, [FromBody] ChannelPollRequest request, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () => Ok(await messageGateway.CreatePollAsync(channel, request, cancellationToken)));
+
+    /// <summary>Closes a poll in a channel.</summary>
+    [HttpDelete("{channel}/polls/{pollId}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public Task<ActionResult> ClosePoll(string channel, string pollId, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () =>
+        {
+            await messageGateway.ClosePollAsync(channel, pollId, cancellationToken);
+            return NoContent();
+        });
+
+    /// <summary>Runs one channel operation, translating gateway failures into problem responses.</summary>
+    private async Task<ActionResult> ExecuteAsync(string channel, Func<Task<ActionResult>> operation)
     {
         try
         {
-            return Ok(await messageGateway.SendAsync(channel, request, cancellationToken));
+            return await operation();
         }
         catch (UnknownChannelException)
         {
@@ -52,15 +154,29 @@ public sealed class ChannelsController(
                     $"{string.Join(", ", channelResolver.ChannelNames)}.",
                 statusCode: StatusCodes.Status404NotFound);
         }
+        catch (UnknownDeliveryException ex)
+        {
+            return Problem(
+                title: "Unknown delivery",
+                detail: $"Message '{ex.DeliveryId}' is not retained in channel '{channel}'.",
+                statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (NotSupportedException ex)
+        {
+            return Problem(
+                title: "Not available on this role",
+                detail: ex.Message,
+                statusCode: StatusCodes.Status501NotImplemented);
+        }
         catch (HttpRequestException ex)
         {
             // 502 rather than 500: the gateway is healthy, its upstream is not, and the caller
             // should retry rather than treat the request as malformed.
-            logger.LogError(ex, "{ClassName} could not reach the wrapper for channel {Channel}",
+            logger.LogError(ex, "{ClassName} could not complete an operation on channel {Channel}",
                 nameof(ChannelsController), channel);
             return Problem(
                 title: "Upstream unavailable",
-                detail: "The signal-cli wrapper could not be reached.",
+                detail: "The signal-cli wrapper could not complete the request.",
                 statusCode: StatusCodes.Status502BadGateway);
         }
     }

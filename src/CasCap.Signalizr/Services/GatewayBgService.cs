@@ -1,13 +1,17 @@
 namespace CasCap.Services;
 
-/// <summary>Hosts the gateway surface — REST send, gRPC subscription and named-channel resolution.</summary>
+/// <summary>Prepares the gateway surface: named-channel resolution and account profile policy.</summary>
 /// <remarks>
-/// Stateless, so every replica runs it. Not yet implemented; the service currently idles so that the
-/// feature-flag host can be exercised end to end.
+/// Stateless, so every replica runs it. The REST channel surface itself is served by the
+/// feature-gated controllers once channels resolve.
 /// </remarks>
-// TODO: implement the REST send endpoint and the gRPC bidirectional subscription surface.
 public sealed class GatewayBgService(
-    ILogger<GatewayBgService> logger, ISignalCliClient client, IChannelResolver channels) : IBgFeature
+    ILogger<GatewayBgService> logger,
+    IOptions<SignalCliConfig> signalCliConfig,
+    IOptions<GatewayConfig> gatewayConfig,
+    ISignalCliClient client,
+    IChannelResolver channels,
+    IOperatorNotifier operatorNotifier) : IBgFeature
 {
     /// <inheritdoc/>
     public string FeatureName => FeatureNames.Gateway;
@@ -16,8 +20,10 @@ public sealed class GatewayBgService(
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         await ResolveChannelsAsync(cancellationToken).ConfigureAwait(false);
+        await ApplyProfileAsync(cancellationToken).ConfigureAwait(false);
+        operatorNotifier.Notify($"gateway started with {channels.ChannelNames.Count} channel(s): {string.Join(", ", channels.ChannelNames)}");
 
-        logger.LogInformation("{ClassName} started with {ClientType} (no surface implemented yet)",
+        logger.LogInformation("{ClassName} started with {ClientType}",
             nameof(GatewayBgService), client.GetType().Name);
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
     }
@@ -46,6 +52,33 @@ public sealed class GatewayBgService(
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 60));
             }
+        }
+    }
+
+    /// <summary>Applies the configured profile display name, when one is configured.</summary>
+    /// <remarks>
+    /// A failure is logged rather than thrown: the display name is cosmetic, and the channel
+    /// surface must not go down because of it.
+    /// </remarks>
+    private async Task ApplyProfileAsync(CancellationToken cancellationToken)
+    {
+        if (gatewayConfig.Value.ProfileName is not { Length: > 0 } profileName)
+            return;
+
+        try
+        {
+            // signal-cli splits the name on \0 into given and family name, so the trailing
+            // separator clears a stale family name instead of leaving it appended.
+            var updated = await client.UpdateProfile(signalCliConfig.Value.PhoneNumber,
+                new UpdateProfileRequest { Name = profileName + "\0" }, cancellationToken).ConfigureAwait(false);
+            if (updated)
+                logger.LogInformation("{ClassName} applied the configured profile name", nameof(GatewayBgService));
+            else
+                logger.LogWarning("{ClassName} the wrapper rejected the profile name", nameof(GatewayBgService));
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogWarning(ex, "{ClassName} could not apply the profile name", nameof(GatewayBgService));
         }
     }
 }

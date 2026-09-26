@@ -12,6 +12,7 @@ namespace CasCap.Tests;
 public class DispatcherMappingTests
 {
     private const string GroupId = "group.dGVzdA==";
+    private const string Account = "+19999999999";
 
     private static readonly FakeChannelResolver Resolver = new(new() { [GroupId] = "system" });
 
@@ -34,7 +35,7 @@ public class DispatcherMappingTests
     [Fact]
     public void A_message_from_a_configured_group_carries_the_channel_name()
     {
-        var delivery = DispatcherBgService.CreateDelivery(CreateMessage(GroupId), Resolver);
+        var delivery = DispatcherBgService.CreateDelivery(CreateMessage(GroupId), Resolver, Account);
 
         Assert.NotNull(delivery);
         Assert.Equal("system", delivery.Channel);
@@ -67,12 +68,81 @@ public class DispatcherMappingTests
             }
         };
 
-        var delivery = DispatcherBgService.CreateDelivery(message, Resolver);
+        var delivery = DispatcherBgService.CreateDelivery(message, Resolver, Account);
 
         Assert.NotNull(delivery);
         Assert.Equal("system", delivery.Channel);
         Assert.Equal("typed on my phone", delivery.Message);
         Assert.Equal(99, delivery.Timestamp);
+        Assert.True(delivery.FromSelf);
+    }
+
+    [Fact]
+    public void A_message_from_another_sender_is_not_marked_as_the_gateways_own()
+    {
+        var delivery = DispatcherBgService.CreateDelivery(CreateMessage(GroupId), Resolver, Account);
+
+        Assert.NotNull(delivery);
+        Assert.False(delivery.FromSelf);
+    }
+
+    [Fact]
+    public void A_data_message_from_the_gateway_account_is_marked_as_its_own()
+    {
+        var message = new SignalReceivedMessage
+        {
+            Envelope = new SignalEnvelope
+            {
+                SourceNumber = Account,
+                Timestamp = 1,
+                DataMessage = new SignalDataMessage
+                {
+                    Message = "echo",
+                    Timestamp = 7,
+                    GroupInfo = new SignalGroupInfo { GroupId = GroupId }
+                }
+            }
+        };
+
+        var delivery = DispatcherBgService.CreateDelivery(message, Resolver, Account);
+
+        Assert.NotNull(delivery);
+        Assert.True(delivery.FromSelf);
+    }
+
+    [Fact]
+    public void A_poll_vote_is_delivered_with_its_poll_and_selection()
+    {
+        var message = new SignalReceivedMessage
+        {
+            Envelope = new SignalEnvelope
+            {
+                Source = "+10000000000",
+                Timestamp = 1,
+                DataMessage = new SignalDataMessage
+                {
+                    Timestamp = 50,
+                    GroupInfo = new SignalGroupInfo { GroupId = GroupId },
+                    PollVote = new SignalPollUpdateMessage { TargetSentTimestamp = 40, OptionIndexes = [0, 2] }
+                }
+            }
+        };
+
+        var delivery = DispatcherBgService.CreateDelivery(message, Resolver, Account);
+
+        Assert.NotNull(delivery);
+        Assert.NotNull(delivery.PollVote);
+        Assert.Equal(40, delivery.PollVote.PollTimestamp);
+        Assert.Equal([0, 2], delivery.PollVote.OptionIndexes);
+    }
+
+    [Fact]
+    public void An_ordinary_message_carries_no_poll_vote()
+    {
+        var delivery = DispatcherBgService.CreateDelivery(CreateMessage(GroupId), Resolver, Account);
+
+        Assert.NotNull(delivery);
+        Assert.Null(delivery.PollVote);
     }
 
     [Fact]
@@ -85,14 +155,14 @@ public class DispatcherMappingTests
             Envelope = new SignalEnvelope { Source = "+10000000000", Timestamp = 1 }
         };
 
-        Assert.Null(DispatcherBgService.CreateDelivery(message, Resolver));
+        Assert.Null(DispatcherBgService.CreateDelivery(message, Resolver, Account));
     }
 
     [Fact]
     public void A_message_from_an_unconfigured_group_has_no_channel()
     {
         // Normal, not an error: the account may belong to groups this deployment ignores.
-        var delivery = DispatcherBgService.CreateDelivery(CreateMessage("group.b3RoZXI="), Resolver);
+        var delivery = DispatcherBgService.CreateDelivery(CreateMessage("group.b3RoZXI="), Resolver, Account);
 
         Assert.NotNull(delivery);
         Assert.Null(delivery.Channel);
@@ -102,7 +172,7 @@ public class DispatcherMappingTests
     [Fact]
     public void A_direct_message_has_no_channel()
     {
-        var delivery = DispatcherBgService.CreateDelivery(CreateMessage(groupId: null), Resolver);
+        var delivery = DispatcherBgService.CreateDelivery(CreateMessage(groupId: null), Resolver, Account);
 
         Assert.NotNull(delivery);
         Assert.Null(delivery.Channel);
@@ -112,7 +182,7 @@ public class DispatcherMappingTests
     public void The_delivery_id_is_assigned_after_persistence_not_mapping()
     {
         // Left empty on purpose: EF assigns the durable sequence during persistence.
-        var delivery = DispatcherBgService.CreateDelivery(CreateMessage(GroupId), Resolver);
+        var delivery = DispatcherBgService.CreateDelivery(CreateMessage(GroupId), Resolver, Account);
 
         Assert.NotNull(delivery);
         Assert.Equal(string.Empty, delivery.DeliveryId);

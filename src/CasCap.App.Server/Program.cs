@@ -54,7 +54,12 @@ if (enabledFeatures.Contains(FeatureNames.DbMigrator))
 }
 
 if (enabledFeatures.Contains(FeatureNames.Gateway))
+{
+    builder.Services.AddOptionsWithValidateOnStart<GatewayConfig>()
+        .BindConfiguration(GatewayConfig.ConfigurationSectionName)
+        .ValidateDataAnnotations();
     builder.Services.AddSingleton<IBgFeature, GatewayBgService>();
+}
 
 if (enabledFeatures.Contains(FeatureNames.Receiver))
 {
@@ -80,10 +85,21 @@ if (enabledFeatures.Contains(FeatureNames.Gateway) || enabledFeatures.Contains(F
     builder.Services.Configure<ChannelConfig>(
         builder.Configuration.GetSection(ChannelConfig.ConfigurationSectionName));
     builder.Services.AddSingleton<IChannelResolver, ChannelResolver>();
+    builder.Services.AddOptionsWithValidateOnStart<OperatorNotificationConfig>()
+        .BindConfiguration(OperatorNotificationConfig.ConfigurationSectionName)
+        .ValidateDataAnnotations();
+    builder.Services.AddSingleton<OperatorNotifier>();
+    builder.Services.AddSingleton<IOperatorNotifier>(sp => sp.GetRequiredService<OperatorNotifier>());
+    // Notices are sent by the receive owner; a Gateway-only pod queues them to no effect.
+    if (enabledFeatures.Contains(FeatureNames.Receiver))
+        builder.Services.AddSingleton<IBgFeature>(sp => sp.GetRequiredService<OperatorNotifier>());
 }
 
 if (enabledFeatures.Contains(FeatureNames.Gateway))
+{
+    builder.Services.AddSingleton<TypingLeaseService>();
     builder.Services.AddSingleton<IMessageGateway, MessageGateway>();
+}
 
 if (enabledFeatures.Contains(FeatureNames.DemoClient))
 {

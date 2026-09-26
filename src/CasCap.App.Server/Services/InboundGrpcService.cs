@@ -19,7 +19,8 @@ public sealed class InboundGrpcService(
     ILogger<InboundGrpcService> logger,
     IInboundSubscriberRegistry registry,
     SignalizrMetrics metrics,
-    IOptions<SubscriberConfig> config) : Inbound.InboundBase
+    IOptions<SubscriberConfig> config,
+    IOperatorNotifier operatorNotifier) : Inbound.InboundBase
 {
     public override async Task Subscribe(
         IAsyncStreamReader<SubscribeRequest> requestStream,
@@ -66,6 +67,7 @@ public sealed class InboundGrpcService(
                     delivery.DeliveryId, ackTimeout, cancellationToken).ConfigureAwait(false))
                 {
                     metrics.RecordAcknowledgementTimeout();
+                    operatorNotifier.Notify($"{name} stopped acknowledging within {ackTimeout}; disconnecting it");
                     throw new RpcException(new Status(StatusCode.DeadlineExceeded,
                         $"No acknowledgement within {ackTimeout}. The subscriber is receiving but not acknowledging."));
                 }
@@ -125,8 +127,14 @@ public sealed class InboundGrpcService(
             Channel = delivery.Channel ?? string.Empty,
             Sender = delivery.Sender ?? string.Empty,
             Message = delivery.Message ?? string.Empty,
-            Timestamp = delivery.Timestamp ?? 0
+            Timestamp = delivery.Timestamp ?? 0,
+            FromSelf = delivery.FromSelf
         };
+        if (delivery.PollVote is { } vote)
+        {
+            message.PollVote = new PollVote { PollTimestamp = vote.PollTimestamp };
+            message.PollVote.OptionIndexes.AddRange(vote.OptionIndexes);
+        }
         message.Attachments.AddRange(delivery.Attachments.Select(attachment => new CasCap.Grpc.InboundAttachment
         {
             Id = attachment.Id,

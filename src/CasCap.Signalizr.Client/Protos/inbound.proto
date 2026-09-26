@@ -49,6 +49,22 @@ message InboundMessage {
 
   // Durable descriptors only. Binary content is downloaded through the REST attachment surface.
   repeated InboundAttachment attachments = 6;
+
+  // Whether the gateway's own account sent the message. On an account linked to a person's phone
+  // the owner's own messages are marked too, so a consumer serving the owner must not drop them on
+  // this flag alone.
+  bool from_self = 7;
+
+  // Set when the message is a vote on a poll rather than ordinary content.
+  PollVote poll_vote = 8;
+}
+
+message PollVote {
+  // The Signal timestamp of the poll message, which is also the poll identifier.
+  int64 poll_timestamp = 1;
+
+  // The selected answers by index. A voter's later vote replaces their earlier one.
+  repeated int32 option_indexes = 2;
 }
 
 message InboundAttachment {

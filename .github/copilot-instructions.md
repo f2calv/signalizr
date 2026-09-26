@@ -12,17 +12,20 @@ Everything below is specific to this repository.
 
 ## Current Baseline
 
-The gateway sends over REST, owns the inbound receive stream and fans it out over a bidirectional
-gRPC subscription. The container image, Helm chart and `CasCap.Signalizr.Client` package all build
-and are exercised in CI.
+The gateway sends and runs channel interactions — reactions, typing indicators and polls — over
+REST, owns the inbound receive stream, persists it and fans it out over a bidirectional gRPC
+subscription with a durable cursor per subscriber. The container image, Helm chart and
+`CasCap.Signalizr.Client` package all build and are exercised in CI.
 
 Both directions are proven against one registered account, deployed in a cluster. Scale, long-run
-stability, multiple subscribers and recovery from a wrapper outage are not. Do not describe the
-unbuilt parts — the MCP role, and any redelivery or persistence — as though they exist.
+stability, multiple production subscribers and recovery from a wrapper outage are not; the planned
+24-hour soak was skipped. Do not describe the unbuilt parts — the MCP role, durable poll tallies and
+the shared command dispatcher — as though they exist.
 
-The gateway links to an existing personal account rather than owning a dedicated number, so the
-account's own messages arrive as `syncMessage.sentMessage` rather than `dataMessage`. Anything that
-filters inbound envelopes must handle both, or the gateway goes blind to its owner.
+The gateway may own a dedicated number or link to an existing personal account. On a linked account
+the owner's own messages arrive as `syncMessage.sentMessage` rather than `dataMessage`. Anything
+that filters inbound envelopes must handle both, or the gateway goes blind to its owner. `FromSelf`
+marks both forms, so a consumer serving the owner must not discard messages on that flag alone.
 
 ## Open Source Boundary
 

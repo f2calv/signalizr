@@ -23,6 +23,17 @@ public sealed record InboundDelivery
     /// <summary>Milliseconds since the Unix epoch, as supplied by the Signal server.</summary>
     public long? Timestamp { get; init; }
 
+    /// <summary>Whether the gateway's own account sent this message.</summary>
+    /// <remarks>
+    /// Lets a consumer ignore the gateway's own traffic without knowing the account. On an
+    /// account linked to a person's phone, the owner's own messages are also marked, so a
+    /// consumer that serves the owner must not discard them on this flag alone.
+    /// </remarks>
+    public bool FromSelf { get; init; }
+
+    /// <summary>The poll vote this message carries, or <see langword="null"/>.</summary>
+    public InboundPollVote? PollVote { get; init; }
+
     /// <summary>Durable binary attachments associated with this message.</summary>
     public IReadOnlyList<InboundAttachment> Attachments { get; init; } = [];
 }

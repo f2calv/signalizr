@@ -9,6 +9,7 @@ namespace CasCap.Services;
 /// </remarks>
 public sealed class DispatcherBgService(
     ILogger<DispatcherBgService> logger,
+    IOptions<SignalCliConfig> signalCliConfig,
     IInboundMessageQueue queue,
     IInboundSubscriberRegistry subscribers,
     IChannelResolver channelResolver,
@@ -26,7 +27,7 @@ public sealed class DispatcherBgService(
 
         await foreach (var message in queue.DequeueAllAsync(cancellationToken).ConfigureAwait(false))
         {
-            var delivery = CreateDelivery(message, channelResolver);
+            var delivery = CreateDelivery(message, channelResolver, signalCliConfig.Value.PhoneNumber);
 
             // Receipts and typing indicators carry no content at all. Skipping them here saves
             // every consumer from filtering out empty messages.
@@ -49,10 +50,13 @@ public sealed class DispatcherBgService(
     /// Separated from the loop so the mapping is testable without a queue or a Signal account. The
     /// identifier is replaced per subscriber during fan-out.
     /// </remarks>
+    /// <param name="message">The upstream envelope.</param>
+    /// <param name="channelResolver">Resolves the envelope's group to a channel name.</param>
+    /// <param name="accountNumber">The gateway's own account, used to mark its own messages.</param>
     /// <returns><see langword="null"/> when the envelope carries no content, such as a receipt or
     /// a typing indicator.</returns>
     public static InboundDelivery? CreateDelivery(
-        SignalReceivedMessage message, IChannelResolver channelResolver)
+        SignalReceivedMessage message, IChannelResolver channelResolver, string accountNumber)
     {
         var notification = (IReceivedNotification)message;
         if (!notification.HasContent)
@@ -63,13 +67,25 @@ public sealed class DispatcherBgService(
             && channelResolver.TryGetChannelName(notification.GroupId, out var resolved))
             channel = resolved;
 
+        var envelope = message.Envelope;
+        var content = envelope.DataMessage ?? envelope.SyncMessage?.SentMessage;
+
+        // A sync sentMessage is by definition the account's own, whichever device sent it.
+        var fromSelf = envelope.SyncMessage?.SentMessage is not null
+            || string.Equals(envelope.SourceNumber, accountNumber, StringComparison.Ordinal)
+            || string.Equals(envelope.Source, accountNumber, StringComparison.Ordinal);
+
         return new InboundDelivery
         {
             DeliveryId = string.Empty,
             Channel = channel,
             Sender = notification.Sender,
             Message = notification.Message,
-            Timestamp = notification.Timestamp ?? message.Envelope.Timestamp
+            Timestamp = notification.Timestamp ?? envelope.Timestamp,
+            FromSelf = fromSelf,
+            PollVote = content?.PollVote is { TargetSentTimestamp: { } pollTimestamp } vote
+                ? new InboundPollVote { PollTimestamp = pollTimestamp, OptionIndexes = vote.OptionIndexes ?? [] }
+                : null
         };
     }
 }

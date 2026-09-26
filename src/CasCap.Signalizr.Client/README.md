@@ -1,7 +1,7 @@
 # CasCap.Signalizr.Client
 
-Client for the [signalizr](https://github.com/f2calv/signalizr) gateway: send to a named channel
-over REST, subscribe to inbound messages over gRPC.
+Client for the [signalizr](https://github.com/f2calv/signalizr) gateway: send, react, show typing
+and run polls on a named channel over REST, and subscribe to inbound messages over gRPC.
 
 ## Install
 
@@ -61,6 +61,38 @@ var timestamp = await client.SendAsync(
 Channels are addressed by name. The gateway owns the Signal account, so a caller never names a
 group, a group id or a sender number. A `404` means the channel is not configured on that gateway;
 `GetChannelsAsync` lists the ones that are.
+
+## Interact
+
+Reactions, typing indicators and polls use the same channel names:
+
+```csharp
+// React to an inbound message with the sender it was delivered with.
+await client.SetReactionAsync("system", "👀", message.Timestamp, message.Sender, cancellationToken);
+
+// Show typing while work runs. Signal clears the indicator after a few seconds.
+await client.StartTypingAsync("system", cancellationToken);
+await client.StopTypingAsync("system", cancellationToken);
+
+// React to a message this gateway sent by omitting the author.
+var sent = await client.SendAsync("system", "done", cancellationToken);
+await client.SetReactionAsync("system", "✅", long.Parse(sent, CultureInfo.InvariantCulture),
+  cancellationToken: cancellationToken);
+
+var pollId = await client.CreatePollAsync("system", "Deploy now?", ["Yes", "No"],
+  cancellationToken: cancellationToken);
+await client.ClosePollAsync("system", pollId, cancellationToken);
+```
+
+A vote arrives on the subscription as a `SignalizrMessage` whose `PollVote` names the poll and the
+selected answer indexes.
+
+`SignalizrMessage.FromSelf` marks messages the gateway's own account sent, so a consumer can ignore
+its own traffic without knowing the account. On an account linked to a person's phone the owner's
+messages are marked too; a consumer serving that owner must not drop them on this flag alone.
+
+The account profile is shared by every channel, so the client cannot change it. The gateway applies
+its configured profile name instead.
 
 ## Subscribe
 

@@ -54,7 +54,12 @@ if (enabledFeatures.Contains(FeatureNames.DbMigrator))
 }
 
 if (enabledFeatures.Contains(FeatureNames.Gateway))
+{
+    builder.Services.AddOptionsWithValidateOnStart<GatewayConfig>()
+        .BindConfiguration(GatewayConfig.ConfigurationSectionName)
+        .ValidateDataAnnotations();
     builder.Services.AddSingleton<IBgFeature, GatewayBgService>();
+}
 
 if (enabledFeatures.Contains(FeatureNames.Receiver))
 {

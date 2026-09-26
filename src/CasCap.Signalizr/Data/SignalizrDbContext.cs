@@ -27,6 +27,11 @@ public sealed class SignalizrDbContext(DbContextOptions<SignalizrDbContext> opti
             entity.Property(message => message.Sender).HasColumnName("sender");
             entity.Property(message => message.Message).HasColumnName("message");
             entity.Property(message => message.Timestamp).HasColumnName("timestamp");
+            // A database default keeps the column additive: pods still on the previous release
+            // insert without it while the new release rolls out.
+            entity.Property(message => message.FromSelf).HasColumnName("from_self").HasDefaultValue(false);
+            entity.Property(message => message.PollVoteTimestamp).HasColumnName("poll_vote_timestamp");
+            entity.Property(message => message.PollVoteOptionIndexes).HasColumnName("poll_vote_option_indexes");
             entity.Property(message => message.PersistedAtUnixMilliseconds)
                 .HasColumnName("persisted_at_unix_milliseconds");
             entity.HasIndex(message => message.PersistedAtUnixMilliseconds)

@@ -125,8 +125,14 @@ public sealed class InboundGrpcService(
             Channel = delivery.Channel ?? string.Empty,
             Sender = delivery.Sender ?? string.Empty,
             Message = delivery.Message ?? string.Empty,
-            Timestamp = delivery.Timestamp ?? 0
+            Timestamp = delivery.Timestamp ?? 0,
+            FromSelf = delivery.FromSelf
         };
+        if (delivery.PollVote is { } vote)
+        {
+            message.PollVote = new PollVote { PollTimestamp = vote.PollTimestamp };
+            message.PollVote.OptionIndexes.AddRange(vote.OptionIndexes);
+        }
         message.Attachments.AddRange(delivery.Attachments.Select(attachment => new CasCap.Grpc.InboundAttachment
         {
             Id = attachment.Id,

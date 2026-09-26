@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
@@ -79,6 +80,59 @@ public sealed class SignalizrClient(
     }
 
     /// <inheritdoc/>
+    public Task SetReactionAsync(
+        string channel,
+        string reaction,
+        long targetTimestamp,
+        string? targetAuthor = null,
+        CancellationToken cancellationToken = default) =>
+        SendChannelRequestAsync(HttpMethod.Post, channel, "reactions",
+            JsonContent.Create(new { reaction, targetTimestamp, targetAuthor }), cancellationToken);
+
+    /// <inheritdoc/>
+    public Task RemoveReactionAsync(
+        string channel,
+        string reaction,
+        long targetTimestamp,
+        string? targetAuthor = null,
+        CancellationToken cancellationToken = default) =>
+        SendChannelRequestAsync(HttpMethod.Delete, channel, "reactions",
+            JsonContent.Create(new { reaction, targetTimestamp, targetAuthor }), cancellationToken);
+
+    /// <inheritdoc/>
+    public Task StartTypingAsync(string channel, CancellationToken cancellationToken = default) =>
+        SendChannelRequestAsync(HttpMethod.Put, channel, "typing", content: null, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task StopTypingAsync(string channel, CancellationToken cancellationToken = default) =>
+        SendChannelRequestAsync(HttpMethod.Delete, channel, "typing", content: null, cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task<string> CreatePollAsync(
+        string channel,
+        string question,
+        IReadOnlyList<string> answers,
+        bool allowMultipleSelections = false,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await SendChannelRequestCoreAsync(HttpMethod.Post, channel, "polls",
+            JsonContent.Create(new { question, answers, allowMultipleSelections }), cancellationToken)
+            .ConfigureAwait(false);
+
+        var result = await response.Content
+            .ReadFromJsonAsync<PollResult>(cancellationToken)
+            .ConfigureAwait(false);
+
+        return result?.PollId
+            ?? throw new HttpRequestException("The gateway returned no identifier for the poll.");
+    }
+
+    /// <inheritdoc/>
+    public Task ClosePollAsync(string channel, string pollId, CancellationToken cancellationToken = default) =>
+        SendChannelRequestAsync(HttpMethod.Delete, channel, $"polls/{Uri.EscapeDataString(pollId)}",
+            content: null, cancellationToken);
+
+    /// <inheritdoc/>
     public async IAsyncEnumerable<SignalizrMessage> SubscribeAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -105,7 +159,15 @@ public sealed class SignalizrClient(
                     ContentType = string.IsNullOrEmpty(attachment.ContentType) ? null : attachment.ContentType,
                     Filename = string.IsNullOrEmpty(attachment.Filename) ? null : attachment.Filename,
                     Size = attachment.Size
-                })]
+                })],
+                FromSelf = message.FromSelf,
+                PollVote = message.PollVote is { } vote
+                    ? new SignalizrPollVote
+                    {
+                        PollId = vote.PollTimestamp.ToString(CultureInfo.InvariantCulture),
+                        OptionIndexes = [.. vote.OptionIndexes]
+                    }
+                    : null
             };
 
             // Execution resumes here only when the consumer asks for the next item, so this means
@@ -118,5 +180,52 @@ public sealed class SignalizrClient(
         }
     }
 
+    private async Task SendChannelRequestAsync(
+        HttpMethod method,
+        string channel,
+        string path,
+        HttpContent? content,
+        CancellationToken cancellationToken)
+    {
+        using var response = await SendChannelRequestCoreAsync(method, channel, path, content, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<HttpResponseMessage> SendChannelRequestCoreAsync(
+        HttpMethod method,
+        string channel,
+        string path,
+        HttpContent? content,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(method, $"api/v1/channels/{Uri.EscapeDataString(channel)}/{path}")
+        {
+            Content = content
+        };
+        var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+        if (response.StatusCode is HttpStatusCode.NotFound)
+        {
+            response.Dispose();
+            throw new HttpRequestException(
+                $"Channel '{channel}' is not configured on this gateway, or it does not run the " +
+                "Gateway role.", null, HttpStatusCode.NotFound);
+        }
+
+        try
+        {
+            response.EnsureSuccessStatusCode();
+        }
+        catch
+        {
+            response.Dispose();
+            throw;
+        }
+
+        return response;
+    }
+
     private sealed record SendResult(string Channel, string Timestamp);
+
+    private sealed record PollResult(string Channel, string PollId);
 }

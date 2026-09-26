@@ -67,10 +67,10 @@ group, a group id or a sender number. A `404` means the channel is not configure
 Reactions, typing indicators and polls use the same channel names:
 
 ```csharp
-// React to an inbound message with the sender it was delivered with.
-await client.SetReactionAsync("system", "👀", message.Timestamp, message.Sender, cancellationToken);
+// React to a delivered message; the gateway resolves its sender and timestamp.
+await client.SetReactionAsync(message, "👀", cancellationToken);
 
-// Show typing while work runs. Signal clears the indicator after a few seconds.
+// Show typing while work runs. The gateway keeps it alive and clears it if the stop never comes.
 await client.StartTypingAsync("system", cancellationToken);
 await client.StopTypingAsync("system", cancellationToken);
 

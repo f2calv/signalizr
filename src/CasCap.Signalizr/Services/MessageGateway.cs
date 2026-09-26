@@ -1,4 +1,7 @@
+using CasCap.Data;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
+using System.Globalization;
 
 namespace CasCap.Services;
 
@@ -10,7 +13,10 @@ public sealed class MessageGateway(
     TimeProvider timeProvider,
     ISignalCliClient client,
     IChannelResolver channelResolver,
-    IOperatorNotifier operatorNotifier) : IMessageGateway
+    IOperatorNotifier operatorNotifier,
+    TypingLeaseService typingLeases,
+    // Registered only with the Receiver role, which owns the persisted deliveries.
+    IDbContextFactory<SignalizrDbContext>? dbContextFactory = null) : IMessageGateway
 {
     private static readonly TimeSpan SendRateInterval = TimeSpan.FromMinutes(1);
 
@@ -64,19 +70,73 @@ public sealed class MessageGateway(
     }
 
     /// <inheritdoc/>
+    public async Task SetDeliveryReactionAsync(
+        string channelName, string deliveryId, string reaction, CancellationToken cancellationToken = default)
+    {
+        var groupId = ResolveGroupId(channelName);
+        var (author, timestamp) = await ResolveDeliveryAsync(channelName, deliveryId, cancellationToken).ConfigureAwait(false);
+        EnsureAccepted(await client.SendReaction(signalCliConfig.Value.PhoneNumber, groupId, reaction,
+            author, timestamp, cancellationToken).ConfigureAwait(false), "reaction");
+    }
+
+    /// <inheritdoc/>
+    public async Task RemoveDeliveryReactionAsync(
+        string channelName, string deliveryId, string reaction, CancellationToken cancellationToken = default)
+    {
+        var groupId = ResolveGroupId(channelName);
+        var (author, timestamp) = await ResolveDeliveryAsync(channelName, deliveryId, cancellationToken).ConfigureAwait(false);
+        EnsureAccepted(await client.RemoveReaction(signalCliConfig.Value.PhoneNumber, groupId, reaction,
+            author, timestamp, cancellationToken).ConfigureAwait(false), "reaction removal");
+    }
+
+    /// <inheritdoc/>
     public async Task StartTypingAsync(string channelName, CancellationToken cancellationToken = default)
     {
         var groupId = ResolveGroupId(channelName);
-        EnsureAccepted(await client.ShowTypingIndicator(signalCliConfig.Value.PhoneNumber, groupId,
-            cancellationToken).ConfigureAwait(false), "typing indicator");
+        EnsureAccepted(await typingLeases.StartAsync(channelName, groupId, cancellationToken).ConfigureAwait(false),
+            "typing indicator");
     }
 
     /// <inheritdoc/>
     public async Task StopTypingAsync(string channelName, CancellationToken cancellationToken = default)
     {
         var groupId = ResolveGroupId(channelName);
-        EnsureAccepted(await client.HideTypingIndicator(signalCliConfig.Value.PhoneNumber, groupId,
-            cancellationToken).ConfigureAwait(false), "typing indicator removal");
+        EnsureAccepted(await typingLeases.StopAsync(channelName, groupId, cancellationToken).ConfigureAwait(false),
+            "typing indicator removal");
+    }
+
+    /// <summary>Maps a stored delivery onto the author and timestamp Signal addresses a reaction by.</summary>
+    /// <remarks>
+    /// The gateway's own messages are authored by its account; consumers never need to know it.
+    /// </remarks>
+    public static (string Author, long Timestamp) GetReactionTarget(
+        string? sender, bool fromSelf, long? timestamp, string account)
+        => (fromSelf || string.IsNullOrEmpty(sender) ? account : sender,
+            timestamp ?? throw new InvalidOperationException("The delivery carries no Signal timestamp."));
+
+    private async Task<(string Author, long Timestamp)> ResolveDeliveryAsync(
+        string channelName, string deliveryId, CancellationToken cancellationToken)
+    {
+        if (dbContextFactory is null)
+            throw new NotSupportedException("Delivery lookups need the Receiver role in the same process.");
+
+        if (!long.TryParse(deliveryId, NumberStyles.None, CultureInfo.InvariantCulture, out var id))
+            throw new UnknownDeliveryException(channelName, deliveryId);
+
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var message = await dbContext.InboundMessages
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == id)
+            .Select(candidate => new { candidate.Channel, candidate.Sender, candidate.FromSelf, candidate.Timestamp })
+            .SingleOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        // A delivery from another channel is reported as missing rather than reacted to, so a caller
+        // cannot reach a group through a channel name it was not given.
+        if (message is null || !string.Equals(message.Channel, channelName, StringComparison.OrdinalIgnoreCase))
+            throw new UnknownDeliveryException(channelName, deliveryId);
+
+        return GetReactionTarget(message.Sender, message.FromSelf, message.Timestamp, signalCliConfig.Value.PhoneNumber);
     }
 
     /// <inheritdoc/>

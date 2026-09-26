@@ -100,6 +100,16 @@ public sealed class SignalizrClient(
             JsonContent.Create(new { reaction, targetTimestamp, targetAuthor }), cancellationToken);
 
     /// <inheritdoc/>
+    public Task SetReactionAsync(SignalizrMessage message, string reaction, CancellationToken cancellationToken = default) =>
+        SendChannelRequestAsync(HttpMethod.Post, RequireChannel(message), DeliveryReactionsPath(message),
+            JsonContent.Create(new { reaction }), cancellationToken);
+
+    /// <inheritdoc/>
+    public Task RemoveReactionAsync(SignalizrMessage message, string reaction, CancellationToken cancellationToken = default) =>
+        SendChannelRequestAsync(HttpMethod.Delete, RequireChannel(message), DeliveryReactionsPath(message),
+            JsonContent.Create(new { reaction }), cancellationToken);
+
+    /// <inheritdoc/>
     public Task StartTypingAsync(string channel, CancellationToken cancellationToken = default) =>
         SendChannelRequestAsync(HttpMethod.Put, channel, "typing", content: null, cancellationToken);
 
@@ -224,6 +234,13 @@ public sealed class SignalizrClient(
 
         return response;
     }
+
+    private static string RequireChannel(SignalizrMessage message) =>
+        message.Channel ?? throw new ArgumentException(
+            "The message arrived on no configured channel, so there is nothing to react through.", nameof(message));
+
+    private static string DeliveryReactionsPath(SignalizrMessage message) =>
+        $"messages/{Uri.EscapeDataString(message.DeliveryId)}/reactions";
 
     private sealed record SendResult(string Channel, string Timestamp);
 

@@ -31,4 +31,19 @@ public sealed record GatewayConfig
     /// </remarks>
     [Range(0, 10_000)]
     public int SendRateWarningPerMinute { get; init; } = 30;
+
+    /// <summary>How often a started typing indicator is re-sent while it is held.</summary>
+    /// <remarks>Signal clients clear an indicator after about 15 seconds without a refresh.</remarks>
+    [Range(1_000, 14_000)]
+    public int TypingRefreshIntervalMs { get; init; } = 10_000;
+
+    /// <summary>
+    /// Longest a typing indicator is held without an explicit stop, after which the gateway clears it.
+    /// </summary>
+    /// <remarks>
+    /// The lease is what makes cleanup deterministic: a consumer that crashes, is cancelled or
+    /// disconnects between start and stop cannot leave the indicator showing indefinitely.
+    /// </remarks>
+    [Range(1_000, 3_600_000)]
+    public int TypingMaxDurationMs { get; init; } = 180_000;
 }

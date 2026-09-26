@@ -25,8 +25,25 @@ public interface IMessageGateway
     Task RemoveReactionAsync(
         string channelName, ChannelReactionRequest request, CancellationToken cancellationToken = default);
 
-    /// <summary>Shows the typing indicator in the named channel.</summary>
-    /// <remarks>Signal clears the indicator after a few seconds, so a long task repeats this.</remarks>
+    /// <summary>Sets a reaction on a delivered message, addressed by its delivery identifier.</summary>
+    /// <remarks>The gateway looks up the message's author and timestamp, so the caller supplies neither.</remarks>
+    /// <exception cref="UnknownChannelException">The channel is not configured or not yet resolved.</exception>
+    /// <exception cref="UnknownDeliveryException">No retained message has that identifier in that channel.</exception>
+    /// <exception cref="NotSupportedException">This process does not hold the persisted deliveries.</exception>
+    /// <exception cref="HttpRequestException">The upstream wrapper rejected the request or could not be reached.</exception>
+    Task SetDeliveryReactionAsync(
+        string channelName, string deliveryId, string reaction, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a reaction from a delivered message, addressed by its delivery identifier.</summary>
+    /// <inheritdoc cref="SetDeliveryReactionAsync(string, string, string, CancellationToken)"/>
+    Task RemoveDeliveryReactionAsync(
+        string channelName, string deliveryId, string reaction, CancellationToken cancellationToken = default);
+
+    /// <summary>Shows the typing indicator in the named channel and holds it until stopped.</summary>
+    /// <remarks>
+    /// The gateway refreshes the indicator while it is held and clears it after
+    /// <see cref="GatewayConfig.TypingMaxDurationMs"/> if no stop arrives.
+    /// </remarks>
     /// <exception cref="UnknownChannelException">The channel is not configured or not yet resolved.</exception>
     /// <exception cref="HttpRequestException">The upstream wrapper rejected the request or could not be reached.</exception>
     Task StartTypingAsync(string channelName, CancellationToken cancellationToken = default);

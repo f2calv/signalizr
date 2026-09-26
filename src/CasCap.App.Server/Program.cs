@@ -96,7 +96,10 @@ if (enabledFeatures.Contains(FeatureNames.Gateway) || enabledFeatures.Contains(F
 }
 
 if (enabledFeatures.Contains(FeatureNames.Gateway))
+{
+    builder.Services.AddSingleton<TypingLeaseService>();
     builder.Services.AddSingleton<IMessageGateway, MessageGateway>();
+}
 
 if (enabledFeatures.Contains(FeatureNames.DemoClient))
 {

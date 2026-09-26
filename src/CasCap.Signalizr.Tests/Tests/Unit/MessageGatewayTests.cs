@@ -89,4 +89,27 @@ public class MessageGatewayTests
         Assert.Equal("nope", exception.ChannelName);
         Assert.Contains("nope", exception.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void GetReactionTarget_UsesTheDeliveredSender()
+    {
+        var (author, timestamp) = MessageGateway.GetReactionTarget("+10000000001", fromSelf: false, 42, Number);
+
+        Assert.Equal("+10000000001", author);
+        Assert.Equal(42, timestamp);
+    }
+
+    [Fact]
+    public void GetReactionTarget_UsesTheAccountForTheGatewaysOwnMessage()
+    {
+        // A sync message's sender is the account's own device, so the account is the author.
+        var (author, _) = MessageGateway.GetReactionTarget("+10000000001", fromSelf: true, 42, Number);
+
+        Assert.Equal(Number, author);
+    }
+
+    [Fact]
+    public void GetReactionTarget_RejectsADeliveryWithoutATimestamp()
+        => Assert.Throws<InvalidOperationException>(
+            () => MessageGateway.GetReactionTarget("+10000000001", fromSelf: false, timestamp: null, Number));
 }

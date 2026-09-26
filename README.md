@@ -137,6 +137,7 @@ wrapper directly:
 | --- | --- | --- |
 | Set a reaction | `POST /api/v1/channels/{channel}/reactions` | `204` |
 | Remove a reaction | `DELETE /api/v1/channels/{channel}/reactions` | `204` |
+| React to a delivered message | `POST` / `DELETE /api/v1/channels/{channel}/messages/{deliveryId}/reactions` | `204` |
 | Show typing | `PUT /api/v1/channels/{channel}/typing` | `204` |
 | Clear typing | `DELETE /api/v1/channels/{channel}/typing` | `204` |
 | Create a poll | `POST /api/v1/channels/{channel}/polls` | `200` with `{ "channel", "pollId" }` |
@@ -148,6 +149,10 @@ delivered with. Omit `targetAuthor` to react to a message the gateway sent:
 ```json
 { "reaction": "✅", "targetTimestamp": 1758518400000, "targetAuthor": "<delivered sender>" }
 ```
+
+A delivered message can instead be addressed by its `delivery_id`, with a body of just `{ "reaction" }`: the gateway looks up the sender and timestamp itself. That needs the Receiver role in the same process, returning `501` otherwise, and `404` once retention has removed the message.
+
+Starting typing takes a lease rather than sending one indicator. The gateway refreshes it every `CasCap:GatewayConfig:TypingRefreshIntervalMs` until it is cleared, and clears it itself after `TypingMaxDurationMs`, so a consumer that fails or disconnects before clearing cannot leave it showing. Leases are per gateway process.
 
 A poll body carries `question`, `answers` and optionally `allowMultipleSelections`. Votes arrive on
 the subscription as messages carrying a `poll_vote`, whose poll timestamp is the `pollId`.

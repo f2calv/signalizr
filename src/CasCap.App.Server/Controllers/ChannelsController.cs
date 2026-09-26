@@ -64,7 +64,35 @@ public sealed class ChannelsController(
             return NoContent();
         });
 
-    /// <summary>Shows the typing indicator in a channel.</summary>
+    /// <summary>Sets a reaction on a delivered message, addressed by its delivery identifier.</summary>
+    [HttpPost("{channel}/messages/{deliveryId}/reactions")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public Task<ActionResult> SetDeliveryReaction(
+        string channel, string deliveryId, [FromBody] DeliveryReactionRequest request, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () =>
+        {
+            await messageGateway.SetDeliveryReactionAsync(channel, deliveryId, request.Reaction, cancellationToken);
+            return NoContent();
+        });
+
+    /// <summary>Removes a reaction from a delivered message, addressed by its delivery identifier.</summary>
+    [HttpDelete("{channel}/messages/{deliveryId}/reactions")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public Task<ActionResult> RemoveDeliveryReaction(
+        string channel, string deliveryId, [FromBody] DeliveryReactionRequest request, CancellationToken cancellationToken)
+        => ExecuteAsync(channel, async () =>
+        {
+            await messageGateway.RemoveDeliveryReactionAsync(channel, deliveryId, request.Reaction, cancellationToken);
+            return NoContent();
+        });
+
+    /// <summary>Shows the typing indicator in a channel and holds it until cleared or expired.</summary>
     [HttpPut("{channel}/typing")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -125,6 +153,20 @@ public sealed class ChannelsController(
                 detail: $"Channel '{channel}' is not configured. Configured channels: " +
                     $"{string.Join(", ", channelResolver.ChannelNames)}.",
                 statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (UnknownDeliveryException ex)
+        {
+            return Problem(
+                title: "Unknown delivery",
+                detail: $"Message '{ex.DeliveryId}' is not retained in channel '{channel}'.",
+                statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (NotSupportedException ex)
+        {
+            return Problem(
+                title: "Not available on this role",
+                detail: ex.Message,
+                statusCode: StatusCodes.Status501NotImplemented);
         }
         catch (HttpRequestException ex)
         {

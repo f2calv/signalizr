@@ -59,8 +59,26 @@ public interface ISignalizrClient
         string? targetAuthor = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Shows the typing indicator in a channel.</summary>
-    /// <remarks>Signal clears the indicator after a few seconds, so a long task repeats this.</remarks>
+    /// <summary>Sets a reaction on a delivered message, replacing any earlier one.</summary>
+    /// <param name="message">The delivered message; the gateway resolves its author and timestamp.</param>
+    /// <param name="reaction">The reaction emoji.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <exception cref="ArgumentException">The message arrived on no configured channel.</exception>
+    /// <exception cref="HttpRequestException">
+    /// The gateway rejected the request or could not be reached. A 404 also means the message is
+    /// no longer retained.
+    /// </exception>
+    Task SetReactionAsync(SignalizrMessage message, string reaction, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a reaction from a delivered message.</summary>
+    /// <inheritdoc cref="SetReactionAsync(SignalizrMessage, string, CancellationToken)"/>
+    Task RemoveReactionAsync(SignalizrMessage message, string reaction, CancellationToken cancellationToken = default);
+
+    /// <summary>Shows the typing indicator in a channel and holds it until stopped.</summary>
+    /// <remarks>
+    /// The gateway refreshes the indicator while it is held, and clears it after its configured
+    /// maximum if no stop arrives, so a consumer that fails before stopping cannot leave it showing.
+    /// </remarks>
     /// <exception cref="HttpRequestException">The gateway rejected the request or could not be reached.</exception>
     Task StartTypingAsync(string channel, CancellationToken cancellationToken = default);
 

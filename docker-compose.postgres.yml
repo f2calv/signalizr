@@ -4,6 +4,12 @@
 #
 #   cp .env.example .env
 #   docker compose --file docker-compose.postgres.yml up --build
+#
+# Endpoints:
+#   PostgreSQL       : localhost:5432
+#   signal-cli REST  : http://localhost:8180
+#   Signalizr REST   : http://localhost:8080
+#   Signalizr gRPC   : localhost:5001 (plaintext HTTP/2)
 name: signalizr-postgres
 
 x-signalizr-image: &signalizr-image

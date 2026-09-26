@@ -1,10 +1,4 @@
 # syntax=docker/dockerfile:1
-# check=skip=CopyIgnoredFile
-#
-# CopyIgnoredFile is skipped deliberately: .dockerignore re-excludes bin/ and obj/ beneath the
-# deps/** allow-list this file relies on, so the broad COPY instructions below legitimately
-# step over ignored files.
-#
 # Debug variant of Dockerfile, used to verify a fix against the local sibling repositories
 # before they are published as packages. Not published; the image job in
 # .github/workflows/ci.yml always builds Dockerfile.
@@ -17,7 +11,7 @@
 # ------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /repo
-COPY ["Directory.Build.props", "Directory.Packages.props", "global.json", "appsettings.json", "./"]
+COPY ["Directory.Build.props", "Directory.Packages.props", "global.json", "./"]
 
 ARG WORKLOAD=CasCap.App.Server
 ARG CONFIGURATION=Debug
@@ -82,7 +76,7 @@ ENV GITHUB_RUN_ID=$GITHUB_RUN_ID
 ARG GITHUB_RUN_NUMBER=0
 ENV GITHUB_RUN_NUMBER=$GITHUB_RUN_NUMBER
 
-EXPOSE 8080
+EXPOSE 8080 5001
 
 USER $APP_UID
 

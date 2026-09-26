@@ -38,8 +38,46 @@ jobs:
       solution-name: signalizr.Release.slnx
       dotnet-test-args: '["--filter-not-trait", "Category=Integration"]'
 
+  #The shared chart workflow skips chart-testing, so each chart and every ci/ fixture is linted here.
+  helm:
+    name: helm (${{ matrix.chart }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        chart:
+          - charts/signalizr
+          - charts/signalizr-dashboards
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: azure/setup-helm@v5
+        with:
+          version: 3.20.2
+
+      - name: helm dependency build ${{ matrix.chart }}
+        run: helm dependency build "${{ matrix.chart }}"
+
+      - name: helm lint ${{ matrix.chart }}
+        run: helm lint "${{ matrix.chart }}"
+
+      - name: helm lint ${{ matrix.chart }} with ci values
+        shell: bash
+        run: |
+          shopt -s nullglob
+          fixtures=("${{ matrix.chart }}"/ci/*-values.yaml)
+          if [[ ${#fixtures[@]} -eq 0 ]]; then
+            echo "::error::${{ matrix.chart }} has no ci/*-values.yaml fixtures."
+            exit 1
+          fi
+          for fixture in "${fixtures[@]}"; do
+            helm lint "${{ matrix.chart }}" --values "$fixture"
+          done
+
   package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [versioning, build]
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     permissions:
@@ -116,7 +154,7 @@ jobs:
       push-chart: false
 
   release:
-    needs: [lint, versioning, build, package, image, dashboards, chart]
+    needs: [lint, versioning, build, helm, package, image, dashboards, chart]
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     uses: f2calv/gha-workflows/.github/workflows/gha-release-versioning.yml@v1
     permissions:

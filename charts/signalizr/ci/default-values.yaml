@@ -1,0 +1,4 @@
+# Default SQLite install: the gateway, the signal-cli wrapper and the migration Job.
+signalizr:
+  envVars:
+    CasCap__ChannelConfig__Channels__system: Example System

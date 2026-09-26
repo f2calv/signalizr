@@ -59,9 +59,9 @@ signalizr:
     # Channels are declared by Signal group NAME and resolved to ids at startup, so no
     # account-linked identifier is committed. Matching is exact and ordinal: a name that does not
     # match a group on the account fails startup rather than routing messages somewhere unintended.
-    # Override these with your own group names.
-    CasCap__ChannelConfig__Channels__system: CasCap.Signalizr System
-    CasCap__ChannelConfig__Channels__demo: CasCap.Signalizr Demo
+    # No channel is declared here: an example default would fail startup on every account that
+    # lacks that group, and Helm cannot remove a subchart map key once it is set. Add your own as
+    # CasCap__ChannelConfig__Channels__<channel>: <Signal group name>.
   # The chiseled .NET image runs as APP_UID 1654. fsGroup makes a fresh PVC writable without
   # granting root privileges or adding an init container.
   podSecurityContext:

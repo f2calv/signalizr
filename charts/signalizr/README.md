@@ -120,7 +120,7 @@ spec:
 | `signalizr.image.tag` | `""` | Always set it; an empty tag falls back to the workload chart's `appVersion` |
 | `signalizr.service` | port 80 to 8080 | REST send surface, health endpoints and metrics |
 | `signalizr.extraPorts` | `grpc` on 5001 | The gRPC subscription surface |
-| `signalizr.envVars.CasCap__ChannelConfig__Channels__*` | two example groups | Replace with your own group names |
+| `signalizr.envVars.CasCap__ChannelConfig__Channels__*` | none | Declare one per channel; the chart ships no example, because a default naming a missing group fails startup and cannot be removed by an override |
 | `signalizr.envSecrets` | phone number from Secret `signalizr` | Personal data never goes in values |
 | `migrate.kind` | `Job` | Renders on every sync; see below |
 | `demo.replicaCount` | `0` | Set `1` to run the DemoClient role against the gateway |
@@ -202,8 +202,6 @@ signalizr:
   envVars:
     CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
     CasCap__SignalCliConfig__BaseAddress: http://signalcli:80
-    CasCap__ChannelConfig__Channels__system: CasCap.Signalizr System
-    CasCap__ChannelConfig__Channels__demo: CasCap.Signalizr Demo
   podSecurityContext:
     fsGroup: 1654
     fsGroupChangePolicy: OnRootMismatch

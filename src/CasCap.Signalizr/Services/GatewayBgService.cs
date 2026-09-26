@@ -65,8 +65,10 @@ public sealed class GatewayBgService(
 
         try
         {
+            // signal-cli splits the name on \0 into given and family name, so the trailing
+            // separator clears a stale family name instead of leaving it appended.
             var updated = await client.UpdateProfile(signalCliConfig.Value.PhoneNumber,
-                new UpdateProfileRequest { Name = profileName }, cancellationToken).ConfigureAwait(false);
+                new UpdateProfileRequest { Name = profileName + "\0" }, cancellationToken).ConfigureAwait(false);
             if (updated)
                 logger.LogInformation("{ClassName} applied the configured profile name", nameof(GatewayBgService));
             else

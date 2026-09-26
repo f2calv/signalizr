@@ -54,6 +54,9 @@ services:
       CasCap__SignalCliConfig__BaseAddress: http://signal-cli-rest-api:8080
       # Personal data: keep the real value in .env, never in this file.
       CasCap__SignalCliConfig__PhoneNumber: ${SIGNALIZR_PHONE_NUMBER:-+10000000000}
+      # Example channels: create Signal groups with these names on the account, or rename them.
+      CasCap__ChannelConfig__Channels__system: CasCap.Signalizr System
+      CasCap__ChannelConfig__Channels__demo: CasCap.Signalizr Demo
       CasCap__DatabaseConfig__Provider: Sqlite
       CasCap__DatabaseConfig__ConnectionString: Data Source=/var/lib/signalizr/signalizr.db
       CasCap__DatabaseConfig__MigrateOnStartup: "false"

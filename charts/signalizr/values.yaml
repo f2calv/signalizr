@@ -12,6 +12,10 @@ signalcli:
   # The dedicated chart owns the image, service, probes and wrapper environment. Keep the
   # deployment's volume request here so account state remains on the existing claim.
   signalcli:
+    # signal-cli locks the account on its volume, so a rolling update leaves the new pod waiting
+    # for a lock the old pod never releases. Stop the old daemon before starting the new one.
+    strategy:
+      type: Recreate
     persistentVolumeClaims:
       - name: signalcli-pvc
         accessModes:

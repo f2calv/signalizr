@@ -15,7 +15,7 @@ placeholder replaced at packaging.
 ```mermaid
 graph LR
   SignalizrChart([signalizr])
-  SignalCliChart[signalcli 1.0.0]
+  SignalCliChart[signalcli 1.0.1]
   Workload[workload 1.1.0]
 
   subgraph Components[Components]

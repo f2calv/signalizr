@@ -23,8 +23,6 @@ public sealed class SignalizrDbContext(DbContextOptions<SignalizrDbContext> opti
             entity.ToTable("inbound_messages");
             entity.HasKey(message => message.Id);
             entity.Property(message => message.Id).HasColumnName("id").ValueGeneratedOnAdd();
-            // TODO: Generate and review the group_name schema migration before the next deployment;
-            // migration generation and validation are deferred while builds are paused.
             entity.Property(message => message.GroupName).HasColumnName("group_name");
             entity.Property(message => message.Sender).HasColumnName("sender");
             entity.Property(message => message.Message).HasColumnName("message");

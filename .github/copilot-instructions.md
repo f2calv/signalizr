@@ -47,7 +47,7 @@ documentation there rather than in these repository-specific constraints.
 
 - Change shared build/deploy orchestration and its tests in the central `container-workflows`
   skill, not in this repository's root shims.
-- The application chart takes the application version at packaging. The dashboard chart has its
-  own version: bump it for every packaged change, including README-only edits.
-- Keep chart fixtures under each chart's `ci/` directory. Do not process dashboard JSON with Helm
-  `tpl`; substitute datasource placeholders explicitly.
+- Use the shared Helm guidance for chart authoring, fixtures, packaging, validation, and dashboard
+  JSON handling.
+- The application chart receives the application version during packaging. The independently
+  versioned dashboard chart publishes from its committed chart version.

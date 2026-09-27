@@ -12,9 +12,12 @@ Open [signalizr-mcp.http](signalizr-mcp.http) and send the initialize request, t
 notification, tool discovery and desired query. The examples use the supported `2025-11-25`
 handshake protocol; modern clients may negotiate without an initialize request.
 
-All POSTs here are read-only protocol operations. No session ID is required because the server is
-stateless. Responses can be JSON or SSE (`data:` lines containing JSON-RPC); both are accepted.
-An initialized notification normally returns 202.
+Discovery, query and prompt POSTs are read-only. The final text-send example is a real write
+operation and requires `MessageSendingEnabled=true`; confirm its destination and text before
+executing it. Do not retry automatically after an uncertain outcome.
+
+No session ID is required because the server is stateless. Responses can be JSON or SSE (`data:`
+lines containing JSON-RPC); both are accepted. An initialized notification normally returns 202.
 
 The prompt examples list available prompts and retrieve `summarise_signalizr_status`. Retrieval
 returns a reusable instruction message; it does not call tools or read live application data.

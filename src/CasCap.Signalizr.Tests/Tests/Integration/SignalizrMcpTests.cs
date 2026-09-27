@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -72,6 +73,184 @@ public sealed class SignalizrMcpTests
             Assert.Equal(JsonValueKind.Object, tool.ProtocolTool.InputSchema.GetProperty("properties").ValueKind);
             Assert.Empty(tool.ProtocolTool.InputSchema.GetProperty("properties").EnumerateObject());
         }
+    }
+
+    [Theory]
+    [InlineData(false, false, 2)]
+    [InlineData(true, false, 3)]
+    [InlineData(false, true, 3)]
+    [InlineData(true, true, 4)]
+    public async Task Sending_AndHistoryHaveIndependentFeatureGates(bool historyEnabled, bool sendingEnabled, int count)
+    {
+        await using var fixture = await Fixture.CreateAsync(historyEnabled: historyEnabled, sendingEnabled: sendingEnabled);
+        await using var client = await fixture.ConnectAsync();
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(count, tools.Count);
+        Assert.Equal(sendingEnabled, tools.Any(tool => tool.Name == "send_signalizr_message"));
+        Assert.Equal(historyEnabled, tools.Any(tool => tool.Name == "get_signalizr_messages"));
+        Assert.Equal(0, fixture.Gateway.SendCalls);
+        if (sendingEnabled)
+        {
+            var send = Assert.Single(tools, tool => tool.Name == "send_signalizr_message");
+            Assert.False(send.ProtocolTool.Annotations?.ReadOnlyHint);
+            Assert.False(send.ProtocolTool.Annotations?.DestructiveHint);
+            Assert.False(send.ProtocolTool.Annotations?.IdempotentHint);
+            Assert.True(send.ProtocolTool.Annotations?.OpenWorldHint);
+            Assert.NotNull(send.ProtocolTool.OutputSchema);
+            Assert.Equal(["groupName", "message"],
+                send.ProtocolTool.InputSchema.GetProperty("properties").EnumerateObject().Select(property => property.Name).Order());
+        }
+        else
+        {
+            await Assert.ThrowsAsync<McpProtocolException>(() => client.CallToolAsync("send_signalizr_message",
+                new Dictionary<string, object?> { ["groupName"] = "system", ["message"] = "example" },
+                cancellationToken: TestContext.Current.CancellationToken).AsTask());
+            Assert.Equal(0, fixture.Gateway.SendCalls);
+        }
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4096)]
+    public async Task Sending_UsesGatewayAndReturnsOnlyAcknowledgement(int length)
+    {
+        await using var fixture = await Fixture.CreateAsync(sendingEnabled: true);
+        const string GroupName = "My Test Group/Name";
+        fixture.Groups["example-send-group"] = GroupName;
+        await using var client = await fixture.ConnectAsync();
+        var message = new string('x', length);
+
+        var result = await CallAsync(client, "send_signalizr_message",
+            new Dictionary<string, object?> { ["groupName"] = GroupName, ["message"] = message });
+
+        Assert.Equal(1, fixture.Gateway.SendCalls);
+        Assert.Equal(GroupName, fixture.Gateway.LastGroupName);
+        Assert.Equal(message, fixture.Gateway.LastRequest?.Message);
+        Assert.Null(fixture.Gateway.LastRequest?.Base64Attachments);
+        Assert.True(fixture.Gateway.LastCancellationToken.CanBeCanceled);
+        Assert.Equal("timestamp", Assert.Single(result.EnumerateObject()).Name);
+        Assert.Equal(fixture.Gateway.Timestamp, result.GetProperty("timestamp").GetString());
+    }
+
+    [Theory]
+    [InlineData("", "example")]
+    [InlineData(" ", "example")]
+    [InlineData("system", "")]
+    [InlineData("system", " \r\n ")]
+    public async Task Sending_RejectsBlankInputsBeforeGateway(string groupName, string message)
+    {
+        await using var fixture = await Fixture.CreateAsync(sendingEnabled: true);
+        await using var client = await fixture.ConnectAsync();
+
+        var result = await client.CallToolAsync("send_signalizr_message",
+            new Dictionary<string, object?> { ["groupName"] = groupName, ["message"] = message },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsError);
+        Assert.Null(result.StructuredContent);
+        Assert.Equal(0, fixture.Gateway.SendCalls);
+    }
+
+    [Fact]
+    public async Task Sending_RejectsOversizedTextBeforeGateway()
+    {
+        await using var fixture = await Fixture.CreateAsync(sendingEnabled: true);
+        await using var client = await fixture.ConnectAsync();
+
+        var result = await client.CallToolAsync("send_signalizr_message",
+            new Dictionary<string, object?> { ["groupName"] = "system", ["message"] = new string('x', 4097) },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsError);
+        Assert.Equal(0, fixture.Gateway.SendCalls);
+    }
+
+    [Theory]
+    [InlineData("SYSTEM")]
+    [InlineData("Unknown Group")]
+    public async Task Sending_RejectsUnknownGroupsWithoutEchoingInput(string groupName)
+    {
+        await using var fixture = await Fixture.CreateAsync(sendingEnabled: true);
+        await using var client = await fixture.ConnectAsync();
+
+        var result = await client.CallToolAsync("send_signalizr_message",
+            new Dictionary<string, object?> { ["groupName"] = groupName, ["message"] = "example" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsError);
+        Assert.Equal(1, fixture.Gateway.SendCalls);
+        Assert.Null(fixture.Gateway.LastRequest);
+        Assert.DoesNotContain(groupName, JsonSerializer.Serialize(result));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Sending_ReportsUncertainOutcomeWithoutRetryOrExceptionDetail(bool timeout)
+    {
+        await using var fixture = await Fixture.CreateAsync(sendingEnabled: true);
+        const string PrivateDetail = "synthetic-sensitive-upstream-detail";
+        fixture.Gateway.Failure = timeout ? new OperationCanceledException(PrivateDetail) : new HttpRequestException(PrivateDetail);
+        await using var client = await fixture.ConnectAsync();
+
+        var result = await client.CallToolAsync("send_signalizr_message",
+            new Dictionary<string, object?> { ["groupName"] = "system", ["message"] = "example" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsError);
+        Assert.Null(result.StructuredContent);
+        Assert.Equal(1, fixture.Gateway.SendCalls);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text;
+        Assert.Contains("may have been sent", text);
+        Assert.Contains("do not retry automatically", text);
+        Assert.DoesNotContain(PrivateDetail, text);
+    }
+
+    [Fact]
+    public async Task Sending_RequiresAnAcknowledgementTimestamp()
+    {
+        await using var fixture = await Fixture.CreateAsync(sendingEnabled: true);
+        fixture.Gateway.Timestamp = string.Empty;
+        await using var client = await fixture.ConnectAsync();
+
+        var result = await client.CallToolAsync("send_signalizr_message",
+            new Dictionary<string, object?> { ["groupName"] = "system", ["message"] = "example" },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsError);
+        Assert.Null(result.StructuredContent);
+        Assert.Equal(1, fixture.Gateway.SendCalls);
+    }
+
+    [Fact]
+    public async Task Sending_CancellationBeforeDispatchDoesNotReachGateway()
+    {
+        await using var fixture = await Fixture.CreateAsync(sendingEnabled: true);
+        var service = new SignalizrMcpMessagingService(NullLogger<SignalizrMcpMessagingService>.Instance, fixture.Gateway);
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.SendSignalizrMessage("system", "example", cancellation.Token));
+
+        Assert.Equal(0, fixture.Gateway.SendCalls);
+    }
+
+    [Fact]
+    public async Task Sending_CancellationDuringDispatchPropagatesWithoutRetry()
+    {
+        await using var fixture = await Fixture.CreateAsync(sendingEnabled: true);
+        using var cancellation = new CancellationTokenSource();
+        fixture.Gateway.BeforeSend = cancellation.Cancel;
+        var service = new SignalizrMcpMessagingService(NullLogger<SignalizrMcpMessagingService>.Instance, fixture.Gateway);
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.SendSignalizrMessage("system", "example", cancellation.Token));
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        Assert.Equal(cancellation.Token, fixture.Gateway.LastCancellationToken);
+        Assert.Equal(1, fixture.Gateway.SendCalls);
     }
 
     [Fact]
@@ -356,7 +535,10 @@ public sealed class SignalizrMcpTests
 
         public IDbContextFactory<SignalizrDbContext> Database => app.Services.GetRequiredService<IDbContextFactory<SignalizrDbContext>>();
 
-        public static async Task<Fixture> CreateAsync(bool mcpEnabled = true, bool historyEnabled = false)
+        public FakeMcpMessageGateway Gateway => app.Services.GetRequiredService<FakeMcpMessageGateway>();
+
+        public static async Task<Fixture> CreateAsync(
+            bool mcpEnabled = true, bool historyEnabled = false, bool sendingEnabled = false)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync(TestContext.Current.CancellationToken);
@@ -364,7 +546,8 @@ public sealed class SignalizrMcpTests
             builder.Configuration.Sources.Clear();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [$"{McpConfig.ConfigurationSectionName}:{nameof(McpConfig.MessageHistoryEnabled)}"] = historyEnabled.ToString()
+                [$"{McpConfig.ConfigurationSectionName}:{nameof(McpConfig.MessageHistoryEnabled)}"] = historyEnabled.ToString(),
+                [$"{McpConfig.ConfigurationSectionName}:{nameof(McpConfig.MessageSendingEnabled)}"] = sendingEnabled.ToString()
             });
             builder.Logging.ClearProviders();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -374,6 +557,8 @@ public sealed class SignalizrMcpTests
                 ["example-group-alerts"] = "alerts"
             };
             builder.Services.AddSingleton<IGroupResolver>(new FakeGroupResolver(groups));
+            builder.Services.AddSingleton<FakeMcpMessageGateway>();
+            builder.Services.AddSingleton<IMessageGateway>(sp => sp.GetRequiredService<FakeMcpMessageGateway>());
             builder.Services.AddSingleton(TimeProvider.System);
             builder.Services.AddSingleton<SignalizrMetrics>();
             builder.Services.Configure<SubscriberConfig>(_ => { });

@@ -29,8 +29,9 @@ documentation there rather than in these repository-specific constraints.
 - Declare roles through `FeatureNames` and register their `IBgFeature` implementations only when
   enabled. Gate feature controllers with `[FeatureController(...)]`; disabled routes return 404,
   not dependency-injection failures.
-- Require Gateway and Receiver together for MCP. Preserve its read-only tools, separate
-  off-by-default history disclosure switch and group-scoped queries.
+- Require Gateway and Receiver together for MCP. Keep query tools read-only; history disclosure
+  and text sending each require their own off-by-default switch. Send through `IMessageGateway`,
+  never replay an uncertain send automatically, and keep queries group-scoped.
 - Keep the small `DemoClient` in the product image rather than adding a second image or sample
   project. Reassess that boundary if it gains independent dependencies or an inbound surface.
 

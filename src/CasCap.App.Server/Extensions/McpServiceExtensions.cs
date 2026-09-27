@@ -23,6 +23,9 @@ public static class McpServiceExtensions
         if (mcpConfig.MessageHistoryEnabled)
             mcp.WithTools<SignalizrMcpMessageHistoryQueryService>();
 
+        if (mcpConfig.MessageSendingEnabled)
+            mcp.WithTools<SignalizrMcpMessagingService>();
+
         return services;
     }
 

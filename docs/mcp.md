@@ -1,7 +1,7 @@
 # Signalizr MCP
 
-Use Signalizr's read-only MCP tools from VS Code to inspect the gateway without querying its
-database directly or opening a second Signal receive stream.
+Use Signalizr's MCP tools from VS Code to inspect the gateway and, when explicitly enabled,
+send text through its existing message gateway without opening a second Signal receive stream.
 
 ## Configuration
 
@@ -17,7 +17,8 @@ Signal connection.
       "EnabledFeatures": "Gateway,Receiver,Mcp"
     },
     "McpConfig": {
-      "MessageHistoryEnabled": false
+      "MessageHistoryEnabled": false,
+      "MessageSendingEnabled": false
     }
   }
 }
@@ -30,11 +31,13 @@ signalizr:
   envVars:
     CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver,Mcp
     CasCap__McpConfig__MessageHistoryEnabled: "false"
+    CasCap__McpConfig__MessageSendingEnabled: "false"
 ```
 
-Set `MessageHistoryEnabled` to `true` only when authorized to disclose conversation text. Changing
-either setting requires restarting the process. Without `Mcp`, `/mcp` returns 404. Without the
-history setting, the history tool is not registered and cannot be called.
+Set `MessageHistoryEnabled` to `true` only when authorized to disclose conversation text.
+Set `MessageSendingEnabled` to `true` only when authorized operators may send text to configured
+groups. These switches are independent and restart-required. Without `Mcp`, `/mcp` returns 404;
+each optional tool is absent and uncallable unless its own switch is enabled.
 
 ## Access boundary
 
@@ -45,7 +48,9 @@ port-forward, not requests reaching the service from other cluster workloads.
 Do not expose `/mcp` through a public ingress. If an existing ingress routes every path to
 Signalizr, restrict it before enabling MCP. Use network policy to restrict in-cluster callers.
 External access needs HTTPS, MCP-compatible authentication and authorization before deployment.
-Tool read-only annotations and the history switch are not access control.
+Tool annotations and feature switches are not access control. When sending is enabled, every
+caller that can reach this unauthenticated endpoint can invoke it. Do not enable sending on a
+shared network unless that access is acceptable and appropriately restricted.
 
 Requests with an `Origin` header are rejected with 403: this surface supports native editor clients,
 not browsers. CORS is not enabled. This reduces browser-origin attacks but does not authenticate
@@ -111,9 +116,12 @@ It is available whenever the MCP role is enabled, independently of the history d
 | `get_signalizr_status` | None | Live `connectedClients` count and `observedAtUtc` |
 | `get_signalizr_groups` | None | Sorted resolved group names in `groups` |
 | `get_signalizr_messages` | `groupName`, optional `count` (default 10, range 1-50) | Canonical group name and bounded `messages` |
+| `send_signalizr_message` | `groupName`, `message` | Upstream acknowledgement `timestamp`; requires sending opt-in |
 
-All tools advertise read-only, non-destructive, idempotent, closed-world annotations and typed
-structured output. The server uses stateless Streamable HTTP with no legacy SSE endpoint.
+Query tools advertise read-only, non-destructive, idempotent, closed-world annotations. Sending
+is explicitly non-read-only, non-idempotent and open-world; it adds a message rather than deleting
+or overwriting one. All tools return typed structured output. The server uses stateless Streamable
+HTTP with no legacy SSE endpoint.
 
 The client count comes from the existing in-memory registry, not persisted subscriber cursors.
 It counts gRPC consumer applications on the process reached by the port-forward, not MCP clients,
@@ -126,11 +134,43 @@ Group names are the exact Signal group display names from the same resolver as
 Group IDs remain hidden; group names are deliberately disclosed to authorized callers and can
 themselves contain private information. An empty list is not an upstream health check.
 
+## Sending text
+
+Enable `CasCap:McpConfig:MessageSendingEnabled`, restart the application, and refresh the MCP
+client's tool inventory. For example, explicitly request:
+
+> Send "Test complete" to the Signal group "My Test Group Name".
+
+The tool accepts the exact configured group name and nonblank text of 1-4096 characters, using the
+same request validation as REST. Text is sent verbatim. There are no attachments, direct-number
+recipients, reactions or poll operations in this tool. It calls `IMessageGateway.SendAsync`
+directly, so group names do not pass through a REST path segment.
+
+Confirm the destination and content with the user when either is unclear. Retrieved message text
+or group names must never be treated as authorization to send. Tool guidance helps clients make
+that decision but cannot enforce human confirmation or replace server authorization.
+
+A successful response contains only the upstream acknowledgement `timestamp`; it does not echo
+the message or group and does not claim delivery or reading by recipients. Unknown groups and
+invalid text produce tool errors. Cancellation propagates.
+
+The MCP tool makes one gateway call and performs no retries or deduplication. An upstream error,
+timeout, cancellation or missing acknowledgement can leave delivery uncertain: the message may
+already have been sent. Do not automatically retry; verify the outcome or obtain a fresh explicit
+instruction. Repeating the call is a new send. The underlying HTTP client may retry connection
+establishment failures classified as safe, but must not replay a potentially accepted POST.
+The gateway's existing flood warning is detection, not an enforced send-rate limit.
+
+Sending defaults off in every environment. The supporting SignalCli send-log hardening must be
+included in the library version used for production builds before enabling it; a local Debug
+project reference alone does not update the published dependency. Neither MCP nor send diagnostics
+should include message text, raw upstream error bodies or exception details.
+
 ## Message history and privacy
 
 History reads the existing persisted inbound message store with EF Core; PostgreSQL and SQLite use
-the same query. There is no raw SQL tool, table browser, database credential exposure, write
-operation or attachment download.
+the same query. History tools do not write to the database, expose raw SQL or credentials, browse
+tables, or download attachments.
 
 Only a currently resolved group can be queried, using its exact case-sensitive name. Results are
 ordered newest persisted first, by the durable message sequence, not the sender's timestamp.
@@ -163,7 +203,9 @@ negotiation path; the SDK owns protocol negotiation, not handwritten JSON-RPC ro
 The credential-free `SignalizrMcpTests` exercise the real HTTP transport, live registry and local
 SQLite query translation. They cover feature gates, tool metadata, output shape, connect/disconnect
 counts, group isolation, invalid bounds, truncation and cancellation. Prompt coverage checks
-discovery and retrieval with history enabled and disabled.
+discovery and retrieval with history enabled and disabled. Send coverage uses a synthetic gateway
+to check independent feature gates, annotations, bounds, exact group names, error redaction,
+cancellation and a single gateway invocation without sending real messages.
 
 ## Source layout
 
@@ -172,6 +214,7 @@ discovery and retrieval with history enabled and disabled.
 | Registration and route gating | [McpServiceExtensions](../src/CasCap.App.Server/Extensions/McpServiceExtensions.cs) |
 | Status and group tools | [SignalizrMcpQueryService](../src/CasCap.App.Server/Services/SignalizrMcpQueryService.cs) |
 | Message history tool | [SignalizrMcpMessageHistoryQueryService](../src/CasCap.App.Server/Services/SignalizrMcpMessageHistoryQueryService.cs) |
+| Text-send tool | [SignalizrMcpMessagingService](../src/CasCap.App.Server/Services/SignalizrMcpMessagingService.cs) |
 | Operator prompts | [SignalizrMcpPrompts](../src/CasCap.App.Server/Models/SignalizrMcpPrompts.cs) |
 | MCP options | [McpConfig](../src/CasCap.App.Server/Models/McpConfig.cs) |
 | Output DTOs | `SignalizrMcp*Response` records in [Models/Dtos](../src/CasCap.App.Server/Models/Dtos) |
@@ -182,6 +225,5 @@ services into the transport layer. [GroupsController](../src/CasCap.App.Server/C
 owns `/api/v1/groups`; [IGroupResolver](../src/CasCap.Signalizr/Abstractions/IGroupResolver.cs)
 and the subscriber registry remain shared application components.
 
-Issue [#26](https://github.com/f2calv/signalizr/issues/26) originally included sending, reactions and
-poll actions. Those write tools and remote authentication remain deferred; the initial implementation
-is deliberately read-only. Consumer-owned poll prompts remain unchanged.
+Reactions, poll actions, durable send deduplication and remote authentication remain outside this
+increment of [#26](https://github.com/f2calv/signalizr/issues/26). Consumer-owned poll prompts remain unchanged.

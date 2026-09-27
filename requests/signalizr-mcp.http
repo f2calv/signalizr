@@ -1,5 +1,5 @@
-### Signalizr read-only MCP
-### All POSTs below are read-only MCP protocol operations, not message sends.
+### Signalizr MCP
+### Discovery, query and prompt POSTs are read-only. The text-send example sends a real message.
 
 @baseUrl = {{$dotenv SIGNALIZR_BASE_URL}}
 @protocolVersion = 2025-11-25
@@ -76,3 +76,12 @@ Accept: application/json, text/event-stream
 MCP-Protocol-Version: {{protocolVersion}}
 
 {"jsonrpc":"2.0","id":8,"method":"prompts/get","params":{"name":"summarise_signalizr_status"}}
+
+### Send text (separate sending opt-in required)
+# @note Sends a real Signal message to the named group. Confirm destination/content; do not retry automatically.
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: {{protocolVersion}}
+
+{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"send_signalizr_message","arguments":{"groupName":"My Test Group Name","message":"Test complete"}}}

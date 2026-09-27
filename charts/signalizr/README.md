@@ -16,7 +16,7 @@ automatically. Use an explicitly published version when installing.
 ```mermaid
 graph LR
   SignalizrChart([signalizr])
-  SignalCliChart[signalcli 1.0.1]
+  SignalCliChart[signalcli 1.0.2]
   Workload[workload 1.1.0]
 
   subgraph Components[Components]

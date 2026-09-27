@@ -1,9 +1,52 @@
 # signalizr
 
-A Signal Messenger **gateway** — a single, controlled owner of one Signal account that other
-applications send through and subscribe to, instead of each one holding its own connection.
+signalizr is a Signal Messenger gateway packaged as a Linux Docker container for **amd64 and
+arm64**, deployable with Docker Compose or Kubernetes via Helm. The deployment runs alongside
+[bbernhard's signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api), allowing
+multiple applications to send to and receive from multiple Signal groups through one controlled
+account connection.
 
 See [Validation Status](#validation-status) for recorded evidence and remaining limits.
+
+## Data Flow
+
+```mermaid
+flowchart LR
+    subgraph Signal["Groups on one Signal account"]
+        CHAT(["My Test Group Name"])
+        MONITOR(["My Test Monitor Group Name"])
+    end
+
+    WRAPPER["bbernhard/signal-cli-rest-api"]
+    GATEWAY["signalizr gateway<br/>Group resolution, persistence and fan-out"]
+
+    subgraph Consumers["Independent consuming applications"]
+        APP_A["Application A"]
+        APP_B["Application B"]
+    end
+    EDITOR["VS Code / MCP client"]
+
+    CHAT <--> WRAPPER
+    MONITOR <--> WRAPPER
+    WRAPPER <-->|"REST sends / one receive stream"| GATEWAY
+    APP_A -->|"REST group operations"| GATEWAY
+    APP_B -->|"REST group operations"| GATEWAY
+    GATEWAY <-->|"gRPC messages / acknowledgements"| APP_A
+    GATEWAY <-->|"gRPC messages / acknowledgements"| APP_B
+    EDITOR <-->|"Optional MCP tools"| GATEWAY
+
+    classDef gateway fill:#dbeafe,stroke:#2563eb,color:#172554
+    classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827
+    classDef consumer fill:#dcfce7,stroke:#16a34a,color:#14532d
+    class GATEWAY gateway
+    class CHAT,MONITOR,WRAPPER external
+    class APP_A,APP_B,EDITOR consumer
+```
+
+Applications address groups by their exact Signal names rather than holding Signal account
+credentials. Each subscriber has its own durable acknowledgement cursor. The gateway fans out the
+persisted inbound stream; each consuming application selects the groups it handles. Group selection
+by a consumer is not a server-side authorization boundary.
 
 ## Quick Start
 
@@ -83,7 +126,7 @@ A single container image, with the role selected by feature flag:
 | --- | --- | --- |
 | `Gateway` | on | REST send surface and named-group resolution |
 | `Receiver` | on | Owns the receive stream, persists messages and serves gRPC subscriptions |
-| `Mcp` | off | Read-only HTTP MCP tools; requires `Gateway,Receiver` in the same process |
+| `Mcp` | off | HTTP MCP queries and separately enabled text sending; requires `Gateway,Receiver` in the same process |
 | `DemoClient` | off | Sample thin client, for evaluating the gateway without writing one |
 | `DbMigrator` | off | Applies pending EF Core migrations, then exits |
 
@@ -93,7 +136,7 @@ A single container image, with the role selected by feature flag:
 | --- | --- | --- |
 | Send and group interactions | REST | `curl`-able, webhook-able, and usable without generating a client |
 | Inbound subscription | gRPC bidirectional streaming | Long-lived and typed, with an ack channel so delivery is not fire-and-forget |
-| Operator queries | MCP Streamable HTTP at `/mcp` | Queries over live subscribers, resolved groups and optionally persisted message previews |
+| Operator tools | MCP Streamable HTTP at `/mcp` | Query status, groups and optional history; send text only when separately enabled |
 
 ## Querying from VS Code
 
@@ -101,6 +144,10 @@ Enable `Gateway,Receiver,Mcp` to ask how many application clients are connected 
 are served. The optional `CasCap:McpConfig:MessageHistoryEnabled` setting also exposes bounded,
 group-scoped inbound message previews from the existing database. Both MCP and message history
 are disabled by default.
+
+`CasCap:McpConfig:MessageSendingEnabled` separately enables `send_signalizr_message` for
+explicitly requested text sends. It is off by default, does not enable history, and reuses the same
+gateway service as REST. See [Sending text](docs/mcp.md#sending-text) for bounds and retry caveats.
 
 See the [MCP setup guide](docs/mcp.md) for a localhost-only Kubernetes port-forward, a
 VS Code server definition, privacy limits, tool reference and the
@@ -318,6 +365,62 @@ Two first-class targets, sharing one configuration shape:
 
 The independent [dashboard chart](charts/signalizr-dashboards/README.md) publishes the
 `charts/signalizr-dashboards` OCI package for deployment into a Grafana monitoring namespace.
+
+### Deployment Flow
+
+```mermaid
+flowchart TB
+    APPS["Consuming applications"]
+    SIGNAL(["Signal network"])
+
+    subgraph Release["signalizr Helm release"]
+        SERVICE["Gateway ClusterIP Service<br/>HTTP 80 / gRPC 5001"]
+        GATEWAY["signalizr Deployment<br/>Gateway + Receiver<br/>Optional Mcp feature"]
+        WRAPPER_SERVICE["signalcli Service"]
+        WRAPPER["signalcli workload<br/>bbernhard/signal-cli-rest-api"]
+        ACCOUNT[("Signal account-state PVC")]
+        SETTINGS["Environment configuration<br/>and Secret references"]
+        MIGRATOR["DbMigrator Job<br/>Configured schema initialization"]
+        DEMO["Optional DemoClient workload"]
+        SQLITE[("SQLite data PVC<br/>Default storage")]
+    end
+
+    POSTGRES[("External PostgreSQL<br/>Alternative storage")]
+    DASHBOARDS["Optional dashboard chart<br/>Dashboard ConfigMaps"]
+    GRAFANA["Existing Grafana sidecar"]
+
+    APPS <-->|"REST / gRPC"| SERVICE
+    SERVICE --> GATEWAY
+    DEMO --> SERVICE
+    GATEWAY <-->|"Send / receive"| WRAPPER_SERVICE
+    WRAPPER_SERVICE --> WRAPPER
+    WRAPPER <--> SIGNAL
+    WRAPPER --> ACCOUNT
+    SETTINGS --> GATEWAY
+    SETTINGS --> MIGRATOR
+    GATEWAY -.->|"SQLite"| SQLITE
+    GATEWAY -.->|"PostgreSQL"| POSTGRES
+    MIGRATOR -.->|"Selected database"| SQLITE
+    MIGRATOR -.->|"Selected database"| POSTGRES
+    DASHBOARDS --> GRAFANA
+
+    classDef application fill:#dbeafe,stroke:#2563eb,color:#172554
+    classDef storage fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827
+    class GATEWAY,MIGRATOR,DEMO,SERVICE,SETTINGS,DASHBOARDS application
+    class ACCOUNT,SQLITE,POSTGRES storage
+    class APPS,SIGNAL,WRAPPER_SERVICE,WRAPPER,GRAFANA external
+```
+
+The application chart combines the `signalcli` chart with workload components for the gateway,
+migrator and optional demo client. The gateway, migrator and demo use the same Signalizr image
+with different feature settings; the wrapper uses its own upstream image and account-state volume.
+
+Choose SQLite or an externally provisioned PostgreSQL database, not both. With externally managed
+migrations, configure the migrator as a completed-before-start barrier (for example an Argo CD
+PreSync Job) and disable receiver startup migration. Keep the Receiver deployment single-owner,
+including during rollouts. The dashboard chart is separate and expects an existing Grafana setup.
+See the [application chart guide](charts/signalizr/README.md) for values and installation examples.
 
 ## Observability
 

@@ -23,7 +23,7 @@ public sealed class SignalizrDbContext(DbContextOptions<SignalizrDbContext> opti
             entity.ToTable("inbound_messages");
             entity.HasKey(message => message.Id);
             entity.Property(message => message.Id).HasColumnName("id").ValueGeneratedOnAdd();
-            entity.Property(message => message.Channel).HasColumnName("channel");
+            entity.Property(message => message.GroupName).HasColumnName("group_name");
             entity.Property(message => message.Sender).HasColumnName("sender");
             entity.Property(message => message.Message).HasColumnName("message");
             entity.Property(message => message.Timestamp).HasColumnName("timestamp");

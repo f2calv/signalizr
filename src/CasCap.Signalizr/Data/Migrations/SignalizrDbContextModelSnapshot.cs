@@ -62,15 +62,15 @@ namespace CasCap.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<string>("Channel")
-                        .HasColumnType("text")
-                        .HasColumnName("channel");
-
                     b.Property<bool>("FromSelf")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("from_self");
+
+                    b.Property<string>("GroupName")
+                        .HasColumnType("text")
+                        .HasColumnName("group_name");
 
                     b.Property<string>("Message")
                         .HasColumnType("text")

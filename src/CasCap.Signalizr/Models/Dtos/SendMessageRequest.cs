@@ -1,6 +1,6 @@
 namespace CasCap.Models.Dtos;
 
-/// <summary>A request to send a message to a named channel.</summary>
+/// <summary>A request to send a message to a named group.</summary>
 /// <remarks>
 /// Deliberately smaller than the upstream send contract. signalizr is a gateway, not a proxy: it
 /// owns the account and exposes only what a caller needs, so a caller cannot choose a recipient,

@@ -7,14 +7,14 @@ namespace CasCap.Tests;
 
 /// <summary>
 /// Covers the mapping from an upstream message onto a delivery, which is where an inbound group id
-/// becomes a channel name and where an unknown group must stay harmless.
+/// becomes a group name and where an unknown group must stay harmless.
 /// </summary>
 public class DispatcherMappingTests
 {
     private const string GroupId = "group.dGVzdA==";
     private const string Account = "+19999999999";
 
-    private static readonly FakeChannelResolver Resolver = new(new() { [GroupId] = "system" });
+    private static readonly FakeGroupResolver Resolver = new(new() { [GroupId] = "system" });
 
     private static SignalReceivedMessage CreateMessage(string? groupId, string? text = "hello")
         => new()
@@ -33,12 +33,12 @@ public class DispatcherMappingTests
         };
 
     [Fact]
-    public void A_message_from_a_configured_group_carries_the_channel_name()
+    public void A_message_from_a_configured_group_carries_the_group_name()
     {
         var delivery = DispatcherBgService.CreateDelivery(CreateMessage(GroupId), Resolver, Account);
 
         Assert.NotNull(delivery);
-        Assert.Equal("system", delivery.Channel);
+        Assert.Equal("system", delivery.GroupName);
         Assert.Equal("hello", delivery.Message);
         Assert.Equal(42, delivery.Timestamp);
         Assert.Equal("+10000000000", delivery.Sender);
@@ -71,7 +71,7 @@ public class DispatcherMappingTests
         var delivery = DispatcherBgService.CreateDelivery(message, Resolver, Account);
 
         Assert.NotNull(delivery);
-        Assert.Equal("system", delivery.Channel);
+        Assert.Equal("system", delivery.GroupName);
         Assert.Equal("typed on my phone", delivery.Message);
         Assert.Equal(99, delivery.Timestamp);
         Assert.True(delivery.FromSelf);
@@ -159,23 +159,23 @@ public class DispatcherMappingTests
     }
 
     [Fact]
-    public void A_message_from_an_unconfigured_group_has_no_channel()
+    public void A_message_from_an_unconfigured_group_has_no_group()
     {
         // Normal, not an error: the account may belong to groups this deployment ignores.
         var delivery = DispatcherBgService.CreateDelivery(CreateMessage("group.b3RoZXI="), Resolver, Account);
 
         Assert.NotNull(delivery);
-        Assert.Null(delivery.Channel);
+        Assert.Null(delivery.GroupName);
         Assert.Equal("hello", delivery.Message);
     }
 
     [Fact]
-    public void A_direct_message_has_no_channel()
+    public void A_direct_message_has_no_group()
     {
         var delivery = DispatcherBgService.CreateDelivery(CreateMessage(groupId: null), Resolver, Account);
 
         Assert.NotNull(delivery);
-        Assert.Null(delivery.Channel);
+        Assert.Null(delivery.GroupName);
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public class DispatcherMappingTests
     }
 
     [Fact]
-    public void Two_channel_names_for_one_group_resolve_inbound_deterministically()
+    public void Inbound_lookup_requires_the_exact_group_name()
     {
         var group = new SignalGroup { Id = GroupId, Name = "system" };
         var resolved = new Dictionary<string, string>
@@ -198,9 +198,7 @@ public class DispatcherMappingTests
             ["alpha"] = GroupId
         };
 
-        // Sending to either name is unambiguous, receiving is not, so the inbound name is chosen
-        // by ordinal order rather than by dictionary enumeration order.
-        Assert.Equal("zulu", Assert.Single(ChannelResolver.BuildInboundLookup(resolved, [group])).Value);
+        Assert.Empty(GroupResolver.BuildInboundLookup(resolved, [group]));
     }
 
     [Fact]
@@ -211,13 +209,13 @@ public class DispatcherMappingTests
         {
             new() { Id = GroupId, Name = "CasCap.Signalizr System", InternalId = InternalId }
         };
-        var resolved = new Dictionary<string, string> { ["system"] = GroupId };
+        var resolved = GroupResolver.Resolve(["CasCap.Signalizr System"], groups);
 
-        var lookup = ChannelResolver.BuildInboundLookup(resolved, groups);
+        var lookup = GroupResolver.BuildInboundLookup(resolved, groups);
 
         var entry = Assert.Single(lookup);
         Assert.True(entry.Key.Matches(GroupId));
         Assert.True(entry.Key.Matches(InternalId));
-        Assert.Equal("system", entry.Value);
+        Assert.Equal("CasCap.Signalizr System", entry.Value);
     }
 }

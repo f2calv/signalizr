@@ -1,9 +1,6 @@
-using CasCap.Abstractions;
 using CasCap.Exceptions;
 using CasCap.Diagnostics;
 using CasCap.Grpc;
-using CasCap.Models;
-using CasCap.Models.Dtos;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
 
@@ -124,7 +121,7 @@ public sealed class InboundGrpcService(
         var message = new InboundMessage
         {
             DeliveryId = delivery.DeliveryId,
-            Channel = delivery.Channel ?? string.Empty,
+            GroupName = delivery.GroupName ?? string.Empty,
             Sender = delivery.Sender ?? string.Empty,
             Message = delivery.Message ?? string.Empty,
             Timestamp = delivery.Timestamp ?? 0,

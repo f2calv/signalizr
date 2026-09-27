@@ -1,29 +1,30 @@
 namespace CasCap.Services;
 
-/// <inheritdoc cref="IChannelResolver"/>
-public sealed class ChannelResolver(
-    ILogger<ChannelResolver> logger,
+/// <inheritdoc cref="IGroupResolver"/>
+public sealed class GroupResolver(
+    ILogger<GroupResolver> logger,
     ISignalCliClient client,
-    IOptions<ChannelConfig> channelConfig,
-    IOptions<SignalCliConfig> signalCliConfig) : IChannelResolver
+    IOptions<GroupConfig> groupConfig,
+    IOptions<SignalCliConfig> signalCliConfig) : IGroupResolver
 {
     private IReadOnlyDictionary<string, string> _resolved =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        new Dictionary<string, string>(StringComparer.Ordinal);
 
     private IReadOnlyList<KeyValuePair<SignalGroup, string>> _groups = [];
+    private IReadOnlyCollection<string> _groupNames = [];
 
     /// <inheritdoc/>
-    public IReadOnlyCollection<string> ChannelNames => Volatile.Read(ref _resolved).Keys.ToArray();
+    public IReadOnlyCollection<string> GroupNames => Volatile.Read(ref _groupNames);
 
     /// <inheritdoc/>
-    public bool TryGetGroupId(string channelName, out string groupId)
-        => Volatile.Read(ref _resolved).TryGetValue(channelName, out groupId!);
+    public bool TryGetGroupId(string groupName, out string groupId)
+        => Volatile.Read(ref _resolved).TryGetValue(groupName, out groupId!);
 
     /// <inheritdoc/>
-    public bool TryGetChannelName(string groupId, out string channelName)
+    public bool TryGetGroupName(string groupId, out string groupName)
     {
         var match = Volatile.Read(ref _groups).FirstOrDefault(pair => pair.Key.Matches(groupId));
-        channelName = match.Value ?? string.Empty;
+        groupName = match.Value ?? string.Empty;
         return match.Key is not null;
     }
 
@@ -37,13 +38,13 @@ public sealed class ChannelResolver(
         var groups = await client.ListGroups(number, cancellationToken).ConfigureAwait(false)
             ?? throw new HttpRequestException("The signal-cli wrapper returned no group list.");
 
-        var resolved = Resolve(channelConfig.Value.Channels, groups);
+        var resolved = Resolve(groupConfig.Value.GroupNames, groups);
         Volatile.Write(ref _resolved, resolved);
         Volatile.Write(ref _groups, BuildInboundLookup(resolved, groups));
+        Volatile.Write(ref _groupNames, Array.AsReadOnly(resolved.Keys.ToArray()));
 
-        // Group ids are account-linked identifiers, so log the channel names only.
-        logger.LogInformation("{ClassName} resolved {ChannelCount} channel(s): {Channels}",
-            nameof(ChannelResolver), resolved.Count, string.Join(", ", resolved.Keys));
+        logger.LogInformation("{ClassName} resolved {GroupCount} Signal group(s)",
+            nameof(GroupResolver), resolved.Count);
     }
 
     /// <summary>Matches configured group names against the account's groups.</summary>
@@ -59,53 +60,58 @@ public sealed class ChannelResolver(
     /// nothing downstream could detect it.
     /// </exception>
     public static IReadOnlyDictionary<string, string> Resolve(
-        IReadOnlyDictionary<string, string> channels, IReadOnlyList<SignalGroup> groups)
+        IReadOnlyCollection<string> groupNames, IReadOnlyList<SignalGroup> groups)
     {
-        var resolved = new Dictionary<string, string>(channels.Count, StringComparer.OrdinalIgnoreCase);
+        var resolved = new Dictionary<string, string>(groupNames.Count, StringComparer.Ordinal);
         var failures = new List<string>();
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var (channelName, groupName) in channels)
+        foreach (var groupName in groupNames)
         {
+            if (string.IsNullOrWhiteSpace(groupName))
+            {
+                failures.Add("a configured group name is blank");
+                continue;
+            }
+            if (!seenNames.Add(groupName))
+            {
+                failures.Add("a group name is configured more than once");
+                continue;
+            }
             var matches = groups.Where(g => string.Equals(g.Name, groupName, StringComparison.Ordinal)).ToList();
             switch (matches.Count)
             {
                 case 1:
-                    resolved[channelName] = matches[0].Id;
+                    resolved[groupName] = matches[0].Id;
                     break;
                 case 0:
-                    failures.Add($"channel '{channelName}' matches no group named '{groupName}'");
+                    failures.Add("a configured name matches no group");
                     break;
                 default:
-                    failures.Add($"channel '{channelName}' matches {matches.Count} groups named '{groupName}'");
+                    failures.Add($"a configured name matches {matches.Count} groups");
                     break;
             }
         }
 
         if (failures.Count > 0)
             throw new InvalidOperationException(
-                $"Channel resolution failed: {string.Join("; ", failures)}.");
+                $"Group resolution failed: {string.Join("; ", failures)}.");
 
         return resolved;
     }
 
-    /// <summary>Builds the group-to-channel lookup used by the inbound direction.</summary>
+    /// <summary>Builds the group identifier-to-name lookup used by the inbound direction.</summary>
     /// <remarks>
     /// <see cref="SignalGroup.Matches(string?)"/> owns the distinction between the send and inbound
     /// identifier forms, so this consumer treats group identifiers as opaque.
-    /// <para>
-    /// Two channel names may point at the same group, which <see cref="Resolve"/> permits because
-    /// sending to either is unambiguous. Inbound is not: the last name wins, so entries are stored
-    /// in descending ordinal name order and the first match is deterministic.
-    /// </para>
     /// </remarks>
     public static IReadOnlyList<KeyValuePair<SignalGroup, string>> BuildInboundLookup(
         IReadOnlyDictionary<string, string> resolved, IReadOnlyList<SignalGroup> groups)
     {
-        return resolved
-            .GroupBy(pair => pair.Value, StringComparer.Ordinal)
-            .Select(entries => new KeyValuePair<SignalGroup, string>(
-                groups.Single(group => string.Equals(group.Id, entries.Key, StringComparison.Ordinal)),
-                entries.OrderBy(pair => pair.Key, StringComparer.Ordinal).Last().Key))
+        return groups
+            .Where(group => resolved.TryGetValue(group.Name, out var id)
+                && string.Equals(id, group.Id, StringComparison.Ordinal))
+            .Select(group => new KeyValuePair<SignalGroup, string>(group, group.Name))
             .ToArray();
     }
 

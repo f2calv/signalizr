@@ -4,11 +4,13 @@ description: Umbrella chart deploying the signalizr gateway alongside the signal
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+sources:
+  - https://github.com/f2calv/signalizr
 
 dependencies:
   # The upstream signal-cli REST wrapper. Owns the registered account and its on-disk state.
   - name: signalcli
-    version: 1.0.1
+    version: 1.0.2
     repository: oci://ghcr.io/f2calv/charts
 
   # The gateway itself: Gateway and Receiver roles from one image.

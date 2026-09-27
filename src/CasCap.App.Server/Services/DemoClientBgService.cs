@@ -1,5 +1,4 @@
 using CasCap.Common.Abstractions;
-using CasCap.Constants;
 using CasCap.Signalizr.Client;
 using CasCap.Signalizr.Client.Exceptions;
 
@@ -27,7 +26,7 @@ public sealed class DemoClientBgService(
         {
             try
             {
-                await LogChannelsAsync(cancellationToken).ConfigureAwait(false);
+                await LogGroupsAsync(cancellationToken).ConfigureAwait(false);
 
                 // The client does not resubscribe on its own, so the reconnect lives here where it
                 // is visible: a silent one would hide the gap in delivery it creates.
@@ -51,18 +50,18 @@ public sealed class DemoClientBgService(
         logger.LogInformation("{ClassName} stopped", nameof(DemoClientBgService));
     }
 
-    /// <summary>Reports the gateway's channels, which is diagnostic rather than required.</summary>
+    /// <summary>Reports the gateway's groups, which is diagnostic rather than required.</summary>
     /// <remarks>
     /// Send and subscribe are served by different roles and may live on different deployments, so
     /// a gateway without the send surface must not stop the demo subscribing.
     /// </remarks>
-    private async Task LogChannelsAsync(CancellationToken cancellationToken)
+    private async Task LogGroupsAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var channels = await client.GetChannelsAsync(cancellationToken).ConfigureAwait(false);
-            logger.LogInformation("{ClassName} gateway has {Count} channel(s): {Channels}",
-                nameof(DemoClientBgService), channels.Count, string.Join(", ", channels));
+            var groups = await client.GetGroupsAsync(cancellationToken).ConfigureAwait(false);
+            logger.LogInformation("{ClassName} gateway has {Count} configured Signal group(s)",
+                nameof(DemoClientBgService), groups.Count);
         }
         catch (SignalizrRoleNotEnabledException)
         {
@@ -75,10 +74,8 @@ public sealed class DemoClientBgService(
     {
         await foreach (var message in client.SubscribeAsync(cancellationToken).ConfigureAwait(false))
         {
-            // Channel and length only. The body is the sender's content and the sender is personal
-            // data, so neither belongs in a log, even in a demo.
-            logger.LogInformation("{ClassName} received {Length} character(s) on channel {Channel}",
-                nameof(DemoClientBgService), message.Message?.Length ?? 0, message.Channel ?? "(none)");
+            logger.LogInformation("{ClassName} received {Length} character(s)",
+                nameof(DemoClientBgService), message.Message?.Length ?? 0);
         }
 
         logger.LogInformation("{ClassName} subscription ended, resubscribing", nameof(DemoClientBgService));

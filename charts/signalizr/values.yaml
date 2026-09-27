@@ -1,7 +1,7 @@
 # ── signalizr umbrella values ────────────────────────────────────────
-# Each top-level key maps to a dependency or dependency alias in Chart.yaml. Values here are
+# Each top-level key maps to a dependency component in Chart.yaml. Values here are
 # public-safe defaults; a deployment supplies the private parts — the phone number,
-# the ingress host and the channel map — through its own values or a Secret.
+# the ingress host and the group map — through its own values or a Secret.
 #
 # Nothing in this file may contain a phone number, a group id, a hostname or any
 # other account-linked identifier.
@@ -56,12 +56,13 @@ signalizr:
     # Gateway role separately rather than raising replicaCount here.
     CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
     CasCap__SignalCliConfig__BaseAddress: http://signalcli:80
-    # Channels are declared by Signal group NAME and resolved to ids at startup, so no
+    # Groups are declared by Signal group NAME and resolved to ids at startup, so no
     # account-linked identifier is committed. Matching is exact and ordinal: a name that does not
     # match a group on the account fails startup rather than routing messages somewhere unintended.
-    # No channel is declared here: an example default would fail startup on every account that
+    # No group is declared here: an example default would fail startup on every account that
     # lacks that group, and Helm cannot remove a subchart map key once it is set. Add your own as
-    # CasCap__ChannelConfig__Channels__<channel>: <Signal group name>.
+    # CasCap__GroupConfig__GroupNames__0: <exact Signal group name>.
+    # Continue with __1, __2, etc. These exact names are the API group names.
   # The chiseled .NET image runs as APP_UID 1654. fsGroup makes a fresh PVC writable without
   # granting root privileges or adding an init container.
   podSecurityContext:

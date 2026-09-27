@@ -18,7 +18,7 @@ public sealed class TypingLeaseService(
 
     /// <summary>Shows the indicator now and keeps it alive until stopped or expired.</summary>
     /// <returns><see langword="false"/> when the wrapper rejected the first indicator.</returns>
-    public async Task<bool> StartAsync(string channelName, string groupId, CancellationToken cancellationToken = default)
+    public async Task<bool> StartAsync(string groupName, string groupId, CancellationToken cancellationToken = default)
     {
         var shown = await client.ShowTypingIndicator(signalCliConfig.Value.PhoneNumber, groupId, cancellationToken)
             .ConfigureAwait(false);
@@ -26,19 +26,19 @@ public sealed class TypingLeaseService(
             return false;
 
         var lease = new CancellationTokenSource();
-        var previous = _leases.AddOrUpdate(channelName, lease, (_, _) => lease);
+        var previous = _leases.AddOrUpdate(groupName, lease, (_, _) => lease);
         if (!ReferenceEquals(previous, lease))
             Release(previous);
 
-        _ = KeepAliveAsync(channelName, groupId, lease);
+        _ = KeepAliveAsync(groupName, groupId, lease);
         return true;
     }
 
-    /// <summary>Ends any held lease for the channel and clears the indicator.</summary>
+    /// <summary>Ends any held lease for the group and clears the indicator.</summary>
     /// <returns><see langword="false"/> when the wrapper rejected the clear.</returns>
-    public async Task<bool> StopAsync(string channelName, string groupId, CancellationToken cancellationToken = default)
+    public async Task<bool> StopAsync(string groupName, string groupId, CancellationToken cancellationToken = default)
     {
-        if (_leases.TryRemove(channelName, out var lease))
+        if (_leases.TryRemove(groupName, out var lease))
             Release(lease);
 
         return await client.HideTypingIndicator(signalCliConfig.Value.PhoneNumber, groupId, cancellationToken)
@@ -53,7 +53,7 @@ public sealed class TypingLeaseService(
         _leases.Clear();
     }
 
-    private async Task KeepAliveAsync(string channelName, string groupId, CancellationTokenSource lease)
+    private async Task KeepAliveAsync(string groupName, string groupId, CancellationTokenSource lease)
     {
         var refresh = TimeSpan.FromMilliseconds(gatewayConfig.Value.TypingRefreshIntervalMs);
         var maxDuration = TimeSpan.FromMilliseconds(gatewayConfig.Value.TypingMaxDurationMs);
@@ -70,11 +70,11 @@ public sealed class TypingLeaseService(
             }
 
             // Expired without a stop: the holder is gone or stuck, so the gateway clears it.
-            if (_leases.TryRemove(new KeyValuePair<string, CancellationTokenSource>(channelName, lease)))
+            if (_leases.TryRemove(new KeyValuePair<string, CancellationTokenSource>(groupName, lease)))
             {
                 await client.HideTypingIndicator(account, groupId, CancellationToken.None).ConfigureAwait(false);
-                logger.LogWarning("{ClassName} typing in channel {Channel} was not stopped within {MaxDuration}, cleared it",
-                    nameof(TypingLeaseService), channelName, maxDuration);
+                logger.LogWarning("{ClassName} typing was not stopped within {MaxDuration}, cleared it",
+                    nameof(TypingLeaseService), maxDuration);
                 lease.Dispose();
             }
         }
@@ -84,8 +84,8 @@ public sealed class TypingLeaseService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "{ClassName} could not refresh typing in channel {Channel}",
-                nameof(TypingLeaseService), channelName);
+            logger.LogWarning(ex, "{ClassName} could not refresh typing",
+                nameof(TypingLeaseService));
         }
     }
 

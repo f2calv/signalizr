@@ -1,0 +1,87 @@
+### Signalizr MCP
+### Discovery, query and prompt POSTs are read-only. The text-send example sends a real message.
+
+@baseUrl = {{$dotenv SIGNALIZR_BASE_URL}}
+@protocolVersion = 2025-11-25
+
+### Initialize
+# @name initialize
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"{{protocolVersion}}","capabilities":{},"clientInfo":{"name":"example-rest-client","version":"1.0.0"}}}
+
+### Initialized notification
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: {{protocolVersion}}
+
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+
+### Discover tools
+# @name listTools
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: {{protocolVersion}}
+
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+
+### Count live gRPC application clients
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: {{protocolVersion}}
+
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_signalizr_status","arguments":{}}}
+
+### List resolved group names
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: {{protocolVersion}}
+
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_signalizr_groups","arguments":{}}}
+
+### Read message history (separate opt-in required; may expose private text)
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: {{protocolVersion}}
+
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_signalizr_messages","arguments":{"groupName":"My Test Group Name","count":5}}}
+
+### Expected tool error: count outside the allowed range (history must be enabled)
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: {{protocolVersion}}
+
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_signalizr_messages","arguments":{"groupName":"My Test Group Name","count":51}}}
+
+### Discover reusable operator prompts
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: {{protocolVersion}}
+
+{"jsonrpc":"2.0","id":7,"method":"prompts/list","params":{}}
+
+### Get status-summary guidance (returns text; does not execute tools)
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: {{protocolVersion}}
+
+{"jsonrpc":"2.0","id":8,"method":"prompts/get","params":{"name":"summarise_signalizr_status"}}
+
+### Send text (separate sending opt-in required)
+# @note Sends a real Signal message to the named group. Confirm destination/content; do not retry automatically.
+POST {{baseUrl}}/mcp HTTP/1.1
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: {{protocolVersion}}
+
+{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"send_signalizr_message","arguments":{"groupName":"My Test Group Name","message":"Test complete"}}}

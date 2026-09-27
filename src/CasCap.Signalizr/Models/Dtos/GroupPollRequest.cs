@@ -1,7 +1,7 @@
 namespace CasCap.Models.Dtos;
 
-/// <summary>Creates a poll in a channel.</summary>
-public sealed record ChannelPollRequest
+/// <summary>Creates a poll in a group.</summary>
+public sealed record GroupPollRequest
 {
     /// <summary>The poll question.</summary>
     [Required, MinLength(1)]

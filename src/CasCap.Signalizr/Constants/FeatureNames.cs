@@ -14,7 +14,7 @@ public static class FeatureNames
     /// <summary>One-shot EF Core database migration role.</summary>
     public const string DbMigrator = nameof(DbMigrator);
 
-    /// <summary>Gateway surface — REST send, gRPC subscription, and named-channel resolution.</summary>
+    /// <summary>Gateway surface — REST send, gRPC subscription, and named-group resolution.</summary>
     public const string Gateway = nameof(Gateway);
 
     /// <summary>Owns the single inbound receive stream and fans messages out to subscribers.</summary>

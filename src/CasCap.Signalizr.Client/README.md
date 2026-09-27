@@ -1,7 +1,7 @@
 # CasCap.Signalizr.Client
 
 Client for the [signalizr](https://github.com/f2calv/signalizr) gateway: send, react, show typing
-and run polls on a named channel over REST, and subscribe to inbound messages over gRPC.
+and run polls on a named group over REST, and subscribe to inbound messages over gRPC.
 
 ## Install
 
@@ -41,7 +41,7 @@ use a stable replica identity only when each replica intentionally needs its own
 ## Send
 
 ```csharp
-var timestamp = await client.SendAsync("system", "deployment finished", cancellationToken);
+var timestamp = await client.SendAsync("My Test Group Name", "deployment finished", cancellationToken);
 ```
 
 Binary attachments use signal-cli-compatible data URIs and are MIME-agnostic:
@@ -52,36 +52,37 @@ string[] attachments =
   $"data:audio/ogg;filename=reply.ogg;base64,{Convert.ToBase64String(audioBytes)}"
 ];
 var timestamp = await client.SendAsync(
-  "system",
+  "My Test Group Name",
   "voice reply",
   attachments,
   cancellationToken);
 ```
 
-Channels are addressed by name. The gateway owns the Signal account, so a caller never names a
-group, a group id or a sender number. A `404` means the channel is not configured on that gateway;
-`GetChannelsAsync` lists the ones that are.
+Groups are addressed by exact Signal group display name, preserving case and spaces.
+The client URL-encodes names in the `groupName` query parameter. The gateway owns the Signal account, so a caller never supplies
+a group id or sender number. A `404` means the group name is not configured on that gateway;
+`GetGroupsAsync` lists the ones that are.
 
 ## Interact
 
-Reactions, typing indicators and polls use the same channel names:
+Reactions, typing indicators and polls use the same group names:
 
 ```csharp
 // React to a delivered message; the gateway resolves its sender and timestamp.
 await client.SetReactionAsync(message, "👀", cancellationToken);
 
 // Show typing while work runs. The gateway keeps it alive and clears it if the stop never comes.
-await client.StartTypingAsync("system", cancellationToken);
-await client.StopTypingAsync("system", cancellationToken);
+await client.StartTypingAsync("My Test Group Name", cancellationToken);
+await client.StopTypingAsync("My Test Group Name", cancellationToken);
 
 // React to a message this gateway sent by omitting the author.
-var sent = await client.SendAsync("system", "done", cancellationToken);
-await client.SetReactionAsync("system", "✅", long.Parse(sent, CultureInfo.InvariantCulture),
+var sent = await client.SendAsync("My Test Group Name", "done", cancellationToken);
+await client.SetReactionAsync("My Test Group Name", "✅", long.Parse(sent, CultureInfo.InvariantCulture),
   cancellationToken: cancellationToken);
 
-var pollId = await client.CreatePollAsync("system", "Deploy now?", ["Yes", "No"],
+var pollId = await client.CreatePollAsync("My Test Group Name", "Deploy now?", ["Yes", "No"],
   cancellationToken: cancellationToken);
-await client.ClosePollAsync("system", pollId, cancellationToken);
+await client.ClosePollAsync("My Test Group Name", pollId, cancellationToken);
 ```
 
 A vote arrives on the subscription as a `SignalizrMessage` whose `PollVote` names the poll and the
@@ -91,7 +92,7 @@ selected answer indexes.
 its own traffic without knowing the account. On an account linked to a person's phone the owner's
 messages are marked too; a consumer serving that owner must not drop them on this flag alone.
 
-The account profile is shared by every channel, so the client cannot change it. The gateway applies
+The account profile is shared by every group, so the client cannot change it. The gateway applies
 its configured profile name instead.
 
 ## Subscribe

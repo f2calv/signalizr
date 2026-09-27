@@ -1,7 +1,7 @@
 namespace CasCap.Models.Dtos;
 
-/// <summary>Sets or removes a reaction on a message in a channel.</summary>
-public sealed record ChannelReactionRequest
+/// <summary>Sets or removes a reaction on a message in a group.</summary>
+public sealed record GroupReactionRequest
 {
     /// <summary>The reaction emoji.</summary>
     [Required, MinLength(1)]

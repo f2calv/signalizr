@@ -59,7 +59,7 @@ var timestamp = await client.SendAsync(
 ```
 
 Groups are addressed by exact Signal group display name, preserving case and spaces.
-The client URL-encodes names. The gateway owns the Signal account, so a caller never supplies
+The client URL-encodes names in the `groupName` query parameter. The gateway owns the Signal account, so a caller never supplies
 a group id or sender number. A `404` means the group name is not configured on that gateway;
 `GetGroupsAsync` lists the ones that are.
 

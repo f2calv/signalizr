@@ -11,9 +11,10 @@ public sealed class GroupResolver(
         new Dictionary<string, string>(StringComparer.Ordinal);
 
     private IReadOnlyList<KeyValuePair<SignalGroup, string>> _groups = [];
+    private IReadOnlyCollection<string> _groupNames = [];
 
     /// <inheritdoc/>
-    public IReadOnlyCollection<string> GroupNames => Volatile.Read(ref _resolved).Keys.ToArray();
+    public IReadOnlyCollection<string> GroupNames => Volatile.Read(ref _groupNames);
 
     /// <inheritdoc/>
     public bool TryGetGroupId(string groupName, out string groupId)
@@ -40,6 +41,7 @@ public sealed class GroupResolver(
         var resolved = Resolve(groupConfig.Value.GroupNames, groups);
         Volatile.Write(ref _resolved, resolved);
         Volatile.Write(ref _groups, BuildInboundLookup(resolved, groups));
+        Volatile.Write(ref _groupNames, Array.AsReadOnly(resolved.Keys.ToArray()));
 
         logger.LogInformation("{ClassName} resolved {GroupCount} Signal group(s)",
             nameof(GroupResolver), resolved.Count);

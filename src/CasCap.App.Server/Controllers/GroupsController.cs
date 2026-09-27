@@ -27,21 +27,21 @@ public sealed class GroupsController(
         => Ok(groupResolver.GroupNames);
 
     /// <summary>Sends a message to a group.</summary>
-    [HttpPost("{groupName}/messages")]
+    [HttpPost("messages")]
     [ProducesResponseType<SendMessageResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public Task<ActionResult> SendMessage(
-        string groupName, [FromBody] SendMessageRequest request, CancellationToken cancellationToken)
+        [FromQuery] string groupName, [FromBody] SendMessageRequest request, CancellationToken cancellationToken)
         => ExecuteAsync(groupName, async () => Ok(await messageGateway.SendAsync(groupName, request, cancellationToken)));
 
     /// <summary>Sets a reaction on a message in a group, replacing any earlier one.</summary>
-    [HttpPost("{groupName}/reactions")]
+    [HttpPost("reactions")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public Task<ActionResult> SetReaction(
-        string groupName, [FromBody] GroupReactionRequest request, CancellationToken cancellationToken)
+        [FromQuery] string groupName, [FromBody] GroupReactionRequest request, CancellationToken cancellationToken)
         => ExecuteAsync(groupName, async () =>
         {
             await messageGateway.SetReactionAsync(groupName, request, cancellationToken);
@@ -49,12 +49,12 @@ public sealed class GroupsController(
         });
 
     /// <summary>Removes a reaction from a message in a group.</summary>
-    [HttpDelete("{groupName}/reactions")]
+    [HttpDelete("reactions")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public Task<ActionResult> RemoveReaction(
-        string groupName, [FromBody] GroupReactionRequest request, CancellationToken cancellationToken)
+        [FromQuery] string groupName, [FromBody] GroupReactionRequest request, CancellationToken cancellationToken)
         => ExecuteAsync(groupName, async () =>
         {
             await messageGateway.RemoveReactionAsync(groupName, request, cancellationToken);
@@ -62,13 +62,13 @@ public sealed class GroupsController(
         });
 
     /// <summary>Sets a reaction on a delivered message, addressed by its delivery identifier.</summary>
-    [HttpPost("{groupName}/messages/{deliveryId}/reactions")]
+    [HttpPost("messages/{deliveryId}/reactions")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status501NotImplemented)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public Task<ActionResult> SetDeliveryReaction(
-        string groupName, string deliveryId, [FromBody] DeliveryReactionRequest request, CancellationToken cancellationToken)
+        [FromQuery] string groupName, string deliveryId, [FromBody] DeliveryReactionRequest request, CancellationToken cancellationToken)
         => ExecuteAsync(groupName, async () =>
         {
             await messageGateway.SetDeliveryReactionAsync(groupName, deliveryId, request.Reaction, cancellationToken);
@@ -76,13 +76,13 @@ public sealed class GroupsController(
         });
 
     /// <summary>Removes a reaction from a delivered message, addressed by its delivery identifier.</summary>
-    [HttpDelete("{groupName}/messages/{deliveryId}/reactions")]
+    [HttpDelete("messages/{deliveryId}/reactions")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status501NotImplemented)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public Task<ActionResult> RemoveDeliveryReaction(
-        string groupName, string deliveryId, [FromBody] DeliveryReactionRequest request, CancellationToken cancellationToken)
+        [FromQuery] string groupName, string deliveryId, [FromBody] DeliveryReactionRequest request, CancellationToken cancellationToken)
         => ExecuteAsync(groupName, async () =>
         {
             await messageGateway.RemoveDeliveryReactionAsync(groupName, deliveryId, request.Reaction, cancellationToken);
@@ -90,11 +90,11 @@ public sealed class GroupsController(
         });
 
     /// <summary>Shows the typing indicator in a group and holds it until cleared or expired.</summary>
-    [HttpPut("{groupName}/typing")]
+    [HttpPut("typing")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
-    public Task<ActionResult> StartTyping(string groupName, CancellationToken cancellationToken)
+    public Task<ActionResult> StartTyping([FromQuery] string groupName, CancellationToken cancellationToken)
         => ExecuteAsync(groupName, async () =>
         {
             await messageGateway.StartTypingAsync(groupName, cancellationToken);
@@ -102,11 +102,11 @@ public sealed class GroupsController(
         });
 
     /// <summary>Clears the typing indicator in a group.</summary>
-    [HttpDelete("{groupName}/typing")]
+    [HttpDelete("typing")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
-    public Task<ActionResult> StopTyping(string groupName, CancellationToken cancellationToken)
+    public Task<ActionResult> StopTyping([FromQuery] string groupName, CancellationToken cancellationToken)
         => ExecuteAsync(groupName, async () =>
         {
             await messageGateway.StopTypingAsync(groupName, cancellationToken);
@@ -114,20 +114,20 @@ public sealed class GroupsController(
         });
 
     /// <summary>Creates a poll in a group.</summary>
-    [HttpPost("{groupName}/polls")]
+    [HttpPost("polls")]
     [ProducesResponseType<GroupPollResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public Task<ActionResult> CreatePoll(
-        string groupName, [FromBody] GroupPollRequest request, CancellationToken cancellationToken)
+        [FromQuery] string groupName, [FromBody] GroupPollRequest request, CancellationToken cancellationToken)
         => ExecuteAsync(groupName, async () => Ok(await messageGateway.CreatePollAsync(groupName, request, cancellationToken)));
 
     /// <summary>Closes a poll in a group.</summary>
-    [HttpDelete("{groupName}/polls/{pollId}")]
+    [HttpDelete("polls/{pollId}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
-    public Task<ActionResult> ClosePoll(string groupName, string pollId, CancellationToken cancellationToken)
+    public Task<ActionResult> ClosePoll([FromQuery] string groupName, string pollId, CancellationToken cancellationToken)
         => ExecuteAsync(groupName, async () =>
         {
             await messageGateway.ClosePollAsync(groupName, pollId, cancellationToken);

@@ -158,10 +158,11 @@ VS Code server definition, privacy limits, tool reference and the
 
 The group name is the exact Signal group display name, including case and spaces.
 A caller never supplies a group id or sender number, because the gateway owns
-the account. URL-encode the name in REST paths; the .NET client does this automatically.
+the account. Supply the URL-encoded `groupName` query parameter for REST operations; the .NET
+client does this automatically, preserving slashes, spaces and literal percent sequences.
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/groups/My%20Test%20Group%20Name/messages \
+curl -X POST 'http://localhost:8080/api/v1/groups/messages?groupName=My%20Test%20Group%20Name' \
   -H 'content-type: application/json' \
   -d '{"message":"deployment finished"}'
 ```
@@ -206,13 +207,13 @@ wrapper directly:
 
 | Operation | Request | Success |
 | --- | --- | --- |
-| Set a reaction | `POST /api/v1/groups/{groupName}/reactions` | `204` |
-| Remove a reaction | `DELETE /api/v1/groups/{groupName}/reactions` | `204` |
-| React to a delivered message | `POST` / `DELETE /api/v1/groups/{groupName}/messages/{deliveryId}/reactions` | `204` |
-| Show typing | `PUT /api/v1/groups/{groupName}/typing` | `204` |
-| Clear typing | `DELETE /api/v1/groups/{groupName}/typing` | `204` |
-| Create a poll | `POST /api/v1/groups/{groupName}/polls` | `200` with `{ "groupName", "pollId" }` |
-| Close a poll | `DELETE /api/v1/groups/{groupName}/polls/{pollId}` | `204` |
+| Set a reaction | `POST /api/v1/groups/reactions?groupName={name}` | `204` |
+| Remove a reaction | `DELETE /api/v1/groups/reactions?groupName={name}` | `204` |
+| React to a delivered message | `POST` / `DELETE /api/v1/groups/messages/{deliveryId}/reactions?groupName={name}` | `204` |
+| Show typing | `PUT /api/v1/groups/typing?groupName={name}` | `204` |
+| Clear typing | `DELETE /api/v1/groups/typing?groupName={name}` | `204` |
+| Create a poll | `POST /api/v1/groups/polls?groupName={name}` | `200` with `{ "groupName", "pollId" }` |
+| Close a poll | `DELETE /api/v1/groups/polls/{pollId}?groupName={name}` | `204` |
 
 A reaction body names the target by its timestamp and, for an inbound message, the sender it was
 delivered with. Omit `targetAuthor` to react to a message the gateway sent:

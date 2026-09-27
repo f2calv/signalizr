@@ -29,8 +29,8 @@ public sealed class SignalizrClient(
         IReadOnlyList<string>? base64Attachments,
         CancellationToken cancellationToken = default)
     {
-        var response = await httpClient
-            .PostAsJsonAsync($"api/v1/groups/{Uri.EscapeDataString(groupName)}/messages",
+        using var response = await httpClient
+            .PostAsJsonAsync(GroupRequestUri(groupName, "messages"),
                 new { message, base64Attachments }, cancellationToken)
             .ConfigureAwait(false);
 
@@ -208,7 +208,7 @@ public sealed class SignalizrClient(
         HttpContent? content,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(method, $"api/v1/groups/{Uri.EscapeDataString(groupName)}/{path}")
+        using var request = new HttpRequestMessage(method, GroupRequestUri(groupName, path))
         {
             Content = content
         };
@@ -234,6 +234,9 @@ public sealed class SignalizrClient(
 
         return response;
     }
+
+    private static string GroupRequestUri(string groupName, string path) =>
+        $"api/v1/groups/{path}?groupName={Uri.EscapeDataString(groupName)}";
 
     private static string RequireGroup(SignalizrMessage message) =>
         message.GroupName ?? throw new ArgumentException(

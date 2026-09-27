@@ -6,9 +6,10 @@ wrapper uses the application-specific
 gateway, the migration Job and the demo client use the
 [`workload`](https://github.com/f2calv/helm-charts/tree/main/charts/workload) chart directly.
 
-The chart is published to `oci://ghcr.io/f2calv/charts/signalizr` under the application release
-version, the same version as the `ghcr.io/f2calv/signalizr` image. The version in `Chart.yaml` is a
-placeholder replaced at packaging.
+The chart's publication location is `oci://ghcr.io/f2calv/charts/signalizr`. Packaging uses the
+application release version, matching the image; `Chart.yaml` contains a packaging placeholder.
+CI validates and packages the chart but does not publish it automatically. Use an explicitly
+published version when installing; see [Development and Packaging](../../README.md#development-and-packaging).
 
 ## Dependency Graph
 
@@ -31,7 +32,7 @@ graph LR
 ```
 
 The `signalcli` dependency owns the registered Signal account and persistent state, including the
-stable `signalcli` Service name consumed by the gateway. The `signalizr` alias runs the Gateway and
+stable `signalcli` Service name consumed by the gateway. The `signalizr` component runs the Gateway and
 Receiver roles, `migrate` applies EF Core migrations, and `demo` runs the optional DemoClient role.
 
 ## Install
@@ -82,7 +83,7 @@ spec:
           image:
             tag: <version>
           envVars:
-            CasCap__ChannelConfig__Channels__system: My System Group
+            CasCap__GroupConfig__GroupNames__0: My Test Group Name
         migrate:
           image:
             tag: <version>
@@ -106,8 +107,9 @@ spec:
      --from-literal=CasCap__SignalCliConfig__PhoneNumber='+10000000000'
    ```
 
-3. Declare each channel by its Signal group name in
-   `signalizr.envVars.CasCap__ChannelConfig__Channels__<channel>`. Names are resolved to group ids
+3. Declare each group by its Signal group name in
+   `signalizr.envVars.CasCap__GroupConfig__GroupNames__0` (then `__1`, `__2`, etc.).
+   API group names are these exact case-sensitive Signal group names. Names are resolved to group ids
    at startup, and a name that matches no group fails startup rather than routing messages
    somewhere unintended.
 
@@ -120,7 +122,7 @@ spec:
 | `signalizr.image.tag` | `""` | Always set it; an empty tag falls back to the workload chart's `appVersion` |
 | `signalizr.service` | port 80 to 8080 | REST send surface, health endpoints and metrics |
 | `signalizr.extraPorts` | `grpc` on 5001 | The gRPC subscription surface |
-| `signalizr.envVars.CasCap__ChannelConfig__Channels__*` | none | Declare one per channel; the chart ships no example, because a default naming a missing group fails startup and cannot be removed by an override |
+| `signalizr.envVars.CasCap__GroupConfig__GroupNames__*` | none | Indexed exact Signal group names; no default groups |
 | `signalizr.envSecrets` | phone number from Secret `signalizr` | Personal data never goes in values |
 | `migrate.kind` | `Job` | Renders on every sync; see below |
 | `demo.replicaCount` | `0` | Set `1` to run the DemoClient role against the gateway |

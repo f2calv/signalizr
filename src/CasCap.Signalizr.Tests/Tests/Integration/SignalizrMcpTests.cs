@@ -94,6 +94,7 @@ public sealed class SignalizrMcpTests
         }, TestContext.Current.CancellationToken);
         var initialized = await ReadProtocolResultAsync(initialize);
         Assert.Equal("2025-11-25", initialized.GetProperty("protocolVersion").GetString());
+        Assert.True(initialized.GetProperty("capabilities").TryGetProperty("prompts", out _));
         Assert.False(initialize.Headers.Contains("Mcp-Session-Id"));
         httpClient.DefaultRequestHeaders.Add("MCP-Protocol-Version", "2025-11-25");
 
@@ -105,6 +106,47 @@ public sealed class SignalizrMcpTests
             new { jsonrpc = "2.0", id = 2, method = "tools/list", @params = new { } },
             TestContext.Current.CancellationToken);
         Assert.Equal(2, (await ReadProtocolResultAsync(tools)).GetProperty("tools").GetArrayLength());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Prompt_DiscoveryAndRetrievalProvideMetadataOnlyGuidance(bool historyEnabled)
+    {
+        await using var fixture = await Fixture.CreateAsync(historyEnabled: historyEnabled);
+        using var httpClient = new HttpClient();
+        httpClient.DefaultRequestHeaders.Add("Accept", "application/json, text/event-stream");
+        httpClient.DefaultRequestHeaders.Add("MCP-Protocol-Version", "2025-11-25");
+
+        using var listResponse = await httpClient.PostAsJsonAsync(fixture.Endpoint,
+            new { jsonrpc = "2.0", id = 1, method = "prompts/list", @params = new { } },
+            TestContext.Current.CancellationToken);
+        var list = await ReadProtocolResultAsync(listResponse);
+        var prompt = Assert.Single(list.GetProperty("prompts").EnumerateArray());
+        Assert.Equal("summarise_signalizr_status", prompt.GetProperty("name").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(prompt.GetProperty("description").GetString()));
+        if (prompt.TryGetProperty("arguments", out var arguments))
+            Assert.Empty(arguments.EnumerateArray());
+
+        using var getResponse = await httpClient.PostAsJsonAsync(fixture.Endpoint,
+            new
+            {
+                jsonrpc = "2.0",
+                id = 2,
+                method = "prompts/get",
+                @params = new { name = "summarise_signalizr_status" }
+            },
+            TestContext.Current.CancellationToken);
+        var result = await ReadProtocolResultAsync(getResponse);
+        var message = Assert.Single(result.GetProperty("messages").EnumerateArray());
+        Assert.Equal("user", message.GetProperty("role").GetString());
+        Assert.Equal("text", message.GetProperty("content").GetProperty("type").GetString());
+        var text = message.GetProperty("content").GetProperty("text").GetString();
+        Assert.NotNull(text);
+        Assert.Contains("get_signalizr_status", text);
+        Assert.Contains("get_signalizr_groups", text);
+        Assert.Contains("Do not retrieve message history", text);
+        Assert.DoesNotContain("get_signalizr_messages", text);
     }
 
     [Fact]
@@ -264,7 +306,7 @@ public sealed class SignalizrMcpTests
     public async Task History_CancellationPropagates()
     {
         await using var fixture = await Fixture.CreateAsync(historyEnabled: true);
-        var service = new SignalizrMessageHistoryQueryService(
+        var service = new SignalizrMcpMessageHistoryQueryService(
             fixture.App.Services.GetRequiredService<IGroupResolver>(), fixture.Database);
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();

@@ -91,6 +91,19 @@ Restart the MCP client or refresh its tool inventory after changing the server's
 For a Dev Container or remote VS Code session, the endpoint must be reachable from that extension
 host; its loopback address is not necessarily your workstation.
 
+## Status summary prompt
+
+`summarise_signalizr_status` is a reusable prompt with no arguments. It asks the client to use
+`get_signalizr_status` and `get_signalizr_groups`, report the application-client count and its
+observation time, and list the exact served group names. It does not request message history or
+changes to the application.
+
+Choose it from your MCP client's prompt picker when available. Clients can discover it through
+`prompts/list` and retrieve it through `prompts/get`; the
+[request collection](../requests/signalizr-mcp.http) includes both operations. Retrieving a prompt
+returns guidance, not live status: the client decides whether to execute its suggested tool calls.
+It is available whenever the MCP role is enabled, independently of the history disclosure switch.
+
 ## Tools
 
 | Tool | Inputs | Result |
@@ -149,7 +162,25 @@ negotiation path; the SDK owns protocol negotiation, not handwritten JSON-RPC ro
 
 The credential-free `SignalizrMcpTests` exercise the real HTTP transport, live registry and local
 SQLite query translation. They cover feature gates, tool metadata, output shape, connect/disconnect
-counts, group isolation, invalid bounds, truncation and cancellation.
+counts, group isolation, invalid bounds, truncation and cancellation. Prompt coverage checks
+discovery and retrieval with history enabled and disabled.
+
+## Source layout
+
+| Component | Source |
+| --- | --- |
+| Registration and route gating | [McpServiceExtensions](../src/CasCap.App.Server/Extensions/McpServiceExtensions.cs) |
+| Status and group tools | [SignalizrMcpQueryService](../src/CasCap.App.Server/Services/SignalizrMcpQueryService.cs) |
+| Message history tool | [SignalizrMcpMessageHistoryQueryService](../src/CasCap.App.Server/Services/SignalizrMcpMessageHistoryQueryService.cs) |
+| Operator prompts | [SignalizrMcpPrompts](../src/CasCap.App.Server/Models/SignalizrMcpPrompts.cs) |
+| MCP options | [McpConfig](../src/CasCap.App.Server/Models/McpConfig.cs) |
+| Output DTOs | `SignalizrMcp*Response` records in [Models/Dtos](../src/CasCap.App.Server/Models/Dtos) |
+| Protocol coverage | [SignalizrMcpTests](../src/CasCap.Signalizr.Tests/Tests/Integration/SignalizrMcpTests.cs) |
+
+MCP-specific filenames contain `Mcp`, so scoped guidance applies without pulling shared runtime
+services into the transport layer. [GroupsController](../src/CasCap.App.Server/Controllers/GroupsController.cs)
+owns `/api/v1/groups`; [IGroupResolver](../src/CasCap.Signalizr/Abstractions/IGroupResolver.cs)
+and the subscriber registry remain shared application components.
 
 Issue [#26](https://github.com/f2calv/signalizr/issues/26) originally included sending, reactions and
 poll actions. Those write tools and remote authentication remain deferred; the initial implementation

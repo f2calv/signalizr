@@ -81,11 +81,11 @@ A single container image, with the role selected by feature flag:
 
 | Feature | Default | Role |
 | --- | --- | --- |
-| `DbMigrator` | off | Applies pending EF Core migrations, then exits |
 | `Gateway` | on | REST send surface and named-group resolution |
 | `Receiver` | on | Owns the receive stream, persists messages and serves gRPC subscriptions |
-| `DemoClient` | off | Sample thin client, for evaluating the gateway without writing one |
 | `Mcp` | off | Read-only HTTP MCP tools; requires `Gateway,Receiver` in the same process |
+| `DemoClient` | off | Sample thin client, for evaluating the gateway without writing one |
+| `DbMigrator` | off | Applies pending EF Core migrations, then exits |
 
 ## Transports
 
@@ -93,7 +93,7 @@ A single container image, with the role selected by feature flag:
 | --- | --- | --- |
 | Send and group interactions | REST | `curl`-able, webhook-able, and usable without generating a client |
 | Inbound subscription | gRPC bidirectional streaming | Long-lived and typed, with an ack channel so delivery is not fire-and-forget |
-| Operator queries | MCP Streamable HTTP at `/mcp` | VS Code queries over live subscribers, resolved groups and optionally persisted message previews |
+| Operator queries | MCP Streamable HTTP at `/mcp` | Queries over live subscribers, resolved groups and optionally persisted message previews |
 
 ## Querying from VS Code
 
@@ -103,8 +103,9 @@ group-scoped inbound message previews from the existing database. Both MCP and m
 are disabled by default.
 
 See the [MCP setup guide](docs/mcp.md) for a localhost-only Kubernetes port-forward, a
-VS Code server definition, privacy limits and tool reference.
-[Executable request examples](requests/README.md) cover the handshake and tool calls.
+VS Code server definition, privacy limits, tool reference and the
+[`summarise_signalizr_status` prompt](docs/mcp.md#status-summary-prompt).
+[Executable request examples](requests/README.md) cover the handshake, tools and prompts.
 
 ## Sending
 
@@ -317,23 +318,6 @@ Two first-class targets, sharing one configuration shape:
 
 The independent [dashboard chart](charts/signalizr-dashboards/README.md) publishes the
 `charts/signalizr-dashboards` OCI package for deployment into a Grafana monitoring namespace.
-
-## Development and Packaging
-
-The root [build.ps1](build.ps1), [build.sh](build.sh) and [deploy.ps1](deploy.ps1) entry points
-delegate to the shared
-[container-workflows skill](https://github.com/f2calv/.github/tree/main/.github/skills/container-workflows).
-Deployment-specific settings come from the gitignored `deploy.local.psd1`; the
-[example file](deploy.local.psd1.example) lists the available inputs.
-
-[CI](.github/workflows/ci.yml) builds the Release solution, packages the client, and validates
-both charts against their `ci/` fixtures. The application chart is packaged with the application
-version; CI does not push that chart (`push-chart: false`), so chart publication is a separate step.
-
-The [dashboard workflow](.github/workflows/deploy-dashboards.yml) publishes the dashboard chart
-using its own `Chart.yaml` version. Its deployment-update job uses caller-configured repository
-variables. For dashboard-only iteration, `deploy.ps1 -OnlyCharts` publishes a development chart
-without rebuilding the application image.
 
 ## Observability
 

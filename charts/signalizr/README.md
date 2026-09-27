@@ -8,8 +8,8 @@ gateway, the migration Job and the demo client use the
 
 The chart's publication location is `oci://ghcr.io/f2calv/charts/signalizr`. Packaging uses the
 application release version, matching the image; `Chart.yaml` contains a packaging placeholder.
-CI validates and packages the chart but does not publish it automatically. Use an explicitly
-published version when installing; see [Development and Packaging](../../README.md#development-and-packaging).
+[CI](../../.github/workflows/ci.yml) validates and packages the chart but does not publish it
+automatically. Use an explicitly published version when installing.
 
 ## Dependency Graph
 

@@ -16,6 +16,9 @@ All POSTs here are read-only protocol operations. No session ID is required beca
 stateless. Responses can be JSON or SSE (`data:` lines containing JSON-RPC); both are accepted.
 An initialized notification normally returns 202.
 
+The prompt examples list available prompts and retrieve `summarise_signalizr_status`. Retrieval
+returns a reusable instruction message; it does not call tools or read live application data.
+
 The history example requires its separate opt-in and uses a synthetic `My Test Group Name` group. Replace
 the group with one discovered by the group tool. Its response can expose private conversation
 text, so do not copy it into issues, logs or commits.

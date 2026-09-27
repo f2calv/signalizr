@@ -3,7 +3,7 @@ using ModelContextProtocol.AspNetCore;
 
 namespace CasCap.Extensions;
 
-/// <summary>Registers and maps only the explicitly enabled MCP tools.</summary>
+/// <summary>Registers and maps only the explicitly enabled MCP tools and prompts.</summary>
 public static class McpServiceExtensions
 {
     /// <summary>Adds the opt-in MCP services alongside the gateway and receiver.</summary>
@@ -17,10 +17,11 @@ public static class McpServiceExtensions
             .Get<McpConfig>() ?? new McpConfig();
         var mcp = services.AddMcpServer()
             .WithHttpTransport(options => options.SessionMode = HttpServerSessionMode.Stateless)
-            .WithTools<SignalizrMcpQueryService>();
+            .WithTools<SignalizrMcpQueryService>()
+            .WithPrompts<SignalizrMcpPrompts>();
 
         if (mcpConfig.MessageHistoryEnabled)
-            mcp.WithTools<SignalizrMessageHistoryQueryService>();
+            mcp.WithTools<SignalizrMcpMessageHistoryQueryService>();
 
         return services;
     }

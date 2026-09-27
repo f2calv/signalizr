@@ -36,6 +36,11 @@ public sealed record FeatureConfig
                 $"Unrecognised feature name(s): {string.Join(", ", unknown)}. " +
                 $"Valid names: {string.Join(", ", FeatureNames.ValidNames)}.");
 
+        if (features.Contains(FeatureNames.Mcp)
+            && (!features.Contains(FeatureNames.Gateway) || !features.Contains(FeatureNames.Receiver)))
+            throw new InvalidOperationException(
+                "The Mcp role requires Gateway and Receiver in the same process for resolved groups and live subscriber counts.");
+
         return features;
     }
 }

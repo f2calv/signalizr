@@ -12,6 +12,8 @@ public class FeatureConfigTests
     [InlineData("Gateway,Receiver", 2)]
     [InlineData(" gateway , RECEIVER ", 2)]
     [InlineData("DemoClient", 1)]
+    [InlineData("Gateway,Receiver,Mcp", 3)]
+    [InlineData("gateway,receiver,mcp", 3)]
     public void GetEnabledFeatures_ParsesKnownNames(string value, int expectedCount)
     {
         var config = new FeatureConfig { EnabledFeatures = value };
@@ -46,6 +48,20 @@ public class FeatureConfigTests
         var config = new FeatureConfig { EnabledFeatures = value };
 
         Assert.Throws<InvalidOperationException>(config.GetEnabledFeatures);
+    }
+
+    [Theory]
+    [InlineData("Mcp")]
+    [InlineData("Gateway,Mcp")]
+    [InlineData("Receiver,Mcp")]
+    [InlineData("DemoClient,Mcp")]
+    public void GetEnabledFeatures_McpRequiresLiveGatewayAndReceiver(string value)
+    {
+        var config = new FeatureConfig { EnabledFeatures = value };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.GetEnabledFeatures);
+
+        Assert.Contains("requires Gateway and Receiver", exception.Message);
     }
 
     [Fact]

@@ -35,8 +35,8 @@ message InboundMessage {
   // Durable Signalizr message sequence. Subscriber acknowledgements advance independent cursors.
   string delivery_id = 1;
 
-  // The configured channel name, or empty when the message did not arrive on a known channel.
-  string channel = 2;
+  // The configured Signal group name, or empty when the message did not arrive on a known group.
+  string group_name = 2;
 
   // The sender's Signal identifier. Personal data: never log it, never put it in a metric label
   // or a trace attribute.

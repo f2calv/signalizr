@@ -76,9 +76,9 @@ services:
       CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
       CasCap__SignalCliConfig__BaseAddress: http://signal-cli-rest-api:8080
       CasCap__SignalCliConfig__PhoneNumber: ${SIGNALIZR_PHONE_NUMBER:-+10000000000}
-      # Example channels: create Signal groups with these names on the account, or rename them.
-      CasCap__ChannelConfig__Channels__system: CasCap.Signalizr System
-      CasCap__ChannelConfig__Channels__demo: CasCap.Signalizr Demo
+      # Example groups: create Signal groups with these names on the account, or rename them.
+      CasCap__GroupConfig__GroupNames__0: CasCap.Signalizr System
+      CasCap__GroupConfig__GroupNames__1: CasCap.Signalizr Demo
       ASPNETCORE_ENVIRONMENT: Development
     ports:
       - "8080:8080"

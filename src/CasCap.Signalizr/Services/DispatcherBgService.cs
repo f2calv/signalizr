@@ -4,7 +4,7 @@ namespace CasCap.Services;
 
 /// <summary>Drains the inbound queue and fans each message out to connected subscribers.</summary>
 /// <remarks>
-/// Separate from the receive loop on purpose. This is where per-message work belongs — channel
+/// Separate from the receive loop on purpose. This is where per-message work belongs — group
 /// resolution, mapping and fan-out — because time spent here does not stop the upstream being read.
 /// </remarks>
 public sealed class DispatcherBgService(
@@ -12,7 +12,7 @@ public sealed class DispatcherBgService(
     IOptions<SignalCliConfig> signalCliConfig,
     IInboundMessageQueue queue,
     IInboundSubscriberRegistry subscribers,
-    IChannelResolver channelResolver,
+    IGroupResolver groupResolver,
     TimeProvider timeProvider,
     SignalizrMetrics metrics,
     InboundMessagePersistenceService persistenceSvc) : IBgFeature
@@ -27,7 +27,7 @@ public sealed class DispatcherBgService(
 
         await foreach (var message in queue.DequeueAllAsync(cancellationToken).ConfigureAwait(false))
         {
-            var delivery = CreateDelivery(message, channelResolver, signalCliConfig.Value.PhoneNumber);
+            var delivery = CreateDelivery(message, groupResolver, signalCliConfig.Value.PhoneNumber);
 
             // Receipts and typing indicators carry no content at all. Skipping them here saves
             // every consumer from filtering out empty messages.
@@ -45,27 +45,27 @@ public sealed class DispatcherBgService(
         logger.LogInformation("{ClassName} stopped", nameof(DispatcherBgService));
     }
 
-    /// <summary>Maps an upstream message onto a delivery, resolving the group to a channel name.</summary>
+    /// <summary>Maps an upstream message onto a delivery, resolving the group to a group name.</summary>
     /// <remarks>
     /// Separated from the loop so the mapping is testable without a queue or a Signal account. The
     /// identifier is replaced per subscriber during fan-out.
     /// </remarks>
     /// <param name="message">The upstream envelope.</param>
-    /// <param name="channelResolver">Resolves the envelope's group to a channel name.</param>
+    /// <param name="groupResolver">Resolves the envelope's group to a group name.</param>
     /// <param name="accountNumber">The gateway's own account, used to mark its own messages.</param>
     /// <returns><see langword="null"/> when the envelope carries no content, such as a receipt or
     /// a typing indicator.</returns>
     public static InboundDelivery? CreateDelivery(
-        SignalReceivedMessage message, IChannelResolver channelResolver, string accountNumber)
+        SignalReceivedMessage message, IGroupResolver groupResolver, string accountNumber)
     {
         var notification = (IReceivedNotification)message;
         if (!notification.HasContent)
             return null;
 
-        string? channel = null;
+        string? groupName = null;
         if (notification.GroupId is not null
-            && channelResolver.TryGetChannelName(notification.GroupId, out var resolved))
-            channel = resolved;
+            && groupResolver.TryGetGroupName(notification.GroupId, out var resolved))
+            groupName = resolved;
 
         var envelope = message.Envelope;
         var content = envelope.DataMessage ?? envelope.SyncMessage?.SentMessage;
@@ -78,7 +78,7 @@ public sealed class DispatcherBgService(
         return new InboundDelivery
         {
             DeliveryId = string.Empty,
-            Channel = channel,
+            GroupName = groupName,
             Sender = notification.Sender,
             Message = notification.Message,
             Timestamp = notification.Timestamp ?? envelope.Timestamp,

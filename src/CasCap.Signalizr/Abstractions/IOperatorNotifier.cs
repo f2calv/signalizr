@@ -2,8 +2,8 @@ namespace CasCap.Abstractions;
 
 /// <summary>Posts gateway operational notices to the account's own "Note to Self" conversation.</summary>
 /// <remarks>
-/// For the operator of the account, not for channel consumers. Notices carry subscriber names,
-/// channel names and counts only — never a phone number, a group id or message content.
+/// For the operator of the account, not for group consumers. Notices carry subscriber names,
+/// group names and counts only — never a phone number, a group id or message content.
 /// </remarks>
 public interface IOperatorNotifier
 {

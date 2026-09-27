@@ -17,27 +17,27 @@ public sealed class SignalizrClient(
 {
     /// <inheritdoc/>
     public Task<string> SendAsync(
-        string channel,
+        string groupName,
         string message,
         CancellationToken cancellationToken = default) =>
-        SendAsync(channel, message, base64Attachments: null, cancellationToken);
+        SendAsync(groupName, message, base64Attachments: null, cancellationToken);
 
     /// <inheritdoc/>
     public async Task<string> SendAsync(
-        string channel,
+        string groupName,
         string message,
         IReadOnlyList<string>? base64Attachments,
         CancellationToken cancellationToken = default)
     {
         var response = await httpClient
-            .PostAsJsonAsync($"api/v1/channels/{Uri.EscapeDataString(channel)}/messages",
+            .PostAsJsonAsync($"api/v1/groups/{Uri.EscapeDataString(groupName)}/messages",
                 new { message, base64Attachments }, cancellationToken)
             .ConfigureAwait(false);
 
         if (response.StatusCode is HttpStatusCode.NotFound)
         {
             throw new HttpRequestException(
-                $"Channel '{channel}' is not configured on this gateway, or it does not run the " +
+                $"Group '{groupName}' is not configured on this gateway, or it does not run the " +
                 "Gateway role.", null, response.StatusCode);
         }
 
@@ -60,9 +60,9 @@ public sealed class SignalizrClient(
             cancellationToken);
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<string>> GetChannelsAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default)
     {
-        var response = await httpClient.GetAsync("api/v1/channels", cancellationToken).ConfigureAwait(false);
+        var response = await httpClient.GetAsync("api/v1/groups", cancellationToken).ConfigureAwait(false);
 
         // A gateway that does not run the Gateway role does not route this path at all, which is a
         // different problem from being unreachable and must not be reported as one.
@@ -81,51 +81,51 @@ public sealed class SignalizrClient(
 
     /// <inheritdoc/>
     public Task SetReactionAsync(
-        string channel,
+        string groupName,
         string reaction,
         long targetTimestamp,
         string? targetAuthor = null,
         CancellationToken cancellationToken = default) =>
-        SendChannelRequestAsync(HttpMethod.Post, channel, "reactions",
+        SendGroupRequestAsync(HttpMethod.Post, groupName, "reactions",
             JsonContent.Create(new { reaction, targetTimestamp, targetAuthor }), cancellationToken);
 
     /// <inheritdoc/>
     public Task RemoveReactionAsync(
-        string channel,
+        string groupName,
         string reaction,
         long targetTimestamp,
         string? targetAuthor = null,
         CancellationToken cancellationToken = default) =>
-        SendChannelRequestAsync(HttpMethod.Delete, channel, "reactions",
+        SendGroupRequestAsync(HttpMethod.Delete, groupName, "reactions",
             JsonContent.Create(new { reaction, targetTimestamp, targetAuthor }), cancellationToken);
 
     /// <inheritdoc/>
     public Task SetReactionAsync(SignalizrMessage message, string reaction, CancellationToken cancellationToken = default) =>
-        SendChannelRequestAsync(HttpMethod.Post, RequireChannel(message), DeliveryReactionsPath(message),
+        SendGroupRequestAsync(HttpMethod.Post, RequireGroup(message), DeliveryReactionsPath(message),
             JsonContent.Create(new { reaction }), cancellationToken);
 
     /// <inheritdoc/>
     public Task RemoveReactionAsync(SignalizrMessage message, string reaction, CancellationToken cancellationToken = default) =>
-        SendChannelRequestAsync(HttpMethod.Delete, RequireChannel(message), DeliveryReactionsPath(message),
+        SendGroupRequestAsync(HttpMethod.Delete, RequireGroup(message), DeliveryReactionsPath(message),
             JsonContent.Create(new { reaction }), cancellationToken);
 
     /// <inheritdoc/>
-    public Task StartTypingAsync(string channel, CancellationToken cancellationToken = default) =>
-        SendChannelRequestAsync(HttpMethod.Put, channel, "typing", content: null, cancellationToken);
+    public Task StartTypingAsync(string groupName, CancellationToken cancellationToken = default) =>
+        SendGroupRequestAsync(HttpMethod.Put, groupName, "typing", content: null, cancellationToken);
 
     /// <inheritdoc/>
-    public Task StopTypingAsync(string channel, CancellationToken cancellationToken = default) =>
-        SendChannelRequestAsync(HttpMethod.Delete, channel, "typing", content: null, cancellationToken);
+    public Task StopTypingAsync(string groupName, CancellationToken cancellationToken = default) =>
+        SendGroupRequestAsync(HttpMethod.Delete, groupName, "typing", content: null, cancellationToken);
 
     /// <inheritdoc/>
     public async Task<string> CreatePollAsync(
-        string channel,
+        string groupName,
         string question,
         IReadOnlyList<string> answers,
         bool allowMultipleSelections = false,
         CancellationToken cancellationToken = default)
     {
-        using var response = await SendChannelRequestCoreAsync(HttpMethod.Post, channel, "polls",
+        using var response = await SendGroupRequestCoreAsync(HttpMethod.Post, groupName, "polls",
             JsonContent.Create(new { question, answers, allowMultipleSelections }), cancellationToken)
             .ConfigureAwait(false);
 
@@ -138,8 +138,8 @@ public sealed class SignalizrClient(
     }
 
     /// <inheritdoc/>
-    public Task ClosePollAsync(string channel, string pollId, CancellationToken cancellationToken = default) =>
-        SendChannelRequestAsync(HttpMethod.Delete, channel, $"polls/{Uri.EscapeDataString(pollId)}",
+    public Task ClosePollAsync(string groupName, string pollId, CancellationToken cancellationToken = default) =>
+        SendGroupRequestAsync(HttpMethod.Delete, groupName, $"polls/{Uri.EscapeDataString(pollId)}",
             content: null, cancellationToken);
 
     /// <inheritdoc/>
@@ -159,7 +159,7 @@ public sealed class SignalizrClient(
             yield return new SignalizrMessage
             {
                 DeliveryId = message.DeliveryId,
-                Channel = string.IsNullOrEmpty(message.Channel) ? null : message.Channel,
+                GroupName = string.IsNullOrEmpty(message.GroupName) ? null : message.GroupName,
                 Sender = string.IsNullOrEmpty(message.Sender) ? null : message.Sender,
                 Message = message.Message,
                 Timestamp = message.Timestamp,
@@ -190,25 +190,25 @@ public sealed class SignalizrClient(
         }
     }
 
-    private async Task SendChannelRequestAsync(
+    private async Task SendGroupRequestAsync(
         HttpMethod method,
-        string channel,
+        string groupName,
         string path,
         HttpContent? content,
         CancellationToken cancellationToken)
     {
-        using var response = await SendChannelRequestCoreAsync(method, channel, path, content, cancellationToken)
+        using var response = await SendGroupRequestCoreAsync(method, groupName, path, content, cancellationToken)
             .ConfigureAwait(false);
     }
 
-    private async Task<HttpResponseMessage> SendChannelRequestCoreAsync(
+    private async Task<HttpResponseMessage> SendGroupRequestCoreAsync(
         HttpMethod method,
-        string channel,
+        string groupName,
         string path,
         HttpContent? content,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(method, $"api/v1/channels/{Uri.EscapeDataString(channel)}/{path}")
+        using var request = new HttpRequestMessage(method, $"api/v1/groups/{Uri.EscapeDataString(groupName)}/{path}")
         {
             Content = content
         };
@@ -218,7 +218,7 @@ public sealed class SignalizrClient(
         {
             response.Dispose();
             throw new HttpRequestException(
-                $"Channel '{channel}' is not configured on this gateway, or it does not run the " +
+                $"Group '{groupName}' is not configured on this gateway, or it does not run the " +
                 "Gateway role.", null, HttpStatusCode.NotFound);
         }
 
@@ -235,14 +235,14 @@ public sealed class SignalizrClient(
         return response;
     }
 
-    private static string RequireChannel(SignalizrMessage message) =>
-        message.Channel ?? throw new ArgumentException(
-            "The message arrived on no configured channel, so there is nothing to react through.", nameof(message));
+    private static string RequireGroup(SignalizrMessage message) =>
+        message.GroupName ?? throw new ArgumentException(
+            "The message arrived on no configured groupName, so there is nothing to react through.", nameof(message));
 
     private static string DeliveryReactionsPath(SignalizrMessage message) =>
         $"messages/{Uri.EscapeDataString(message.DeliveryId)}/reactions";
 
-    private sealed record SendResult(string Channel, string Timestamp);
+    private sealed record SendResult(string GroupName, string Timestamp);
 
-    private sealed record PollResult(string Channel, string PollId);
+    private sealed record PollResult(string GroupName, string PollId);
 }

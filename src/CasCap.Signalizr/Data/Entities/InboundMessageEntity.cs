@@ -6,8 +6,8 @@ public sealed class InboundMessageEntity
     /// <summary>Monotonic message sequence used as the delivery identifier.</summary>
     public long Id { get; set; }
 
-    /// <summary>The configured channel name, or <see langword="null"/> when unresolved.</summary>
-    public string? Channel { get; set; }
+    /// <summary>The configured group name, or <see langword="null"/> when unresolved.</summary>
+    public string? GroupName { get; set; }
 
     /// <summary>The sender identifier. Personal data: never log or expose as a telemetry attribute.</summary>
     public string? Sender { get; set; }

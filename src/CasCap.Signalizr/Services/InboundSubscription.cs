@@ -77,7 +77,7 @@ public sealed class InboundSubscription : IDisposable
                 yield return new InboundDelivery
                 {
                     DeliveryId = message.Id.ToString(CultureInfo.InvariantCulture),
-                    Channel = message.Channel,
+                    GroupName = message.GroupName,
                     Sender = message.Sender,
                     Message = message.Message,
                     Timestamp = message.Timestamp,

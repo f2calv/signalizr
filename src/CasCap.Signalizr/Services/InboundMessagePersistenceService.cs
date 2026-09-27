@@ -26,7 +26,7 @@ public sealed class InboundMessagePersistenceService(
             .ToArray() ?? [];
         var entity = new InboundMessageEntity
         {
-            Channel = delivery.Channel,
+            GroupName = delivery.GroupName,
             Sender = delivery.Sender,
             Message = delivery.Message,
             Timestamp = delivery.Timestamp,

@@ -1,16 +1,16 @@
 namespace CasCap.Services;
 
-/// <summary>Prepares the gateway surface: named-channel resolution and account profile policy.</summary>
+/// <summary>Prepares the gateway surface: named-group resolution and account profile policy.</summary>
 /// <remarks>
-/// Stateless, so every replica runs it. The REST channel surface itself is served by the
-/// feature-gated controllers once channels resolve.
+/// Stateless, so every replica runs it. The REST group surface itself is served by the
+/// feature-gated controllers once groups resolve.
 /// </remarks>
 public sealed class GatewayBgService(
     ILogger<GatewayBgService> logger,
     IOptions<SignalCliConfig> signalCliConfig,
     IOptions<GatewayConfig> gatewayConfig,
     ISignalCliClient client,
-    IChannelResolver channels,
+    IGroupResolver groups,
     IOperatorNotifier operatorNotifier) : IBgFeature
 {
     /// <inheritdoc/>
@@ -19,30 +19,30 @@ public sealed class GatewayBgService(
     /// <inheritdoc/>
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        await ResolveChannelsAsync(cancellationToken).ConfigureAwait(false);
+        await ResolveGroupsAsync(cancellationToken).ConfigureAwait(false);
         await ApplyProfileAsync(cancellationToken).ConfigureAwait(false);
-        operatorNotifier.Notify($"gateway started with {channels.ChannelNames.Count} channel(s): {string.Join(", ", channels.ChannelNames)}");
+        operatorNotifier.Notify($"gateway started with {groups.GroupNames.Count} group(s): {string.Join(", ", groups.GroupNames)}");
 
         logger.LogInformation("{ClassName} started with {ClientType}",
             nameof(GatewayBgService), client.GetType().Name);
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Resolves channels, retrying while the wrapper is unreachable.</summary>
+    /// <summary>Resolves groups, retrying while the wrapper is unreachable.</summary>
     /// <remarks>
     /// An unreachable wrapper must not crash the process: readiness already excludes the pod from
     /// the Service while the upstream is down, and a crash loop would turn a recoverable outage
     /// into a restart storm. A configuration fault is different - retrying cannot fix a group name
     /// that is missing or ambiguous - so <see cref="InvalidOperationException"/> propagates.
     /// </remarks>
-    private async Task ResolveChannelsAsync(CancellationToken cancellationToken)
+    private async Task ResolveGroupsAsync(CancellationToken cancellationToken)
     {
         var delay = TimeSpan.FromSeconds(5);
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                await channels.RefreshAsync(cancellationToken).ConfigureAwait(false);
+                await groups.RefreshAsync(cancellationToken).ConfigureAwait(false);
                 return;
             }
             catch (HttpRequestException ex)
@@ -57,7 +57,7 @@ public sealed class GatewayBgService(
 
     /// <summary>Applies the configured profile display name, when one is configured.</summary>
     /// <remarks>
-    /// A failure is logged rather than thrown: the display name is cosmetic, and the channel
+    /// A failure is logged rather than thrown: the display name is cosmetic, and the group
     /// surface must not go down because of it.
     /// </remarks>
     private async Task ApplyProfileAsync(CancellationToken cancellationToken)

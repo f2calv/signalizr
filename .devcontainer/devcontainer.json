@@ -30,6 +30,7 @@
         "ms-azuretools.vscode-containers",
         "ms-vscode-remote.vscode-remote-extensionpack",
         "davidanson.vscode-markdownlint",
+        "humao.rest-client",
         "redhat.vscode-yaml",
         "usernamehw.errorlens",
         "eamodio.gitlens",

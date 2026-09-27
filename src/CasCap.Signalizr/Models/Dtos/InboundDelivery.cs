@@ -10,9 +10,9 @@ public sealed record InboundDelivery
     /// <summary>Durable message sequence represented as an invariant string.</summary>
     public required string DeliveryId { get; init; }
 
-    /// <summary>The configured channel name, or <see langword="null"/> when the message did not
-    /// arrive on a known channel.</summary>
-    public string? Channel { get; init; }
+    /// <summary>The exact Signal group name, or <see langword="null"/> when the message did not
+    /// arrive on a known group.</summary>
+    public string? GroupName { get; init; }
 
     /// <summary>The sender's Signal identifier. Personal data: never log it.</summary>
     public string? Sender { get; init; }

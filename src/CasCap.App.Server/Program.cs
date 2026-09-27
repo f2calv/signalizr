@@ -1,12 +1,8 @@
-using CasCap.Abstractions;
 using CasCap.Common.Abstractions;
 using CasCap.Common.Extensions;
 using CasCap.Common.Models;
-using CasCap.Constants;
 using CasCap.Diagnostics;
 using CasCap.Extensions;
-using CasCap.Models;
-using CasCap.Services;
 using CasCap.Signalizr.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -82,9 +78,11 @@ if (enabledFeatures.Contains(FeatureNames.Receiver))
 if (enabledFeatures.Contains(FeatureNames.Gateway) || enabledFeatures.Contains(FeatureNames.Receiver))
 {
     builder.Services.AddSignalCli(builder.Configuration);
-    builder.Services.Configure<ChannelConfig>(
-        builder.Configuration.GetSection(ChannelConfig.ConfigurationSectionName));
-    builder.Services.AddSingleton<IChannelResolver, ChannelResolver>();
+    builder.Services.AddOptions<GroupConfig>()
+        .Bind(builder.Configuration.GetSection(GroupConfig.ConfigurationSectionName),
+            options => options.ErrorOnUnknownConfiguration = true)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IGroupResolver, GroupResolver>();
     builder.Services.AddOptionsWithValidateOnStart<OperatorNotificationConfig>()
         .BindConfiguration(OperatorNotificationConfig.ConfigurationSectionName)
         .ValidateDataAnnotations();
@@ -114,6 +112,7 @@ builder.Services.AddHealthChecks();
 // Every controller compiles into every image, so a controller whose dependency is registered only
 // for one role would throw on activation elsewhere. Gating removes it from routing entirely.
 builder.Services.AddControllers().AddFeatureGatedControllers(enabledFeatures);
+builder.Services.AddSignalizrMcp(builder.Configuration, enabledFeatures);
 
 // Only the receiver holds the inbound stream, so only it serves subscriptions and only it needs
 // the second endpoint.
@@ -142,6 +141,7 @@ if (servesGrpc)
 var app = builder.Build();
 
 app.MapControllers();
+app.MapSignalizrMcp(enabledFeatures);
 
 if (servesGrpc)
     app.MapGrpcService<InboundGrpcService>();

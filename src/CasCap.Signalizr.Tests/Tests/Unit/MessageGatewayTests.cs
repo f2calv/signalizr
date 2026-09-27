@@ -6,7 +6,7 @@ using Xunit;
 namespace CasCap.Tests;
 
 /// <summary>
-/// Covers the translation from a channel message onto the upstream send contract, which is where
+/// Covers the translation from a group message onto the upstream send contract, which is where
 /// the gateway decides what a caller can and cannot reach.
 /// </summary>
 public class MessageGatewayTests
@@ -82,11 +82,11 @@ public class MessageGatewayTests
     }
 
     [Fact]
-    public void UnknownChannelException_NamesTheChannel()
+    public void UnknownGroupException_NamesTheGroup()
     {
-        var exception = new UnknownChannelException("nope");
+        var exception = new UnknownGroupException("nope");
 
-        Assert.Equal("nope", exception.ChannelName);
+        Assert.Equal("nope", exception.GroupName);
         Assert.Contains("nope", exception.Message, StringComparison.Ordinal);
     }
 

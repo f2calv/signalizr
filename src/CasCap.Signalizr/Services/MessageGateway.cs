@@ -12,7 +12,7 @@ public sealed class MessageGateway(
     IOptions<GatewayConfig> gatewayConfig,
     TimeProvider timeProvider,
     ISignalCliClient client,
-    IChannelResolver channelResolver,
+    IGroupResolver groupResolver,
     IOperatorNotifier operatorNotifier,
     TypingLeaseService typingLeases,
     // Registered only with the Receiver role, which owns the persisted deliveries.
@@ -20,12 +20,12 @@ public sealed class MessageGateway(
 {
     private static readonly TimeSpan SendRateInterval = TimeSpan.FromMinutes(1);
 
-    private readonly ConcurrentDictionary<string, SendRateWindow> _sendRates = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, SendRateWindow> _sendRates = new(StringComparer.Ordinal);
     /// <inheritdoc/>
     public async Task<SendMessageResponse> SendAsync(
-        string channelName, SendMessageRequest request, CancellationToken cancellationToken = default)
+        string groupName, SendMessageRequest request, CancellationToken cancellationToken = default)
     {
-        var groupId = ResolveGroupId(channelName);
+        var groupId = ResolveGroupId(groupName);
 
         var message = CreateRequest(
             signalCliConfig.Value.PhoneNumber,
@@ -38,20 +38,18 @@ public sealed class MessageGateway(
         var response = await client.SendMessage(message, cancellationToken).ConfigureAwait(false)
             ?? throw new HttpRequestException("The signal-cli wrapper returned no send result.");
 
-        // Channel name only: the group id is an account-linked identifier and the message body is
-        // the caller's content, neither of which belongs in a log.
-        logger.LogInformation("{ClassName} sent a message to channel {Channel}",
-            nameof(MessageGateway), channelName);
-        TrackSendRate(channelName);
+        logger.LogInformation("{ClassName} sent a message to a configured Signal group",
+            nameof(MessageGateway));
+        TrackSendRate(groupName);
 
-        return new SendMessageResponse { Channel = channelName, Timestamp = response.Timestamp };
+        return new SendMessageResponse { GroupName = groupName, Timestamp = response.Timestamp };
     }
 
     /// <inheritdoc/>
     public async Task SetReactionAsync(
-        string channelName, ChannelReactionRequest request, CancellationToken cancellationToken = default)
+        string groupName, GroupReactionRequest request, CancellationToken cancellationToken = default)
     {
-        var groupId = ResolveGroupId(channelName);
+        var groupId = ResolveGroupId(groupName);
         var account = signalCliConfig.Value.PhoneNumber;
         EnsureAccepted(await client.SendReaction(account, groupId, request.Reaction,
             request.TargetAuthor ?? account, request.TargetTimestamp, cancellationToken).ConfigureAwait(false),
@@ -60,9 +58,9 @@ public sealed class MessageGateway(
 
     /// <inheritdoc/>
     public async Task RemoveReactionAsync(
-        string channelName, ChannelReactionRequest request, CancellationToken cancellationToken = default)
+        string groupName, GroupReactionRequest request, CancellationToken cancellationToken = default)
     {
-        var groupId = ResolveGroupId(channelName);
+        var groupId = ResolveGroupId(groupName);
         var account = signalCliConfig.Value.PhoneNumber;
         EnsureAccepted(await client.RemoveReaction(account, groupId, request.Reaction,
             request.TargetAuthor ?? account, request.TargetTimestamp, cancellationToken).ConfigureAwait(false),
@@ -71,37 +69,37 @@ public sealed class MessageGateway(
 
     /// <inheritdoc/>
     public async Task SetDeliveryReactionAsync(
-        string channelName, string deliveryId, string reaction, CancellationToken cancellationToken = default)
+        string groupName, string deliveryId, string reaction, CancellationToken cancellationToken = default)
     {
-        var groupId = ResolveGroupId(channelName);
-        var (author, timestamp) = await ResolveDeliveryAsync(channelName, deliveryId, cancellationToken).ConfigureAwait(false);
+        var groupId = ResolveGroupId(groupName);
+        var (author, timestamp) = await ResolveDeliveryAsync(groupName, deliveryId, cancellationToken).ConfigureAwait(false);
         EnsureAccepted(await client.SendReaction(signalCliConfig.Value.PhoneNumber, groupId, reaction,
             author, timestamp, cancellationToken).ConfigureAwait(false), "reaction");
     }
 
     /// <inheritdoc/>
     public async Task RemoveDeliveryReactionAsync(
-        string channelName, string deliveryId, string reaction, CancellationToken cancellationToken = default)
+        string groupName, string deliveryId, string reaction, CancellationToken cancellationToken = default)
     {
-        var groupId = ResolveGroupId(channelName);
-        var (author, timestamp) = await ResolveDeliveryAsync(channelName, deliveryId, cancellationToken).ConfigureAwait(false);
+        var groupId = ResolveGroupId(groupName);
+        var (author, timestamp) = await ResolveDeliveryAsync(groupName, deliveryId, cancellationToken).ConfigureAwait(false);
         EnsureAccepted(await client.RemoveReaction(signalCliConfig.Value.PhoneNumber, groupId, reaction,
             author, timestamp, cancellationToken).ConfigureAwait(false), "reaction removal");
     }
 
     /// <inheritdoc/>
-    public async Task StartTypingAsync(string channelName, CancellationToken cancellationToken = default)
+    public async Task StartTypingAsync(string groupName, CancellationToken cancellationToken = default)
     {
-        var groupId = ResolveGroupId(channelName);
-        EnsureAccepted(await typingLeases.StartAsync(channelName, groupId, cancellationToken).ConfigureAwait(false),
+        var groupId = ResolveGroupId(groupName);
+        EnsureAccepted(await typingLeases.StartAsync(groupName, groupId, cancellationToken).ConfigureAwait(false),
             "typing indicator");
     }
 
     /// <inheritdoc/>
-    public async Task StopTypingAsync(string channelName, CancellationToken cancellationToken = default)
+    public async Task StopTypingAsync(string groupName, CancellationToken cancellationToken = default)
     {
-        var groupId = ResolveGroupId(channelName);
-        EnsureAccepted(await typingLeases.StopAsync(channelName, groupId, cancellationToken).ConfigureAwait(false),
+        var groupId = ResolveGroupId(groupName);
+        EnsureAccepted(await typingLeases.StopAsync(groupName, groupId, cancellationToken).ConfigureAwait(false),
             "typing indicator removal");
     }
 
@@ -115,35 +113,35 @@ public sealed class MessageGateway(
             timestamp ?? throw new InvalidOperationException("The delivery carries no Signal timestamp."));
 
     private async Task<(string Author, long Timestamp)> ResolveDeliveryAsync(
-        string channelName, string deliveryId, CancellationToken cancellationToken)
+        string groupName, string deliveryId, CancellationToken cancellationToken)
     {
         if (dbContextFactory is null)
             throw new NotSupportedException("Delivery lookups need the Receiver role in the same process.");
 
         if (!long.TryParse(deliveryId, NumberStyles.None, CultureInfo.InvariantCulture, out var id))
-            throw new UnknownDeliveryException(channelName, deliveryId);
+            throw new UnknownDeliveryException(groupName, deliveryId);
 
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         var message = await dbContext.InboundMessages
             .AsNoTracking()
             .Where(candidate => candidate.Id == id)
-            .Select(candidate => new { candidate.Channel, candidate.Sender, candidate.FromSelf, candidate.Timestamp })
+            .Select(candidate => new { candidate.GroupName, candidate.Sender, candidate.FromSelf, candidate.Timestamp })
             .SingleOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        // A delivery from another channel is reported as missing rather than reacted to, so a caller
-        // cannot reach a group through a channel name it was not given.
-        if (message is null || !string.Equals(message.Channel, channelName, StringComparison.OrdinalIgnoreCase))
-            throw new UnknownDeliveryException(channelName, deliveryId);
+        // A delivery from another group is reported as missing rather than reacted to, so a caller
+        // cannot reach a group through a group name it was not given.
+        if (message is null || !string.Equals(message.GroupName, groupName, StringComparison.Ordinal))
+            throw new UnknownDeliveryException(groupName, deliveryId);
 
         return GetReactionTarget(message.Sender, message.FromSelf, message.Timestamp, signalCliConfig.Value.PhoneNumber);
     }
 
     /// <inheritdoc/>
-    public async Task<ChannelPollResponse> CreatePollAsync(
-        string channelName, ChannelPollRequest request, CancellationToken cancellationToken = default)
+    public async Task<GroupPollResponse> CreatePollAsync(
+        string groupName, GroupPollRequest request, CancellationToken cancellationToken = default)
     {
-        var groupId = ResolveGroupId(channelName);
+        var groupId = ResolveGroupId(groupName);
         var response = await client.CreatePoll(signalCliConfig.Value.PhoneNumber, new CreatePollRequest
         {
             Question = request.Question,
@@ -153,16 +151,16 @@ public sealed class MessageGateway(
         }, cancellationToken).ConfigureAwait(false)
             ?? throw new HttpRequestException("The signal-cli wrapper returned no poll result.");
 
-        logger.LogInformation("{ClassName} created a poll in channel {Channel}",
-            nameof(MessageGateway), channelName);
+        logger.LogInformation("{ClassName} created a poll in a configured Signal group",
+            nameof(MessageGateway));
 
-        return new ChannelPollResponse { Channel = channelName, PollId = response.Timestamp };
+        return new GroupPollResponse { GroupName = groupName, PollId = response.Timestamp };
     }
 
     /// <inheritdoc/>
-    public async Task ClosePollAsync(string channelName, string pollId, CancellationToken cancellationToken = default)
+    public async Task ClosePollAsync(string groupName, string pollId, CancellationToken cancellationToken = default)
     {
-        var groupId = ResolveGroupId(channelName);
+        var groupId = ResolveGroupId(groupName);
         EnsureAccepted(await client.ClosePoll(signalCliConfig.Value.PhoneNumber, new ClosePollRequest
         {
             PollTimestamp = pollId,
@@ -170,20 +168,20 @@ public sealed class MessageGateway(
         }, cancellationToken).ConfigureAwait(false), "poll closure");
     }
 
-    /// <summary>Warns once per channel per minute when sends exceed the configured rate.</summary>
+    /// <summary>Warns once per group per minute when sends exceed the configured rate.</summary>
     /// <remarks>
-    /// A fixed one-minute window: cheap, and precise enough to say "this channel is flooding".
+    /// A fixed one-minute window: cheap, and precise enough to say "this group is flooding".
     /// </remarks>
-    // TODO: enforce a per-channel and per-account send budget (queue or reject with 429) once the
+    // TODO: enforce a per-group and per-account send budget (queue or reject with 429) once the
     // warnings show real production rates. Detection comes first so a limit is not guessed; until
     // then producers such as CAS keep their own throttles.
-    private void TrackSendRate(string channelName)
+    private void TrackSendRate(string groupName)
     {
         var threshold = gatewayConfig.Value.SendRateWarningPerMinute;
         if (threshold <= 0)
             return;
 
-        var window = _sendRates.GetOrAdd(channelName, _ => new SendRateWindow());
+        var window = _sendRates.GetOrAdd(groupName, _ => new SendRateWindow());
         int count;
         lock (window.Gate)
         {
@@ -201,16 +199,16 @@ public sealed class MessageGateway(
             window.Warned = true;
         }
 
-        logger.LogWarning("{ClassName} channel {Channel} exceeded {Threshold} sends within a minute, a possible flood",
-            nameof(MessageGateway), channelName, threshold);
-        operatorNotifier.Notify($"flood warning: channel {channelName} sent more than {threshold} messages within a minute; " +
+        logger.LogWarning("{ClassName} a configured Signal group exceeded {Threshold} sends within a minute, a possible flood",
+            nameof(MessageGateway), threshold);
+        operatorNotifier.Notify($"flood warning: groupName {groupName} sent more than {threshold} messages within a minute; " +
             "Signal may start rate-limiting the account");
     }
 
-    private string ResolveGroupId(string channelName) =>
-        channelResolver.TryGetGroupId(channelName, out var groupId)
+    private string ResolveGroupId(string groupName) =>
+        groupResolver.TryGetGroupId(groupName, out var groupId)
             ? groupId
-            : throw new UnknownChannelException(channelName);
+            : throw new UnknownGroupException(groupName);
 
     // The upstream reports rejection as false rather than an error status, and the caller must
     // not mistake a refused operation for a completed one.

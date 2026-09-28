@@ -144,3 +144,9 @@ while (!cancellationToken.IsCancellationRequested)
 
 `SignalizrMessage.Sender` is a Signal identifier and `Message` is someone's content. Neither belongs
 in a log, a metric label or a trace attribute.
+
+## Testing
+
+The companion [`CasCap.Signalizr.Client.Testing`](../CasCap.Signalizr.Client.Testing/README.md)
+package provides `FakeSignalizrClient`. It is an in-memory implementation that feeds deliveries to
+a consumer and records every group operation, for test projects that need no gateway.

@@ -28,3 +28,5 @@
 # test projects are never part of the runtime image; excluding the *.Tests dirs
 # keeps them out of the csproj globs / COPY and avoids cache busts on test edits
 **/*.Tests/**
+# the same applies to the published *.Testing fakes packages
+**/*.Testing/**

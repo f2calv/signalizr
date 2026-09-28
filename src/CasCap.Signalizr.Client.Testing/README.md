@@ -33,8 +33,10 @@ performed. There is no network, gRPC channel or Signal account involved.
 | `Reactions`, `RemovedReactions`, `ReactionCount(emoji)` | Reactions set and removed |
 | `Polls`, `ClosedPolls` | Polls created and closed |
 | `AttachmentFetches` | Attachment identifiers requested |
-| `SubscribeCallCount`, `StartTypingCallCount`, `StopTypingCallCount` | Call counters |
+| `SubscribeCallCount`, `StartTypingCallCount`, `StopTypingCallCount`, `GetGroupsCallCount` | Call counters |
 | `BlockStartTyping()`, `ReleaseStartTyping()` | Hold callers inside `StartTypingAsync`, for example to observe reply-queue backpressure |
+| `GroupsFailures` | The number of upcoming `GetGroupsAsync` calls that fail with `HttpRequestException`, as if the gateway were unreachable |
+| `InteractionFailure` | When set, reaction and typing calls fail with this exception instead of being recorded |
 
 Returned timestamps and poll identifiers come from the optional `TimeProvider` constructor
 argument, so a fake clock gives deterministic values. Reacting to a delivery that has no

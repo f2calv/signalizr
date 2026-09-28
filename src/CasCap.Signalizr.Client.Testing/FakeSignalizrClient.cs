@@ -17,6 +17,8 @@ public sealed class FakeSignalizrClient(TimeProvider? timeProvider = null) : ISi
     private int _subscribeCallCount;
     private int _startTypingCallCount;
     private int _stopTypingCallCount;
+    private int _getGroupsCallCount;
+    private int _groupsFailures;
 
     /// <summary>One reaction set or removed through the client.</summary>
     /// <param name="GroupName">Exact Signal group name.</param>
@@ -37,6 +39,17 @@ public sealed class FakeSignalizrClient(TimeProvider? timeProvider = null) : ISi
     /// <summary>Groups returned by <see cref="GetGroupsAsync"/>.</summary>
     /// <remarks>Defaults to none, so a consumer that validates its groups at startup must be given them.</remarks>
     public IReadOnlyList<string> Groups { get; set; } = [];
+
+    /// <summary>The number of upcoming <see cref="GetGroupsAsync"/> calls that fail as if the gateway were unreachable.</summary>
+    /// <remarks>Each failing call throws <see cref="HttpRequestException"/> and decrements the count.</remarks>
+    public int GroupsFailures
+    {
+        get => Volatile.Read(ref _groupsFailures);
+        set => Volatile.Write(ref _groupsFailures, value);
+    }
+
+    /// <summary>When set, reaction and typing calls fail with this instead of being recorded.</summary>
+    public Exception? InteractionFailure { get; set; }
 
     /// <summary>Messages sent through the client, in order.</summary>
     public ConcurrentQueue<(string GroupName, string Message, IReadOnlyList<string>? Attachments)> Sent { get; } = new();
@@ -67,6 +80,9 @@ public sealed class FakeSignalizrClient(TimeProvider? timeProvider = null) : ISi
 
     /// <summary>The number of <see cref="StopTypingAsync"/> calls.</summary>
     public int StopTypingCallCount => Volatile.Read(ref _stopTypingCallCount);
+
+    /// <summary>The number of <see cref="GetGroupsAsync"/> calls, including failed ones.</summary>
+    public int GetGroupsCallCount => Volatile.Read(ref _getGroupsCallCount);
 
     /// <summary>Queues an inbound delivery for the subscription.</summary>
     public void Enqueue(SignalizrMessage message) => _inbox.Writer.TryWrite(message);
@@ -113,13 +129,22 @@ public sealed class FakeSignalizrClient(TimeProvider? timeProvider = null) : ISi
     }
 
     /// <inheritdoc/>
-    public Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(Groups);
+    /// <exception cref="HttpRequestException">A failure remains in <see cref="GroupsFailures"/>.</exception>
+    public Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _getGroupsCallCount);
+        if (Interlocked.Decrement(ref _groupsFailures) >= 0)
+            return Task.FromException<IReadOnlyList<string>>(new HttpRequestException("The gateway is unreachable."));
+        Interlocked.Exchange(ref _groupsFailures, 0);
+        return Task.FromResult(Groups);
+    }
 
     /// <inheritdoc/>
     public Task SetReactionAsync(string groupName, string reaction, long targetTimestamp,
         string? targetAuthor = null, CancellationToken cancellationToken = default)
     {
+        if (InteractionFailure is { } failure)
+            return Task.FromException(failure);
         Reactions.Enqueue(new Reaction(groupName, reaction, targetTimestamp, targetAuthor));
         return Task.CompletedTask;
     }
@@ -128,6 +153,8 @@ public sealed class FakeSignalizrClient(TimeProvider? timeProvider = null) : ISi
     public Task RemoveReactionAsync(string groupName, string reaction, long targetTimestamp,
         string? targetAuthor = null, CancellationToken cancellationToken = default)
     {
+        if (InteractionFailure is { } failure)
+            return Task.FromException(failure);
         RemovedReactions.Enqueue(new Reaction(groupName, reaction, targetTimestamp, targetAuthor));
         return Task.CompletedTask;
     }
@@ -144,6 +171,8 @@ public sealed class FakeSignalizrClient(TimeProvider? timeProvider = null) : ISi
     public Task StartTypingAsync(string groupName, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _startTypingCallCount);
+        if (InteractionFailure is { } failure)
+            return Task.FromException(failure);
         return _startTypingGate.Task.WaitAsync(cancellationToken);
     }
 
@@ -151,7 +180,7 @@ public sealed class FakeSignalizrClient(TimeProvider? timeProvider = null) : ISi
     public Task StopTypingAsync(string groupName, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _stopTypingCallCount);
-        return Task.CompletedTask;
+        return InteractionFailure is { } failure ? Task.FromException(failure) : Task.CompletedTask;
     }
 
     /// <inheritdoc/>

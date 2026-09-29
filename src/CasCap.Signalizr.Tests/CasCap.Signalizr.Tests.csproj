@@ -25,6 +25,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CasCap.App.Server\CasCap.App.Server.csproj" />
     <ProjectReference Include="..\CasCap.Signalizr\CasCap.Signalizr.csproj" />
+    <ProjectReference Include="..\CasCap.Signalizr.Client.Testing\CasCap.Signalizr.Client.Testing.csproj" />
   </ItemGroup>
 
 </Project>

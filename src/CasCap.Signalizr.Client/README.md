@@ -88,6 +88,31 @@ await client.ClosePollAsync("My Test Group Name", pollId, cancellationToken);
 A vote arrives on the subscription as a `SignalizrMessage` whose `PollVote` names the poll and the
 selected answer indexes.
 
+Reactions and typing indicators are feedback about work, not the work itself. The `Try*` extension
+methods report an unreachable gateway or a client timeout instead of throwing, so a missed
+indicator cannot stop a consumer. Cancellation you requested still propagates:
+
+```csharp
+await client.TrySetReactionAsync("My Test Group Name", "⏳", message.Timestamp, message.Sender,
+  onFailure: ex => logger.LogWarning(ex, "reaction not shown"), cancellationToken: cancellationToken);
+await client.TryStartTypingAsync("My Test Group Name", cancellationToken: cancellationToken);
+await client.TryStopTypingAsync("My Test Group Name", cancellationToken: cancellationToken);
+```
+
+At startup, `WaitForGroupsAsync` retries an unreachable gateway until it answers. It then throws
+`SignalizrGroupNotConfiguredException` if a required group is missing, and returns the optional
+groups it does not serve:
+
+```csharp
+var missingOptional = await client.WaitForGroupsAsync(
+  requiredGroups: ["My Test Group Name"],
+  optionalGroups: ["My Test Monitor Group Name"],
+  retryDelay: TimeSpan.FromSeconds(2),
+  cancellationToken: cancellationToken);
+```
+
+The exception message omits the group names, which can carry private information.
+
 `SignalizrMessage.FromSelf` marks messages the gateway's own account sent, so a consumer can ignore
 its own traffic without knowing the account. On an account linked to a person's phone the owner's
 messages are marked too; a consumer serving that owner must not drop them on this flag alone.
@@ -144,3 +169,9 @@ while (!cancellationToken.IsCancellationRequested)
 
 `SignalizrMessage.Sender` is a Signal identifier and `Message` is someone's content. Neither belongs
 in a log, a metric label or a trace attribute.
+
+## Testing
+
+The companion [`CasCap.Signalizr.Client.Testing`](../CasCap.Signalizr.Client.Testing/README.md)
+package provides `FakeSignalizrClient`. It is an in-memory implementation that feeds deliveries to
+a consumer and records every group operation, for test projects that need no gateway.

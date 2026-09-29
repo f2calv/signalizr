@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>CasCap.Signalizr.Client.Testing</PackageId>
+    <Description>In-memory ISignalizrClient for testing signalizr consumers without a gateway: feeds inbound deliveries and records every group operation.</Description>
+    <PackageTags>signal;messaging;gateway;testing;fakes</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CasCap.Signalizr.Client\CasCap.Signalizr.Client.csproj" />
+  </ItemGroup>
+
+</Project>

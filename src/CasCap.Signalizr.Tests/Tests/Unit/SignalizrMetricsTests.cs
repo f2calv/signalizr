@@ -39,4 +39,28 @@ public sealed class SignalizrMetricsTests
         });
         Assert.Equal(prefix, metrics.ActivitySource.Name);
     }
+
+    [Fact]
+    public void StoredMessagesGauge_UsesAnAnnotationUnitSoPrometheusAddsNoRatioSuffix()
+    {
+        const string prefix = "custom_signalizr";
+        Instrument? gauge = null;
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, _) =>
+            {
+                if (instrument.Name == $"{prefix}.inbound.stored_messages")
+                    gauge = instrument;
+            }
+        };
+        listener.Start();
+
+        using var metrics = new SignalizrMetrics(Options.Create(new AppConfig
+        {
+            MetricNamePrefix = prefix
+        }));
+
+        Assert.NotNull(gauge);
+        Assert.Equal("{message}", gauge.Unit);
+    }
 }

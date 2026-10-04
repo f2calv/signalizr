@@ -260,7 +260,7 @@
             "targets": [
                 {
                     "editorMode": "code",
-                    "expr": "sum(increase(signalizr_inbound_dropped_total[$__range]))",
+                    "expr": "sum(increase(signalizr_inbound_dropped_total[$__range])) or vector(0)",
                     "legendFormat": "Dropped",
                     "range": true,
                     "refId": "A"

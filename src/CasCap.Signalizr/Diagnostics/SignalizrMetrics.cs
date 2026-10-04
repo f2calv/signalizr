@@ -44,10 +44,12 @@ public sealed class SignalizrMetrics : IDisposable
             $"{prefix}.inbound.received", "1", "Inbound messages accepted into the process queue.");
         _subscribers = _meter.CreateUpDownCounter<long>(
             $"{prefix}.subscribers.active", "1", "Current connected durable subscribers.");
+        // An annotation unit keeps the Prometheus name unchanged: the OTLP translation appends "_ratio" to a gauge
+        // whose unit is "1", which would hide it from the dashboard's signalizr_inbound_stored_messages query.
         _meter.CreateObservableGauge(
             $"{prefix}.inbound.stored_messages",
             () => Interlocked.Read(ref _storedMessages),
-            "1",
+            "{message}",
             "Current persisted inbound messages available for replay.");
         ActivitySource = new ActivitySource(prefix);
     }

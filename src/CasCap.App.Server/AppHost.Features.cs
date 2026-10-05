@@ -1,0 +1,108 @@
+using CasCap.Common.Abstractions;
+using CasCap.Extensions;
+using CasCap.Signalizr.Client;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+
+namespace CasCap;
+
+public static partial class AppHost
+{
+    private static void AddFeatures(
+        WebApplicationBuilder builder,
+        IReadOnlySet<string> enabledFeatures)
+    {
+        if (enabledFeatures.Contains(FeatureNames.DbMigrator))
+        {
+            builder.Services.AddSignalizrDataLayer(builder.Configuration, addRuntimeServices: false);
+            builder.Services.AddSingleton<IBgFeature, DbMigratorBgService>();
+        }
+
+        if (enabledFeatures.Contains(FeatureNames.Gateway))
+        {
+            builder.Services.AddOptionsWithValidateOnStart<GatewayConfig>()
+                .BindConfiguration(GatewayConfig.ConfigurationSectionName)
+                .ValidateDataAnnotations();
+            builder.Services.AddSingleton<IBgFeature, GatewayBgService>();
+        }
+
+        if (enabledFeatures.Contains(FeatureNames.Receiver))
+        {
+            builder.Services.AddSignalizrDataLayer(builder.Configuration);
+            builder.Services.Configure<ReceiverConfig>(
+                builder.Configuration.GetSection(ReceiverConfig.ConfigurationSectionName));
+            builder.Services.Configure<SubscriberConfig>(
+                builder.Configuration.GetSection(SubscriberConfig.ConfigurationSectionName));
+            builder.Services.AddSingleton<IInboundMessageQueue, InboundMessageQueue>();
+            builder.Services.AddSingleton<IInboundSubscriberRegistry, InboundSubscriberRegistry>();
+            builder.Services.AddSingleton<InboundAttachmentService>();
+            builder.Services.AddSingleton<InboundMessagePersistenceService>();
+            builder.Services.AddSingleton<IBgFeature, ReceiverBgService>();
+            // Separate from the receive loop: per-message work belongs here, where it cannot stop the
+            // upstream being read.
+            builder.Services.AddSingleton<IBgFeature, DispatcherBgService>();
+        }
+
+        // Only the roles that talk to Signal need an account, so a DemoClient container needs no phone number.
+        if (enabledFeatures.Contains(FeatureNames.Gateway) || enabledFeatures.Contains(FeatureNames.Receiver))
+        {
+            builder.Services.AddSignalCli(builder.Configuration);
+            builder.Services.AddOptions<GroupConfig>()
+                .Bind(builder.Configuration.GetSection(GroupConfig.ConfigurationSectionName),
+                    options => options.ErrorOnUnknownConfiguration = true)
+                .ValidateOnStart();
+            builder.Services.AddSingleton<IGroupResolver, GroupResolver>();
+            builder.Services.AddOptionsWithValidateOnStart<OperatorNotificationConfig>()
+                .BindConfiguration(OperatorNotificationConfig.ConfigurationSectionName)
+                .ValidateDataAnnotations();
+            builder.Services.AddSingleton<OperatorNotifier>();
+            builder.Services.AddSingleton<IOperatorNotifier>(sp => sp.GetRequiredService<OperatorNotifier>());
+            // Notices are sent by the receive owner; a Gateway-only pod queues them to no effect.
+            if (enabledFeatures.Contains(FeatureNames.Receiver))
+                builder.Services.AddSingleton<IBgFeature>(sp => sp.GetRequiredService<OperatorNotifier>());
+        }
+
+        if (enabledFeatures.Contains(FeatureNames.Gateway))
+        {
+            builder.Services.AddSingleton<TypingLeaseService>();
+            builder.Services.AddSingleton<IMessageGateway, MessageGateway>();
+        }
+
+        if (enabledFeatures.Contains(FeatureNames.DemoClient))
+        {
+            // The demo consumes the gateway like any other client, over its published package.
+            builder.Services.AddSignalizrClient(builder.Configuration);
+            builder.Services.AddSingleton<IBgFeature, DemoClientBgService>();
+        }
+    }
+
+    private static bool ConfigureGrpc(
+        WebApplicationBuilder builder,
+        IReadOnlySet<string> enabledFeatures,
+        ILogger logger)
+    {
+        // Only the receiver holds the inbound stream, so only it serves subscriptions and only it needs
+        // the second endpoint.
+        if (!enabledFeatures.Contains(FeatureNames.Receiver))
+            return false;
+
+        var grpcHostConfig = builder.Configuration
+            .GetSection(GrpcHostConfig.ConfigurationSectionName)
+            .Get<GrpcHostConfig>() ?? new GrpcHostConfig();
+
+        builder.Services.AddGrpc();
+
+        // A plaintext port cannot negotiate protocols: without TLS there is no ALPN, so one endpoint
+        // answers HTTP/1.1 or HTTP/2, not both. Sharing one fails at the first gRPC call with
+        // HTTP_1_1_REQUIRED, which is why REST and gRPC get a port each.
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            options.ListenAnyIP(grpcHostConfig.Http1Port, listen => listen.Protocols = HttpProtocols.Http1);
+            options.ListenAnyIP(grpcHostConfig.Http2Port, listen => listen.Protocols = HttpProtocols.Http2);
+        });
+
+        logger.LogInformation("{AppName} serving HTTP/1.1 on {Http1Port} and gRPC on {Http2Port}",
+            AppDomain.CurrentDomain.FriendlyName, grpcHostConfig.Http1Port, grpcHostConfig.Http2Port);
+
+        return true;
+    }
+}

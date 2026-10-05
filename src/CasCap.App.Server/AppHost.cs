@@ -65,7 +65,6 @@ public static partial class AppHost
         AddFeatures(builder, enabledFeatures);
 
         // Web API registration
-        builder.Services.AddFeatureFlagService(enabledFeatures, addGitMetadataService: true);
         AddWebApi(builder, enabledFeatures);
 
         // Transport registration

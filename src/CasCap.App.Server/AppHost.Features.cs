@@ -1,4 +1,5 @@
 using CasCap.Common.Abstractions;
+using CasCap.Common.Extensions;
 using CasCap.Extensions;
 using CasCap.Signalizr.Client;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -73,6 +74,8 @@ public static partial class AppHost
             builder.Services.AddSignalizrClient(builder.Configuration);
             builder.Services.AddSingleton<IBgFeature, DemoClientBgService>();
         }
+
+        builder.Services.AddFeatureFlagService(enabledFeatures, addGitMetadataService: true);
     }
 
     private static bool ConfigureGrpc(

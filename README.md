@@ -138,6 +138,18 @@ A single container image, with the role selected by feature flag:
 | Inbound subscription | gRPC bidirectional streaming | Long-lived and typed, with an ack channel so delivery is not fire-and-forget |
 | Operator tools | MCP Streamable HTTP at `/mcp` | Query status, groups and optional history; send text only when separately enabled |
 
+## NuGet Packages
+
+| Package | Purpose |
+| --- | --- |
+| `CasCap.Signalizr.Client` | Typed REST and gRPC client for sending, group operations, and durable inbound subscriptions |
+| `CasCap.Signalizr.Client.Testing` | In-memory client for credential-free consumer tests |
+| `CasCap.Comms` | Redis-backed Signalizr communications pipeline, media handling, voice processing, and reply queue |
+| `CasCap.Comms.AI` | Optional AI agent responder, session commands, poll tools, and diagnostics for `CasCap.Comms` |
+
+The packages share the repository's immutable release version. Consumers use adjacent project
+references in Debug and exact published package versions in Release.
+
 ## Querying from VS Code
 
 Enable `Gateway,Receiver,Mcp` to ask how many application clients are connected and which groups

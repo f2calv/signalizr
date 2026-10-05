@@ -22,7 +22,8 @@ AI provider.
 | `SignalMessageDeduplicatorTests` | 9 | 11 | Comms | Redis-backed duplicate Signal message suppression |
 | `MonitorSourcesGroupRouterTests` | 2 | 3 | Comms | Routing of configured operational sources to the monitor group |
 | `CommsEventFormatterTests` | 2 | 2 | Comms | The plain and timestamped direct-send formats |
-| **Total** | **39** | **50** | | |
+| `InMemoryPollTrackerTests` | 2 | 2 | Messaging | Poll vote summaries and TTL expiry |
+| **Total** | **41** | **52** | | |
 
 ## Trait Categories
 
@@ -51,6 +52,7 @@ Tests/
     ├── FakeSessionStore.cs
     ├── FakeSignalMessageDeduplicator.cs
     ├── InMemoryCommsRedis.cs                   # Stream and string commands only
+    ├── InMemoryPollTrackerTests.cs
     ├── MonitorSourcesGroupRouterTests.cs
     ├── SignalMessageDeduplicatorTests.cs
     ├── StubAIAgent.cs

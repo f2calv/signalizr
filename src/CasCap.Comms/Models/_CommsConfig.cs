@@ -191,4 +191,9 @@ public sealed record CommsConfig : IAppConfig
     /// </remarks>
     [Range(1, 720)]
     public int MessageDeduplicationTtlHours { get; init; } = 168;
+
+    /// <summary>Time-to-live in milliseconds for agent-created polls awaiting votes.</summary>
+    /// <remarks>Defaults to <c>3600000</c> ms (1 hour).</remarks>
+    [Range(1, int.MaxValue)]
+    public int PollTtlMs { get; init; } = 3_600_000;
 }

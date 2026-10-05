@@ -31,6 +31,7 @@ published package in Release.
 | `CommsAgentProfile` | The agent key and the assembly holding its embedded instructions |
 | `CommsDebugStep` | One step of the monitor-group pipeline timeline |
 | `MessagingMcpQueryService` | MCP poll tools (`create_poll`, `close_poll`, `get_poll_status`) on the chat group |
+| `IPollTracker`, `InMemoryPollTracker` | Comms-owned poll lifecycle, votes, result summaries, and TTL expiry |
 | `CommsAgentServiceCollectionExtensions` | `AddCommsAgent(agentKey, instructionsAssembly)`, `AddMessagingMcp()` and `AddMessagingMcpStub()` |
 
 ## Configuration
@@ -38,6 +39,8 @@ published package in Release.
 The responder reads `CommsConfig` from [CasCap.Comms](../CasCap.Comms/README.md) and the agent
 profile named by `CommsAgentProfile.AgentKey` from `CasCap:AIConfig:Agents`. The host registers the
 keyed `AIAgent` for that key.
+
+`CommsConfig.PollTtlMs` controls how long an agent-created poll remains available for votes.
 
 ```csharp
 services.AddComms(configuration);
@@ -50,6 +53,6 @@ services.AddSingleton<IAgentRunEnricher, MyHardwareEnricher>();
 | Dependency | Use |
 | --- | --- |
 | `CasCap.Comms` | The pipeline this responder answers for |
-| `CasCap.Common.AI` | Agent runs, sessions, slash commands, poll tracking and MCP attributes |
+| `CasCap.Common.AI` | Agent runs, sessions, slash commands and MCP attributes |
 
 Debug builds reference adjacent source checkouts; Release builds use the published packages.

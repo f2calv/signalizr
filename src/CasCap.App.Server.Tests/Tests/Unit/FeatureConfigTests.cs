@@ -1,12 +1,20 @@
-using CasCap.Constants;
-using CasCap.Models;
-using Xunit;
-
 namespace CasCap.Tests;
 
 /// <summary>Covers the feature-name validation that gates which role a container instance runs.</summary>
-public class FeatureConfigTests
+public sealed class FeatureConfigTests
 {
+    [Fact]
+    public void Bind_MissingSection_ReturnsNull()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var config = configuration
+            .GetSection(FeatureConfig.ConfigurationSectionName)
+            .Get<FeatureConfig>();
+
+        Assert.Null(config);
+    }
+
     [Theory]
     [InlineData("Gateway", 1)]
     [InlineData("Gateway,Receiver", 2)]

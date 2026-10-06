@@ -10,7 +10,7 @@ namespace CasCap.Tests.Unit;
 /// The service exposes no other entry point, so the fixture starts the real execution pipeline —
 /// stream consumer, reply drain loop and subscription — and the tests observe it through
 /// <see cref="Signalizr"/> and <see cref="Redis"/>. The responder is a real <see cref="AgentCommsResponder"/>
-/// over <see cref="StubAIAgent"/>, which refuses inference, so every agent turn ends without a reply.
+/// over the typed Agent Runtime client and a fake HTTP handler whose default response has no reply text.
 /// </remarks>
 public sealed class CommunicationsBgServiceTestFixture : IAsyncDisposable
 {
@@ -36,6 +36,7 @@ public sealed class CommunicationsBgServiceTestFixture : IAsyncDisposable
     public const string EnvironmentAcronym = "DEV";
 
     private readonly CancellationTokenSource _cts = new();
+    private HttpClient? _agentRuntimeHttpClient;
     private Task? _execution;
 
     /// <summary>Builds the service.</summary>
@@ -288,49 +289,27 @@ public sealed class CommunicationsBgServiceTestFixture : IAsyncDisposable
             }
         }
         _cts.Dispose();
+        _agentRuntimeHttpClient?.Dispose();
     }
 
     private AgentCommsResponder BuildResponder(IOptions<CommsConfig> commsConfig)
     {
-        var aiConfig = Options.Create(BuildAIConfig());
-        var services = new ServiceCollection();
-        services.AddKeyedSingleton<AIAgent>(AgentKey, new StubAIAgent());
-        var serviceProvider = services.BuildServiceProvider();
-
         var debugNotifier = new CommsDebugNotifier(NullLogger<CommsDebugNotifier>.Instance, commsConfig,
             TimeProvider.System, Signalizr, []);
-        var commandHandler = new AgentCommandHandler(NullLogger<AgentCommandHandler>.Instance, aiConfig,
-            new FakeSessionStore());
+        _agentRuntimeHttpClient = new HttpClient(new FakeAgentRuntimeHttpMessageHandler())
+        {
+            BaseAddress = new Uri("http://agent-runtime.test"),
+        };
+        var agentRuntimeClient = new AgentRuntimeClient(_agentRuntimeHttpClient);
 
         return new AgentCommsResponder(
             NullLogger<AgentCommsResponder>.Instance,
             commsConfig,
-            aiConfig,
-            new CommsAgentProfile(AgentKey, typeof(CommunicationsBgServiceTestFixture).Assembly),
+            new CommsAgentProfile(AgentKey, "test-group-session", "respond"),
+            agentRuntimeClient,
             Signalizr,
-            commandHandler,
             PollTracker,
             debugNotifier,
-            [],
-            serviceProvider);
+            []);
     }
-
-    private static AIConfig BuildAIConfig() => new()
-    {
-        Providers = new Dictionary<string, ProviderConfig>
-        {
-            ["Stub"] = new() { Type = AgentType.Ollama, ModelName = "stub-model" },
-        },
-        Agents = new Dictionary<string, AgentConfig>
-        {
-            [AgentKey] = new()
-            {
-                Provider = "Stub",
-                Name = AgentKey,
-                Description = "comms agent under test",
-                Prompt = "respond",
-                Instructions = "you are a test double",
-            },
-        },
-    };
 }

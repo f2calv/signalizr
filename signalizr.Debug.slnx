@@ -25,6 +25,10 @@
     <Project Path="../CasCap.Common/src/CasCap.Common.Logging/CasCap.Common.Logging.csproj" />
     <Project Path="../CasCap.Common/src/CasCap.Common.Services/CasCap.Common.Services.csproj" />
   </Folder>
+  <Folder Name="/signalizr/agentizr/">
+    <Project Path="../agentizr/src/CasCap.AgentRuntime.Client/CasCap.AgentRuntime.Client.csproj" />
+    <Project Path="../agentizr/src/CasCap.AgentRuntime.Contracts/CasCap.AgentRuntime.Contracts.csproj" />
+  </Folder>
   <Folder Name="/signalizr/">
     <Project Path="src/CasCap.App.Server/CasCap.App.Server.csproj" />
     <Project Path="src/CasCap.App.Server.Tests/CasCap.App.Server.Tests.csproj" />

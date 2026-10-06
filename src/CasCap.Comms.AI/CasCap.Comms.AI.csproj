@@ -9,13 +9,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CasCap.Comms\CasCap.Comms.csproj" />
+    <PackageReference Include="ModelContextProtocol" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)'=='Debug'">
-    <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.AI\CasCap.Common.AI.csproj" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(Configuration)'=='Release'">
-    <PackageReference Include="CasCap.Common.AI" />
+    <ProjectReference Include="..\..\..\agentizr\src\CasCap.AgentRuntime.Client\CasCap.AgentRuntime.Client.csproj" />
+    <ProjectReference Include="..\..\..\agentizr\src\CasCap.AgentRuntime.Contracts\CasCap.AgentRuntime.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

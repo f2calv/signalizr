@@ -4,10 +4,6 @@ namespace CasCap.Services;
 /// <remarks>Sender identifiers and message text are personal data and are never logged here.</remarks>
 public sealed partial class AgentCommsResponder
 {
-    [LoggerMessage(Level = LogLevel.Warning,
-        Message = "{ClassName} agent profile {ProfileKey} not fully configured, agent responses disabled")]
-    private static partial void LogAgentNotConfigured(ILogger logger, string className, string profileKey);
-
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} received poll vote on poll {PollId}, selected indices: [{SelectedIndices}]")]
     private static partial void LogPollVoteReceived(ILogger logger, string className, string pollId, string selectedIndices);
@@ -18,23 +14,11 @@ public sealed partial class AgentCommsResponder
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} processing slash command {Command}")]
-    private static partial void LogSlashCommand(ILogger logger, string className, ChatCommand command);
+    private static partial void LogSlashCommand(ILogger logger, string className, CommsAgentCommand command);
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} running agent inference, promptLength={PromptLength}, hasAttachment={HasAttachment}, model={Model}")]
     private static partial void LogAgentInferenceStarting(ILogger logger, string className, int promptLength, bool hasAttachment, string model);
-
-    [LoggerMessage(Level = LogLevel.Information,
-        Message = "{ClassName} new agent session started")]
-    private static partial void LogAgentSessionStarted(ILogger logger, string className);
-
-    [LoggerMessage(Level = LogLevel.Information,
-        Message = "{ClassName} agent session resumed")]
-    private static partial void LogAgentSessionResumed(ILogger logger, string className);
-
-    [LoggerMessage(Level = LogLevel.Information,
-        Message = "{ClassName} bypassing session for this request")]
-    private static partial void LogAgentSessionBypassed(ILogger logger, string className);
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} delegating to {AgentKey} ({DepthLabel}), provider={ProviderModel}")]
@@ -47,10 +31,6 @@ public sealed partial class AgentCommsResponder
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} agent completed in {Duration}, session {SessionStatus}")]
     private static partial void LogAgentCompleted(ILogger logger, string className, TimeSpan duration, string sessionStatus);
-
-    [LoggerMessage(Level = LogLevel.Debug,
-        Message = "{ClassName} agent session persisted")]
-    private static partial void LogAgentSessionPersisted(ILogger logger, string className);
 
     [LoggerMessage(Level = LogLevel.Error,
         Message = "{ClassName} agent inference failed")]

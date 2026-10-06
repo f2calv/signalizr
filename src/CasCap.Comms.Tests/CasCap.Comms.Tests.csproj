@@ -15,6 +15,8 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)'=='Debug'">
+    <ProjectReference Include="..\..\..\agentizr\src\CasCap.AgentRuntime.Client\CasCap.AgentRuntime.Client.csproj" />
+    <ProjectReference Include="..\..\..\agentizr\src\CasCap.AgentRuntime.Contracts\CasCap.AgentRuntime.Contracts.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Api.Voice\src\CasCap.Api.Voice.Testing\CasCap.Api.Voice.Testing.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(Configuration)'=='Release'">

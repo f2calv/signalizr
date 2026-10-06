@@ -1,18 +1,17 @@
 namespace CasCap.Services;
 
 /// <summary>
-/// <see cref="ICommsResponder"/> that answers Signalizr communications with a configured <see cref="AIAgent"/>.
+/// <see cref="ICommsResponder"/> that answers Signalizr communications through the remote Agent Runtime.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The agent is the keyed <see cref="AIAgent"/> named by <see cref="CommsAgentProfile.AgentKey"/>, with its
-/// profile and provider in <see cref="AIConfig"/>. When any of them is missing the responder reports itself
-/// unavailable, and <see cref="CommunicationsBgService"/> behaves as if no responder were registered.
+/// The runtime owns tenant definitions, credentials, overrides, session state, agent construction and tools.
+/// Comms owns message parsing, progress interaction, delivery and operator diagnostics.
 /// </para>
 /// <para>
-/// Handles slash commands through <see cref="AgentCommandHandler"/>, poll votes through <see cref="IPollTracker"/>,
-/// session persistence, model and instruction overrides, delegation feedback and the stats footer and
-/// monitor-group timeline produced by <see cref="CommsDebugNotifier"/>.
+/// Handles slash commands through typed runtime control operations, poll votes through <see cref="IPollTracker"/>,
+/// live delegation feedback and the stats footer and monitor-group timeline produced by
+/// <see cref="CommsDebugNotifier"/>.
 /// </para>
 /// </remarks>
 public sealed partial class AgentCommsResponder : ICommsResponder
@@ -22,56 +21,38 @@ public sealed partial class AgentCommsResponder : ICommsResponder
 
     private readonly ILogger _logger;
     private readonly IOptions<CommsConfig> _commsConfig;
-    private readonly AIConfig _aiConfig;
+    private readonly CommsAgentProfile _profile;
+    private readonly IAgentRuntimeClient _agentRuntimeClient;
     private readonly ISignalizrClient _signalizrClient;
-    private readonly AgentCommandHandler _commandHandler;
     private readonly IPollTracker _pollTracker;
     private readonly CommsDebugNotifier _debugNotifier;
     private readonly IReadOnlyList<IAgentRunEnricher> _enrichers;
-    private readonly AIAgent? _agent;
-    private readonly ProviderConfig? _provider;
-    private readonly AgentConfig? _agentConfig;
-    private readonly string? _resolvedInstructions;
 
     /// <summary>Initializes a new instance of the <see cref="AgentCommsResponder"/> class.</summary>
     public AgentCommsResponder(ILogger<AgentCommsResponder> logger,
         IOptions<CommsConfig> commsConfig,
-        IOptions<AIConfig> aiConfig,
         CommsAgentProfile profile,
+        IAgentRuntimeClient agentRuntimeClient,
         ISignalizrClient signalizrClient,
-        AgentCommandHandler commandHandler,
         IPollTracker pollTracker,
         CommsDebugNotifier debugNotifier,
-        IEnumerable<IAgentRunEnricher> enrichers,
-        IServiceProvider serviceProvider)
+        IEnumerable<IAgentRunEnricher> enrichers)
     {
         _logger = logger;
         _commsConfig = commsConfig;
-        _aiConfig = aiConfig.Value;
+        _profile = profile;
+        _agentRuntimeClient = agentRuntimeClient;
         _signalizrClient = signalizrClient;
-        _commandHandler = commandHandler;
         _pollTracker = pollTracker;
         _debugNotifier = debugNotifier;
         _enrichers = [.. enrichers];
-
-        if (_aiConfig.Agents.TryGetValue(profile.AgentKey, out var agentConfig))
-        {
-            _agentConfig = agentConfig;
-            _agent = serviceProvider.GetKeyedService<AIAgent>(profile.AgentKey);
-            if (_aiConfig.Providers.TryGetValue(agentConfig.Provider, out var provider))
-                _provider = provider;
-            _resolvedInstructions = AgentExtensions.ResolveInstructions(agentConfig, profile.InstructionsAssembly, _aiConfig);
-        }
-
-        if (!IsAvailable)
-            LogAgentNotConfigured(_logger, nameof(AgentCommsResponder), profile.AgentKey);
     }
 
     /// <inheritdoc/>
-    public bool IsAvailable => _agent is not null && _agentConfig is not null && _provider is not null;
+    public bool IsAvailable => true;
 
     /// <inheritdoc/>
-    public string DefaultPrompt => _agentConfig?.Prompt ?? string.Empty;
+    public string DefaultPrompt => _profile.DefaultPrompt;
 
     /// <inheritdoc/>
     public async Task<CommsTurn> CreateStreamTurnAsync(CommsEvent commsEvent, IReadOnlyList<string>? base64Attachments,
@@ -118,17 +99,15 @@ public sealed partial class AgentCommsResponder : ICommsResponder
     /// <inheritdoc/>
     public async Task<CommsCommandOutcome?> TryHandleCommandAsync(string text, CancellationToken cancellationToken)
     {
-        if (!ChatCommandParser.TryParseCommand(text, out var chatCmd, out var cmdArg))
+        if (!CommsAgentCommandParser.TryParse(text, out var command, out var argument))
             return null;
 
-        LogSlashCommand(_logger, nameof(AgentCommsResponder), chatCmd);
+        LogSlashCommand(_logger, nameof(AgentCommsResponder), command);
 
-        // SessionBypass answers the argument as a one-off turn with no conversation history.
-        if (chatCmd is ChatCommand.SessionBypass && !string.IsNullOrWhiteSpace(cmdArg))
-            return new CommsCommandOutcome(null, new CommsTurn(cmdArg, BypassSession: true));
+        if (command is CommsAgentCommand.SessionBypass && !string.IsNullOrWhiteSpace(argument))
+            return new CommsCommandOutcome(null, new CommsTurn(argument, BypassSession: true));
 
-        var reply = await _commandHandler.HandleCommandAsync(chatCmd, cmdArg, _agent!, _agentConfig!.Name);
-        return new CommsCommandOutcome(reply);
+        return new CommsCommandOutcome(await HandleCommandAsync(command, argument, cancellationToken));
     }
 
     /// <inheritdoc/>
@@ -161,85 +140,64 @@ public sealed partial class AgentCommsResponder : ICommsResponder
         });
     }
 
-    private async Task<(AgentRunResult? Result, List<CommsDebugStep> DebugSteps)> RunAgentAsync(CommsTurn turn,
+    private async Task<(CommsAgentRunResult? Result, List<CommsDebugStep> DebugSteps)> RunAgentAsync(CommsTurn turn,
         CancellationToken cancellationToken)
     {
         try
         {
-            var agent = _agent!;
-            var agentConfig = _agentConfig!;
-            var provider = _provider!;
-
             LogAgentInferenceStarting(_logger, nameof(AgentCommsResponder), turn.Prompt.Length,
-                turn.BinaryContent is not null, _commandHandler.GetModelOverride(agentConfig.Name) ?? agentConfig.Provider);
+                turn.BinaryContent is not null, _profile.AgentName);
 
-            var session = await LoadSessionAsync(agent, agentConfig, turn);
-
-            var message = AgentExtensions.BuildChatMessage(turn.Prompt,
-                binaryContent: turn.BinaryContent, mimeType: turn.MimeType);
-            var chatOptions = AgentExtensions.BuildChatOptions(agentConfig, _resolvedInstructions!);
-            _commandHandler.ApplyModelOverride(chatOptions, agentConfig.Name);
-            _commandHandler.ApplyInstructionsOverride(chatOptions, agentConfig.Name, _aiConfig);
-
-            // Accumulate debug steps across the full agent pipeline.
             var debugSteps = new List<CommsDebugStep>();
             var pipelineSw = Stopwatch.StartNew();
-
             debugSteps.Add(new CommsDebugStep(
-                $"\U0001F680 {agentConfig.Name}",
-                $"{_commandHandler.GetModelOverride(agentConfig.Name) ?? agentConfig.Provider} ({provider.ModelName})",
+                $"\U0001F680 {_profile.AgentName}",
+                null,
                 TimeSpan.Zero));
 
-            var runScope = CreateRunScope(turn, debugSteps, pipelineSw, cancellationToken);
+            var enrichmentState = new object?[_enrichers.Count];
+            for (var i = 0; i < _enrichers.Count; i++)
+                enrichmentState[i] = await _enrichers[i].BeforeRunAsync(cancellationToken);
 
-            try
-            {
-                var enrichmentState = new object?[_enrichers.Count];
-                for (var i = 0; i < _enrichers.Count; i++)
-                    enrichmentState[i] = await _enrichers[i].BeforeRunAsync(cancellationToken);
-
-                var result = await agent.RunAnalysisAsync(
-                    provider,
-                    agentConfig,
-                    message,
-                    chatOptions,
-                    session: session,
-                    cancellationToken: cancellationToken,
-                    logger: _logger,
-                    scope: runScope);
-
-                for (var i = 0; i < _enrichers.Count; i++)
-                    await _enrichers[i].AfterRunAsync(result, enrichmentState[i], cancellationToken);
-
-                LogAgentCompleted(_logger, nameof(AgentCommsResponder), result.Elapsed,
-                    result.Session is not null ? "present" : "missing");
-
-                // Persist the updated session so the next call resumes conversation context.
-                if (!turn.BypassSession && result.Session is not null)
+            RunAgentResponse? response = null;
+            await foreach (var item in _agentRuntimeClient.StreamAgentAsync(
+                _profile.AgentName,
+                new RunAgentRequest
                 {
-                    await _commandHandler.SaveSessionAsync(agent, agentConfig.Name, result.Session);
-                    LogAgentSessionPersisted(_logger, nameof(AgentCommsResponder));
-                }
-
-                // Restore hourglass reaction after delegation completes (Option B cleanup).
-                await SetReactionAsync(Hourglass, turn, cancellationToken);
-
-                // Final step for the parent agent.
-                pipelineSw.Stop();
-                debugSteps.Add(new CommsDebugStep(
-                    $"\U0001F3C1 {agentConfig.Name}",
-                    null,
-                    pipelineSw.Elapsed,
-                    result));
-
-                return (result, debugSteps);
-            }
-            finally
+                    SessionId = _profile.SessionId,
+                    Input = turn.Prompt,
+                    BinaryContent = turn.BinaryContent,
+                    MimeType = turn.MimeType,
+                    BypassSession = turn.BypassSession,
+                    IncludeDiagnosticDetails = _commsConfig.Value.MonitorGroupName is { Length: > 0 }
+                        || _enrichers.Count > 0,
+                },
+                cancellationToken))
             {
-                // Delegation, completion and compaction callbacks live on the run scope and fall out of
-                // use with it; only the audio debug artifacts remain ambient.
-                AgentExtensions.ClearAmbientAudioDebug();
+                if (item.Event is { } executionEvent)
+                    await HandleExecutionEventAsync(executionEvent, turn, debugSteps, pipelineSw, cancellationToken);
+                if (item.Response is not null)
+                    response = item.Response;
             }
+
+            if (response is null)
+                return (null, debugSteps);
+
+            var result = CommsAgentRunResult.FromResponse(response);
+            for (var i = 0; i < _enrichers.Count; i++)
+                await _enrichers[i].AfterRunAsync(result, enrichmentState[i], cancellationToken);
+
+            LogAgentCompleted(_logger, nameof(AgentCommsResponder), result.Elapsed,
+                result.Session is { Exists: true } ? "present" : "missing");
+            await SetReactionAsync(Hourglass, turn, cancellationToken);
+
+            pipelineSw.Stop();
+            debugSteps.Add(new CommsDebugStep(
+                $"\U0001F3C1 {_profile.AgentName}",
+                result.ModelName,
+                pipelineSw.Elapsed,
+                result));
+            return (result, debugSteps);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
@@ -248,71 +206,79 @@ public sealed partial class AgentCommsResponder : ICommsResponder
         }
     }
 
-    /// <summary>Loads the conversation session for the turn, or none when the turn bypasses it.</summary>
-    private async Task<AgentSession?> LoadSessionAsync(AIAgent agent, AgentConfig agentConfig, CommsTurn turn)
+    private async Task HandleExecutionEventAsync(
+        RunAgentEvent executionEvent,
+        CommsTurn turn,
+        List<CommsDebugStep> debugSteps,
+        Stopwatch pipelineStopwatch,
+        CancellationToken cancellationToken)
     {
-        if (turn.BypassSession)
+        if (executionEvent.Type == RunAgentEventTypes.DelegationStarted)
         {
-            LogAgentSessionBypassed(_logger, nameof(AgentCommsResponder));
-            return null;
+            var depth = executionEvent.Depth ?? 1;
+            var depthLabel = depth switch { 1 => "sub-agent", 2 => "sub-sub-agent", _ => $"depth-{depth} agent" };
+            var agentName = executionEvent.AgentName ?? "agent";
+            var modelName = executionEvent.ModelName ?? "unknown model";
+            LogAgentDelegating(_logger, nameof(AgentCommsResponder), agentName, depthLabel, modelName);
+            debugSteps.Add(new CommsDebugStep(
+                $"{TwistedArrows} {agentName} ({depthLabel})",
+                modelName,
+                pipelineStopwatch.Elapsed));
+            if (_commsConfig.Value.DelegationMessagesEnabled)
+            {
+                await _signalizrClient.SendAsync(
+                    _commsConfig.Value.GroupName,
+                    $"{TwistedArrows} Consulting {agentName} ({depthLabel}) \u2022 {modelName}",
+                    cancellationToken);
+            }
+            await SetReactionAsync(TwistedArrows, turn, cancellationToken);
+            return;
         }
 
-        var session = await _commandHandler.LoadSessionAsync(agent, agentConfig.Name);
-        if (session is null)
-            LogAgentSessionStarted(_logger, nameof(AgentCommsResponder));
-        else
-            LogAgentSessionResumed(_logger, nameof(AgentCommsResponder));
-        return session;
+        if (executionEvent.Type == RunAgentEventTypes.DelegationCompleted)
+        {
+            debugSteps.Add(new CommsDebugStep(
+                $"\u2705 {executionEvent.AgentName ?? "agent"}",
+                executionEvent.ModelName,
+                pipelineStopwatch.Elapsed,
+                executionEvent.Result is { } result ? MapStepResult(result, executionEvent.ModelName) : null));
+            return;
+        }
+
+        if (executionEvent.Type == RunAgentEventTypes.SessionCompacted)
+        {
+            var input = executionEvent.InputMessageCount ?? 0;
+            var output = executionEvent.OutputMessageCount ?? 0;
+            var toolDropped = executionEvent.ToolMessagesDropped ?? 0;
+            var windowTrimmed = executionEvent.WindowMessagesTrimmed ?? 0;
+            var target = executionEvent.TargetMessageCount ?? 0;
+            LogSessionCompaction(_logger, nameof(AgentCommsResponder), input, output, toolDropped, windowTrimmed, target);
+            await _debugNotifier.SendCompactionDebugAsync(
+                input,
+                output,
+                toolDropped,
+                windowTrimmed,
+                target,
+                cancellationToken);
+        }
     }
 
-    /// <summary>
-    /// Builds the per-run scope carrying the host callbacks, so there is no process-wide state to leak if
-    /// the run exits early.
-    /// </summary>
-    private AgentRunScope CreateRunScope(CommsTurn turn, List<CommsDebugStep> debugSteps, Stopwatch pipelineSw,
-        CancellationToken cancellationToken) => new()
+    private static CommsAgentRunResult MapStepResult(RunAgentStepResult result, string? modelName)
+    {
+        var mapped = new CommsAgentRunResult
         {
-            OnDelegation = async (agentKey, depth, subProvider, ct) =>
-            {
-                var depthLabel = depth switch { 1 => "sub-agent", 2 => "sub-sub-agent", _ => $"depth-{depth} agent" };
-                LogAgentDelegating(_logger, nameof(AgentCommsResponder), agentKey, depthLabel,
-                    $"{subProvider.Type}:{subProvider.ModelName}");
-
-                debugSteps.Add(new CommsDebugStep(
-                    $"{TwistedArrows} {agentKey} ({depthLabel})",
-                    $"{subProvider.Type}:{subProvider.ModelName}",
-                    pipelineSw.Elapsed));
-
-                // Option A: send a separate status message (toggleable via config).
-                if (_commsConfig.Value.DelegationMessagesEnabled)
-                {
-                    await _signalizrClient.SendAsync(_commsConfig.Value.GroupName,
-                        $"{TwistedArrows} Consulting {agentKey} ({depthLabel}) \u2022 {subProvider.Type}:{subProvider.ModelName}", ct);
-                }
-
-                // Option B: swap reaction to twisted-arrows to indicate delegation.
-                await SetReactionAsync(TwistedArrows, turn, ct);
-            },
-
-            OnCompletion = (agentKey, depth, subResult, ct) =>
-            {
-                debugSteps.Add(new CommsDebugStep(
-                    $"\u2705 {agentKey}",
-                    null,
-                    pipelineSw.Elapsed,
-                    subResult));
-                return Task.CompletedTask;
-            },
-
-            OnCompaction = stats =>
-            {
-                LogSessionCompaction(_logger, nameof(AgentCommsResponder), stats.InputCount, stats.OutputCount,
-                    stats.ToolDropped, stats.WindowTrimmed, stats.Target);
-
-                _ = _debugNotifier.SendCompactionDebugAsync(stats.InputCount, stats.OutputCount,
-                    stats.ToolDropped, stats.WindowTrimmed, stats.Target, cancellationToken);
-            },
+            OutputText = string.Empty,
+            ModelName = modelName ?? string.Empty,
+            Elapsed = TimeSpan.FromMilliseconds(result.ElapsedMilliseconds),
+            Usage = result.Usage,
+            ToolCalls = result.ToolCalls,
         };
+        foreach (var (key, value) in result.AdditionalProperties)
+            mapped.AdditionalProperties[key] = value.ValueKind is JsonValueKind.Number && value.TryGetDouble(out var number)
+                ? number
+                : value.ToString();
+        return mapped;
+    }
 
     /// <summary>Sets a progress reaction on the turn's inbound message, best effort.</summary>
     private Task SetReactionAsync(string reaction, CommsTurn turn, CancellationToken cancellationToken) =>

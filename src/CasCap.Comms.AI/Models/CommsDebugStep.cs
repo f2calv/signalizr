@@ -5,4 +5,4 @@ public sealed record CommsDebugStep(
     string Label,
     string? Provider,
     TimeSpan WallClockOffset,
-    AgentRunResult? Result = null);
+    CommsAgentRunResult? Result = null);

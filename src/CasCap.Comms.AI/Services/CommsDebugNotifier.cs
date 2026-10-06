@@ -17,7 +17,7 @@ public sealed class CommsDebugNotifier(
     IEnumerable<IAgentRunEnricher> enrichers)
 {
     /// <summary>Builds a compact stats footer to append to the group message.</summary>
-    public async Task<string> FormatStatsFooterAsync(AgentRunResult result, CancellationToken cancellationToken)
+    public async Task<string> FormatStatsFooterAsync(CommsAgentRunResult result, CancellationToken cancellationToken)
     {
         var sb = new StringBuilder();
         sb.AppendLine();
@@ -42,8 +42,8 @@ public sealed class CommsDebugNotifier(
         }
 
         // Session context size (best-effort).
-        if (result.Session is not null && TryDescribeSession(result.Session) is { } session)
-            sb.Append($" | 💾 {session}");
+        if (result.Session is { Exists: true } session)
+            sb.Append($" | 💾 {DescribeSession(session)}");
 
         // Host-specific lines, such as energy and GPU metrics.
         foreach (var enricher in enrichers)
@@ -127,7 +127,7 @@ public sealed class CommsDebugNotifier(
     /// <c>inboundTimestamp</c> is the inbound Signal message timestamp in milliseconds since the
     /// Unix epoch, used to report the end-to-end turnaround the sender actually experienced.
     /// </remarks>
-    public async Task SendDebugStatsAsync(string prompt, AgentRunResult result, IReadOnlyList<CommsDebugStep> debugSteps,
+    public async Task SendDebugStatsAsync(string prompt, CommsAgentRunResult result, IReadOnlyList<CommsDebugStep> debugSteps,
         long? inboundTimestamp, CancellationToken cancellationToken)
     {
         if (commsConfig.Value.MonitorGroupName is not { Length: > 0 } monitorGroupName)
@@ -171,7 +171,7 @@ public sealed class CommsDebugNotifier(
         }
     }
 
-    private void AppendSummary(StringBuilder sb, AgentRunResult result)
+    private void AppendSummary(StringBuilder sb, CommsAgentRunResult result)
     {
         sb.AppendLine($"\u23F1 Wall: {result.Elapsed.TotalSeconds:F1}s");
 
@@ -190,8 +190,8 @@ public sealed class CommsDebugNotifier(
         foreach (var line in enrichers.SelectMany(e => e.FormatDebugLines(result)))
             sb.AppendLine(line);
 
-        if (result.Session is not null)
-            sb.AppendLine($"\U0001F4BE Session: {TryDescribeSession(result.Session) ?? "detail unavailable"}");
+        if (result.Session is { Exists: true } session)
+            sb.AppendLine($"\U0001F4BE Session: {DescribeSession(session)}");
 
         if (result.FinishReason is { Length: > 0 })
             sb.AppendLine($"\U0001F3C1 Finish: {result.FinishReason}");
@@ -221,7 +221,7 @@ public sealed class CommsDebugNotifier(
         {
             foreach (var tc in r.ToolCalls)
             {
-                var args = tc.Arguments is { Count: > 0 }
+                var args = tc.Arguments.Count > 0
                     ? $"({string.Join(", ", tc.Arguments.Select(a => $"{a.Key}={a.Value}"))})"
                     : string.Empty;
                 sb.AppendLine($"   \U0001F527 {tc.Name}{args}");
@@ -232,20 +232,8 @@ public sealed class CommsDebugNotifier(
             sb.AppendLine($"   {line}");
     }
 
-    //Session context size is best-effort diagnostics; a state bag it cannot read is reported as unavailable.
-    private static string? TryDescribeSession(AgentSession session)
-    {
-        try
-        {
-            var entries = ChatCommandParser.GetStateBagEntries(session);
-            var totalBytes = entries.Sum(e => e.ByteSize);
-            var userMsg = entries.Sum(e => e.UserMessageCount);
-            var assistantMsg = entries.Sum(e => e.AssistantMessageCount);
-            return $"{totalBytes / 1024.0:F1}KB, {userMsg}u/{assistantMsg}a";
-        }
-        catch (Exception ex) when (ex is JsonException or InvalidOperationException or NotSupportedException)
-        {
-            return null;
-        }
-    }
+    private static string DescribeSession(AgentSessionInfoResponse session) =>
+        $"{session.SizeBytes / 1024.0:F1}KB, "
+        + $"{session.Entries.Sum(entry => entry.UserMessageCount)}u/"
+        + $"{session.Entries.Sum(entry => entry.AssistantMessageCount)}a";
 }

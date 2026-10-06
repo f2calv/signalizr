@@ -5,28 +5,28 @@ public static class CommsAgentServiceCollectionExtensions
 {
     /// <summary>
     /// Registers <see cref="AgentCommsResponder"/> as the <see cref="ICommsResponder"/>, with its
-    /// <see cref="CommsDebugNotifier"/>, session store, command handler and poll tracker.
+    /// <see cref="CommsDebugNotifier"/> and poll tracker.
     /// </summary>
     /// <remarks>
-    /// The keyed <see cref="Microsoft.Agents.AI.AIAgent"/> named <paramref name="agentKey"/> and its
-    /// <see cref="AIConfig"/> profile are registered by the host. Register <see cref="IAgentRunEnricher"/>
-    /// implementations to add host-specific measurements.
+    /// Register <see cref="IAgentRunEnricher"/> implementations to add host-specific measurements.
+    /// The returned HTTP client builder accepts caller-owned authentication and resilience handlers.
     /// </remarks>
     /// <param name="services">The service collection.</param>
-    /// <param name="agentKey">The key of the agent in <see cref="AIConfig.Agents"/>.</param>
-    /// <param name="instructionsAssembly">The assembly holding the agent's embedded instruction resources.</param>
-    /// <returns>The same <see cref="IServiceCollection"/> for chaining.</returns>
-    public static IServiceCollection AddCommsAgent(this IServiceCollection services, string agentKey,
-        Assembly instructionsAssembly)
+    /// <param name="agentName">The stable tenant-local Agent Runtime name.</param>
+    /// <param name="sessionId">The stable opaque conversation session identifier.</param>
+    /// <param name="defaultPrompt">The prompt used when an attachment arrives without text.</param>
+    /// <returns>The Agent Runtime HTTP client builder.</returns>
+    public static IHttpClientBuilder AddCommsAgent(
+        this IServiceCollection services,
+        string agentName,
+        string sessionId,
+        string defaultPrompt)
     {
-        services.AddSingleton(new CommsAgentProfile(agentKey, instructionsAssembly));
-        services.TryAddSingleton<DistributedCacheSessionStore>();
-        services.TryAddSingleton<ISessionStore>(sp => sp.GetRequiredService<DistributedCacheSessionStore>());
-        services.TryAddSingleton<AgentCommandHandler>();
+        services.AddSingleton(new CommsAgentProfile(agentName, sessionId, defaultPrompt));
         services.TryAddSingleton<CommsDebugNotifier>();
         services.TryAddSingleton<ICommsResponder, AgentCommsResponder>();
         services.AddMessagingMcp();
-        return services;
+        return services.AddAgentRuntimeClient();
     }
 
     /// <summary>

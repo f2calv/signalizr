@@ -12,17 +12,14 @@ public static class CommsAgentServiceCollectionExtensions
     /// The returned HTTP client builder accepts caller-owned authentication and resilience handlers.
     /// </remarks>
     /// <param name="services">The service collection.</param>
-    /// <param name="agentName">The stable tenant-local Agent Runtime name.</param>
-    /// <param name="sessionId">The stable opaque conversation session identifier.</param>
-    /// <param name="defaultPrompt">The prompt used when an attachment arrives without text.</param>
     /// <returns>The Agent Runtime HTTP client builder.</returns>
-    public static IHttpClientBuilder AddCommsAgent(
-        this IServiceCollection services,
-        string agentName,
-        string sessionId,
-        string defaultPrompt)
+    public static IHttpClientBuilder AddCommsAgent(this IServiceCollection services)
     {
-        services.AddSingleton(new CommsAgentProfile(agentName, sessionId, defaultPrompt));
+        services.AddSingleton(serviceProvider =>
+        {
+            var config = serviceProvider.GetRequiredService<IOptions<CommsConfig>>().Value;
+            return new CommsAgentProfile(config.AgentName, config.AgentSessionId, config.AgentDefaultPrompt);
+        });
         services.TryAddSingleton<CommsDebugNotifier>();
         services.TryAddSingleton<ICommsResponder, AgentCommsResponder>();
         services.AddMessagingMcp();

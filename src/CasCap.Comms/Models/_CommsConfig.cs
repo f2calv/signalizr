@@ -15,6 +15,19 @@ public sealed record CommsConfig : IAppConfig
     [Required, MinLength(1)]
     public string GroupName { get; init; } = "My Test Group Name";
 
+    /// <summary>Stable tenant-local Agent Runtime name used by the communications responder.</summary>
+    [Required, MinLength(1), MaxLength(200)]
+    public string AgentName { get; init; } = "CommsAgent";
+
+    /// <summary>Stable opaque Agent Runtime session identifier for the configured chat conversation.</summary>
+    /// <remarks>Do not use the Signal group display name or another personal identifier.</remarks>
+    [Required, MinLength(1), MaxLength(200)]
+    public string AgentSessionId { get; init; } = "primary-group";
+
+    /// <summary>Prompt used when a non-audio attachment arrives without message text.</summary>
+    [Required, MinLength(1), MaxLength(10_000)]
+    public string AgentDefaultPrompt { get; init; } = "Describe this attachment.";
+
     /// <summary>
     /// Exact Signal group display name for operator diagnostics, or <see langword="null"/> to disable them.
     /// </summary>

@@ -32,7 +32,7 @@ published package in Release.
 | `CommsDebugStep` | One step of the monitor-group pipeline timeline |
 | `MessagingMcpQueryService` | MCP poll tools (`create_poll`, `close_poll`, `get_poll_status`) on the chat group |
 | `IPollTracker`, `InMemoryPollTracker` | Comms-owned poll lifecycle, votes, result summaries, and TTL expiry |
-| `CommsAgentServiceCollectionExtensions` | `AddCommsAgent(agentName, sessionId, defaultPrompt)`, `AddMessagingMcp()` and `AddMessagingMcpStub()` |
+| `CommsAgentServiceCollectionExtensions` | `AddCommsAgent()`, `AddMessagingMcp()` and `AddMessagingMcpStub()` |
 
 ## Configuration
 
@@ -44,7 +44,7 @@ authentication and resilience to the `IHttpClientBuilder` returned by `AddCommsA
 
 ```csharp
 services.AddComms(configuration);
-services.AddCommsAgent("CommsAgent", "primary-group", "Describe this attachment.");
+services.AddCommsAgent();
 services.AddSingleton<IAgentRunEnricher, MyHardwareEnricher>();
 ```
 
@@ -57,4 +57,6 @@ services.AddSingleton<IAgentRunEnricher, MyHardwareEnricher>();
 | `CasCap.AgentRuntime.Contracts` | Stable run, diagnostic and control DTOs |
 | `ModelContextProtocol` | Poll tool attributes |
 
-Debug builds reference adjacent source checkouts; Release builds use the published packages.
+Debug builds reference the adjacent Agent Runtime source checkout. Add exact Release package
+references only after `CasCap.AgentRuntime.Client` and `CasCap.AgentRuntime.Contracts` have immutable
+published versions.

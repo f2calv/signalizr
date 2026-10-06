@@ -52,8 +52,9 @@ documentation there rather than in these repository-specific constraints.
   references and package the complete set together; downstream Debug builds use adjacent project
   references and Release builds pin the exact published version.
 - `CasCap.Comms` owns the shared Signalizr consumer pipeline and reply queue. `CasCap.Comms.AI`
-  owns its optional in-process agent responder until that implementation migrates to the Agent
-  Runtime client. Application event producers and application-specific enrichers remain with their
+  owns its optional Agent Runtime responder, Comms-specific slash syntax, poll tools and diagnostic
+  adaptation. The runtime owns definitions, credentials, construction, tools, session state and
+  overrides. Application event producers and application-specific enrichers remain with their
   consuming applications.
 - Use the shared Helm guidance for chart authoring, fixtures, packaging, validation, and dashboard
   JSON handling.

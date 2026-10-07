@@ -4,7 +4,7 @@ namespace CasCap.Services;
 /// <remarks>Sender identifiers and message text are personal data and are never logged here.</remarks>
 public sealed partial class AgentCommsResponder
 {
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Information, SkipEnabledCheck = true,
         Message = "{ClassName} received poll vote on poll {PollId}, selected indices: [{SelectedIndices}]")]
     private static partial void LogPollVoteReceived(ILogger logger, string className, string pollId, string selectedIndices);
 
@@ -36,7 +36,7 @@ public sealed partial class AgentCommsResponder
         Message = "{ClassName} agent inference failed")]
     private static partial void LogAgentInferenceFailed(ILogger logger, Exception ex, string className);
 
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Information, SkipEnabledCheck = true,
         Message = "{ClassName} debug stats: parentUsage={HasUsage}, inputTokens={InputTokens}, outputTokens={OutputTokens}, debugSteps={StepCount}, stepsWithResult={StepsWithResult}, stepsWithUsage={StepsWithUsage}")]
     private static partial void LogDebugStats(ILogger logger, string className, bool hasUsage, long? inputTokens, long? outputTokens, int stepCount, int stepsWithResult, int stepsWithUsage);
 

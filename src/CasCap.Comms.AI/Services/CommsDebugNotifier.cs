@@ -77,8 +77,9 @@ public sealed class CommsDebugNotifier(
                 sb.AppendLine($"\U0001F4CE {commsEvent.JsonPayload}");
 
             await signalizrClient.SendAsync(monitorGroupName, sb.ToString().TrimEnd(), cancellationToken);
-            logger.LogDebug("{ClassName} stream event debug sent to the configured monitor group",
-                nameof(CommsDebugNotifier));
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug("{ClassName} stream event debug sent to the configured monitor group",
+                    nameof(CommsDebugNotifier));
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
@@ -109,8 +110,9 @@ public sealed class CommsDebugNotifier(
             sb.Append($"\U0001F3AF Target: {target}");
 
             await signalizrClient.SendAsync(monitorGroupName, sb.ToString(), cancellationToken);
-            logger.LogDebug("{ClassName} compaction debug sent to the configured monitor group",
-                nameof(CommsDebugNotifier));
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug("{ClassName} compaction debug sent to the configured monitor group",
+                    nameof(CommsDebugNotifier));
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
@@ -161,8 +163,9 @@ public sealed class CommsDebugNotifier(
             AppendSummary(sb, result);
 
             await signalizrClient.SendAsync(monitorGroupName, sb.ToString().TrimEnd(), cancellationToken);
-            logger.LogDebug("{ClassName} debug stats sent to the configured monitor group",
-                nameof(CommsDebugNotifier));
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug("{ClassName} debug stats sent to the configured monitor group",
+                    nameof(CommsDebugNotifier));
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {

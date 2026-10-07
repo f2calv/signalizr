@@ -72,7 +72,11 @@ public sealed partial class AgentCommsResponder : ICommsResponder
     {
         var pollId = pollVote.PollId;
         var selectedIndices = pollVote.OptionIndexes.ToArray();
-        LogPollVoteReceived(_logger, nameof(AgentCommsResponder), pollId, string.Join(", ", selectedIndices));
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            var selectedIndicesText = string.Join(", ", selectedIndices);
+            LogPollVoteReceived(_logger, nameof(AgentCommsResponder), pollId, selectedIndicesText);
+        }
 
         // Fetch the poll first so we have its metadata even if it expires between RecordVote and
         // building the prompt.
@@ -129,13 +133,18 @@ public sealed partial class AgentCommsResponder : ICommsResponder
         return new CommsReply(result.OutputText, footer, attachments, async ct =>
         {
             // Send the detailed pipeline timeline to the monitor group.
-            LogDebugStats(_logger, nameof(AgentCommsResponder),
-                result.Usage is not null,
-                result.Usage?.InputTokenCount,
-                result.Usage?.OutputTokenCount,
-                debugSteps.Count,
-                debugSteps.Count(s => s.Result is not null),
-                debugSteps.Count(s => s.Result?.Usage is not null));
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                var stepsWithResult = debugSteps.Count(s => s.Result is not null);
+                var stepsWithUsage = debugSteps.Count(s => s.Result?.Usage is not null);
+                LogDebugStats(_logger, nameof(AgentCommsResponder),
+                    result.Usage is not null,
+                    result.Usage?.InputTokenCount,
+                    result.Usage?.OutputTokenCount,
+                    debugSteps.Count,
+                    stepsWithResult,
+                    stepsWithUsage);
+            }
             await _debugNotifier.SendDebugStatsAsync(turn.Prompt, result, debugSteps, turn.Timestamp, ct);
         });
     }

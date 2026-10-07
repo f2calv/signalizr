@@ -319,7 +319,7 @@ public sealed partial class CommunicationsBgService
         contentType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true;
 
     //Read from the envelope so the sender can be acknowledged before anything is downloaded.
-    private static bool CarriesAudio(IReceivedNotification notification) =>
+    private static bool CarriesAudio(SignalizrReceivedNotification notification) =>
         notification.Attachments?.Any(a => IsAudio(a.ContentType)) == true;
 
     /// <summary>Queues a turn for sequential processing, waiting for capacity when the queue is full.</summary>

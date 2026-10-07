@@ -27,8 +27,11 @@ public sealed class ReceiverBgService(
                 "for messages rather than receive copies of them.");
         }
 
-        logger.LogInformation("{ClassName} draining {ReceiverType} into the inbound queue",
-            nameof(ReceiverBgService), receiver.GetType().Name);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("{ClassName} draining {ReceiverType} into the inbound queue",
+                nameof(ReceiverBgService), receiver.GetType().Name);
+        }
 
         var delay = TimeSpan.FromSeconds(5);
         while (!cancellationToken.IsCancellationRequested)
@@ -63,8 +66,11 @@ public sealed class ReceiverBgService(
 
         queue.Complete();
 
-        logger.LogInformation("{ClassName} stopped after {Enqueued} message(s), {Dropped} dropped",
-            nameof(ReceiverBgService), queue.EnqueuedCount, queue.DroppedCount);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("{ClassName} stopped after {Enqueued} message(s), {Dropped} dropped",
+                nameof(ReceiverBgService), queue.EnqueuedCount, queue.DroppedCount);
+        }
     }
 
     /// <summary>Reads the stream, doing nothing per message but queueing it.</summary>

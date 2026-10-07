@@ -29,7 +29,7 @@ public sealed partial class CommunicationsBgService
             }
             catch (Exception ex) when (ex is not OperationCanceledException and not TaskCanceledException)
             {
-                LogPollCycleError(logger, ex, nameof(CommunicationsBgService), ex.GetType().Name, ex.Message);
+                LogPollCycleError(logger, ex, nameof(CommunicationsBgService));
             }
 
             // A clean end of the Signalizr gRPC subscription also means the gateway went away, so both paths back off.
@@ -72,7 +72,7 @@ public sealed partial class CommunicationsBgService
         await ProcessDataMessageAsync(notification, active, cancellationToken);
     }
 
-    private async Task ProcessDataMessageAsync(IReceivedNotification notification, ICommsResponder active,
+    private async Task ProcessDataMessageAsync(SignalizrReceivedNotification notification, ICommsResponder active,
         CancellationToken cancellationToken)
     {
         // A poll vote nobody tracks carries no text to act on.
@@ -119,7 +119,7 @@ public sealed partial class CommunicationsBgService
         // been acquired and cleaned up.
         if (acquisition.VoiceSuppressed && string.IsNullOrWhiteSpace(notification.Message))
         {
-            LogVoiceTurnSuppressed(logger, nameof(CommunicationsBgService), speechToTextConfig.Value.Mode.ToString());
+            LogVoiceTurnSuppressed(logger, nameof(CommunicationsBgService), speechToTextConfig.Value.Mode);
             return;
         }
 
@@ -148,7 +148,7 @@ public sealed partial class CommunicationsBgService
     /// and the sender should see that it was heard immediately. The hourglass replaces it once the
     /// prompt reaches the responder.
     /// </remarks>
-    private async Task AcknowledgeReceiptAsync(IReceivedNotification notification, CancellationToken cancellationToken)
+    private async Task AcknowledgeReceiptAsync(SignalizrReceivedNotification notification, CancellationToken cancellationToken)
     {
         if (notification.Timestamp is not { } timestamp)
             return;
@@ -159,7 +159,7 @@ public sealed partial class CommunicationsBgService
     /// <summary>Lets the responder handle <paramref name="prompt"/> as a command, completing it when it is one.</summary>
     /// <returns><see langword="true"/> when the prompt was a command and needs no ordinary turn.</returns>
     private async Task<bool> TryCompleteCommandAsync(ICommsResponder active, string prompt,
-        IReceivedNotification notification, CancellationToken cancellationToken)
+        SignalizrReceivedNotification notification, CancellationToken cancellationToken)
     {
         var command = await active.TryHandleCommandAsync(prompt, cancellationToken);
         if (command is null)
@@ -189,7 +189,7 @@ public sealed partial class CommunicationsBgService
     /// turn by the configured mode.
     /// </returns>
     private async Task<AttachmentAcquisition> AcquireAttachmentAsync(
-        IReceivedNotification notification, CancellationToken cancellationToken)
+        SignalizrReceivedNotification notification, CancellationToken cancellationToken)
     {
         var attachments = notification.Attachments ?? [];
         if (attachments.Count > 1)
@@ -223,7 +223,7 @@ public sealed partial class CommunicationsBgService
         // Raw audio never reaches the responder: it is replaced by the normalised transcript, or the
         // turn is abandoned. Shadow transcribes for measurement but stops short of a turn.
         var result = await transcriptionSvc.Transcribe(content, attachment.ContentType, cancellationToken);
-        LogVoiceTranscription(logger, nameof(CommunicationsBgService), result.Outcome.ToString(),
+        LogVoiceTranscription(logger, nameof(CommunicationsBgService), result.Outcome,
             result.Text?.Length ?? 0);
 
         //Shadow measures the pipeline but must not reach the responder, so the transcript is dropped here.
@@ -286,7 +286,7 @@ public sealed partial class CommunicationsBgService
 
     /// <summary>Sends the single generic failure reply used when a voice message could not be transcribed.</summary>
     /// <remarks>Carries no transcript, no audio and no identifier.</remarks>
-    private Task SendVoiceFailureReplyAsync(CancellationToken cancellationToken) =>
+    private Task<string> SendVoiceFailureReplyAsync(CancellationToken cancellationToken) =>
         SendMessageAsync("\U0001F507 Sorry, I could not understand that voice message.", cancellationToken);
 
     /// <summary>Marks the sender's message as failed with a red cross.</summary>
@@ -294,7 +294,7 @@ public sealed partial class CommunicationsBgService
     /// Every abandoned turn has to reach this, otherwise the message keeps its acknowledgement
     /// reaction and looks like it is still being worked on.
     /// </remarks>
-    private async Task SendFailureReactionAsync(IReceivedNotification notification, CancellationToken cancellationToken)
+    private async Task SendFailureReactionAsync(SignalizrReceivedNotification notification, CancellationToken cancellationToken)
     {
         if (notification.Timestamp is null)
             return;
@@ -390,7 +390,7 @@ public sealed partial class CommunicationsBgService
             }
             catch (Exception ex) when (ex is not OperationCanceledException and not TaskCanceledException)
             {
-                LogReplyProcessingError(logger, ex, nameof(CommunicationsBgService), ex.GetType().Name, ex.Message);
+                LogReplyProcessingError(logger, ex, nameof(CommunicationsBgService));
 
                 // Red cross reaction to indicate a processing failure.
                 if (turn.Sender is not null && turn.Timestamp is not null)
@@ -410,17 +410,17 @@ public sealed partial class CommunicationsBgService
 
     /// <summary>Sets a progress reaction on a message in the chat group, best effort.</summary>
     /// <remarks>A reaction is feedback about the work, and failing to show it must not abandon the work itself.</remarks>
-    private Task SetReactionAsync(string reaction, string sender, long timestamp, CancellationToken cancellationToken) =>
+    private Task<bool> SetReactionAsync(string reaction, string sender, long timestamp, CancellationToken cancellationToken) =>
         signalizrClient.TrySetReactionAsync(commsConfig.Value.GroupName, reaction, timestamp, sender,
             ex => LogGroupInteractionFailed(logger, ex, nameof(CommunicationsBgService), "reaction"), cancellationToken);
 
     /// <summary>Shows the typing indicator in the chat group, best effort.</summary>
-    private Task StartTypingAsync(CancellationToken cancellationToken) =>
+    private Task<bool> StartTypingAsync(CancellationToken cancellationToken) =>
         signalizrClient.TryStartTypingAsync(commsConfig.Value.GroupName,
             ex => LogGroupInteractionFailed(logger, ex, nameof(CommunicationsBgService), "typing"), cancellationToken);
 
     /// <summary>Clears the typing indicator in the chat group, best effort.</summary>
-    private Task StopTypingAsync(CancellationToken cancellationToken) =>
+    private Task<bool> StopTypingAsync(CancellationToken cancellationToken) =>
         signalizrClient.TryStopTypingAsync(commsConfig.Value.GroupName,
             ex => LogGroupInteractionFailed(logger, ex, nameof(CommunicationsBgService), "typing"), cancellationToken);
 }

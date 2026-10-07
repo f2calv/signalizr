@@ -22,11 +22,11 @@ public interface ISignalMessageDeduplicator
     /// <see langword="true"/> when this caller took the reservation and should process the message;
     /// <see langword="false"/> when a reservation already exists and the message must be skipped.
     /// </returns>
-    Task<bool> TryClaimAsync(SignalMessageIdentity identity, CancellationToken cancellationToken = default);
+    public Task<bool> TryClaimAsync(SignalMessageIdentity identity, CancellationToken cancellationToken = default);
 
     /// <summary>Releases a reservation so the message may be reprocessed on redelivery.</summary>
     /// <param name="identity">The stable coordinates of the inbound message.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <remarks>Called only when processing failed before any user-visible side effect occurred.</remarks>
-    Task ReleaseAsync(SignalMessageIdentity identity, CancellationToken cancellationToken = default);
+    public Task ReleaseAsync(SignalMessageIdentity identity, CancellationToken cancellationToken = default);
 }

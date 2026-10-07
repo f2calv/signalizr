@@ -68,8 +68,9 @@ public sealed partial class CommunicationsBgService(
     /// <inheritdoc/>
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        LogStarting(logger, nameof(CommunicationsBgService), !string.IsNullOrEmpty(commsConfig.Value.MonitorGroupName),
-            ActiveResponder is not null);
+        var monitorEnabled = !string.IsNullOrEmpty(commsConfig.Value.MonitorGroupName);
+        var responderEnabled = ActiveResponder is not null;
+        LogStarting(logger, nameof(CommunicationsBgService), monitorEnabled, responderEnabled);
         try
         {
             // Start consuming the comms stream immediately — this must not be gated behind the gateway
@@ -106,14 +107,22 @@ public sealed partial class CommunicationsBgService(
     /// </remarks>
     private async Task WaitForGroupsAsync(CancellationToken cancellationToken)
     {
+        var retryMs = commsConfig.Value.HealthCheckProbeDelayMs;
         var missingOptional = await signalizrClient.WaitForGroupsAsync(
             [commsConfig.Value.GroupName],
             [commsConfig.Value.MonitorGroupName],
-            TimeSpan.FromMilliseconds(commsConfig.Value.HealthCheckProbeDelayMs),
+            TimeSpan.FromMilliseconds(retryMs),
             timeProvider,
-            (ex, attempt) => logger.Log(attempt % 10 == 0 ? LogLevel.Warning : LogLevel.Debug, ex,
-                "{ClassName} Signalizr gateway not reachable, attempt {Attempt}, retrying in {RetryMs}ms",
-                nameof(CommunicationsBgService), attempt, commsConfig.Value.HealthCheckProbeDelayMs),
+            (ex, attempt) =>
+            {
+                var level = attempt % 10 == 0 ? LogLevel.Warning : LogLevel.Debug;
+                if (logger.IsEnabled(level))
+                {
+                    logger.Log(level, ex,
+                        "{ClassName} Signalizr gateway not reachable, attempt {Attempt}, retrying in {RetryMs}ms",
+                        nameof(CommunicationsBgService), attempt, retryMs);
+                }
+            },
             cancellationToken);
 
         if (missingOptional.Count > 0)

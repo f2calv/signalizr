@@ -79,8 +79,11 @@ public sealed class InboundSubscriberRegistry(
 
             subscription.NotifyMessageAvailable();
             metrics.RecordSubscriberConnected();
-            logger.LogInformation("{ClassName} subscriber connected, {Count} total",
-                nameof(InboundSubscriberRegistry), _subscriptions.Count);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("{ClassName} subscriber connected, {Count} total",
+                    nameof(InboundSubscriberRegistry), _subscriptions.Count);
+            }
             operatorNotifier.Notify($"{subscriberName} connected ({_subscriptions.Count} subscriber(s))");
 
             return subscription;
@@ -102,8 +105,11 @@ public sealed class InboundSubscriberRegistry(
         subscription.Complete(error);
         metrics.RecordSubscriberDisconnected();
 
-        logger.LogInformation("{ClassName} subscriber disconnected, {Count} remaining",
-            nameof(InboundSubscriberRegistry), _subscriptions.Count);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("{ClassName} subscriber disconnected, {Count} remaining",
+                nameof(InboundSubscriberRegistry), _subscriptions.Count);
+        }
         // The exception type only: its message can carry details from the transport.
         operatorNotifier.Notify($"{subscription.Name} disconnected ({_subscriptions.Count} remaining)"
             + (error is null ? string.Empty : $", {error.GetType().Name}"));

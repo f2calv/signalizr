@@ -33,7 +33,7 @@ public sealed class RedisSignalMessageDeduplicator(
         try
         {
             var claimed = await remoteCache.Db.StringSetAsync(key, 1, ttl, When.NotExists);
-            if (!claimed)
+            if (!claimed && logger.IsEnabled(LogLevel.Information))
                 logger.LogInformation("{ClassName} duplicate suppressed for reservation {ReservationKey}",
                     nameof(RedisSignalMessageDeduplicator), key);
             return claimed;
@@ -41,8 +41,11 @@ public sealed class RedisSignalMessageDeduplicator(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             //A store outage must not silently stop inbound messages, so fail open and process.
-            logger.LogWarning(ex, "{ClassName} reservation failed for {ReservationKey}, processing anyway ({ExceptionType})",
-                nameof(RedisSignalMessageDeduplicator), key, ex.GetType().Name);
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning(ex, "{ClassName} reservation failed for {ReservationKey}, processing anyway",
+                    nameof(RedisSignalMessageDeduplicator), key);
+            }
             return true;
         }
     }
@@ -58,8 +61,11 @@ public sealed class RedisSignalMessageDeduplicator(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "{ClassName} reservation release failed for {ReservationKey} ({ExceptionType})",
-                nameof(RedisSignalMessageDeduplicator), key, ex.GetType().Name);
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning(ex, "{ClassName} reservation release failed for {ReservationKey}",
+                    nameof(RedisSignalMessageDeduplicator), key);
+            }
         }
     }
 

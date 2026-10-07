@@ -38,8 +38,9 @@ public sealed class MessageGateway(
         var response = await client.SendMessage(message, cancellationToken).ConfigureAwait(false)
             ?? throw new HttpRequestException("The signal-cli wrapper returned no send result.");
 
-        logger.LogInformation("{ClassName} sent a message to a configured Signal group",
-            nameof(MessageGateway));
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{ClassName} sent a message to a configured Signal group",
+                nameof(MessageGateway));
         TrackSendRate(groupName);
 
         return new SendMessageResponse { GroupName = groupName, Timestamp = response.Timestamp };
@@ -151,8 +152,9 @@ public sealed class MessageGateway(
         }, cancellationToken).ConfigureAwait(false)
             ?? throw new HttpRequestException("The signal-cli wrapper returned no poll result.");
 
-        logger.LogInformation("{ClassName} created a poll in a configured Signal group",
-            nameof(MessageGateway));
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{ClassName} created a poll in a configured Signal group",
+                nameof(MessageGateway));
 
         return new GroupPollResponse { GroupName = groupName, PollId = response.Timestamp };
     }
@@ -199,8 +201,11 @@ public sealed class MessageGateway(
             window.Warned = true;
         }
 
-        logger.LogWarning("{ClassName} a configured Signal group exceeded {Threshold} sends within a minute, a possible flood",
-            nameof(MessageGateway), threshold);
+        if (logger.IsEnabled(LogLevel.Warning))
+        {
+            logger.LogWarning("{ClassName} a configured Signal group exceeded {Threshold} sends within a minute, a possible flood",
+                nameof(MessageGateway), threshold);
+        }
         operatorNotifier.Notify($"flood warning: groupName {groupName} sent more than {threshold} messages within a minute; " +
             "Signal may start rate-limiting the account");
     }

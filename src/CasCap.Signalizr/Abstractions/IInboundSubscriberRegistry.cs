@@ -6,18 +6,18 @@ namespace CasCap.Abstractions;
 public interface IInboundSubscriberRegistry
 {
     /// <summary>How many subscribers are currently connected.</summary>
-    int Count { get; }
+    public int Count { get; }
 
     /// <summary>Registers a stable subscriber identity and resumes from its durable cursor.</summary>
-    Task<InboundSubscription> SubscribeAsync(
+    public Task<InboundSubscription> SubscribeAsync(
         string subscriberName,
         CancellationToken cancellationToken = default);
 
     /// <summary>Removes a subscriber and completes its queue.</summary>
     /// <param name="subscription">The subscription to remove.</param>
     /// <param name="error">Optional failure reported to the subscriber's stream.</param>
-    void Unsubscribe(InboundSubscription subscription, Exception? error = null);
+    public void Unsubscribe(InboundSubscription subscription, Exception? error = null);
 
     /// <summary>Signals every connected subscriber that persisted messages may be available.</summary>
-    void NotifyMessageAvailable();
+    public void NotifyMessageAvailable();
 }

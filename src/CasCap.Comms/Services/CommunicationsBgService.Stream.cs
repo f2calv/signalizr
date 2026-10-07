@@ -50,9 +50,19 @@ public sealed partial class CommunicationsBgService
                         if (commsConfig.Value.AllowedSources.Count > 0
                             && !commsConfig.Value.AllowedSources.Contains(commsEvent.Source))
                         {
-                            logger.Log(env.IsDevelopment() ? LogLevel.Error : LogLevel.Debug,
-                                "{ClassName} skipping event from unrecognised source {Source}",
-                                nameof(CommunicationsBgService), commsEvent.Source);
+                            if (env.IsDevelopment())
+                            {
+                                if (logger.IsEnabled(LogLevel.Error))
+                                {
+                                    logger.LogError("{ClassName} skipping event from unrecognised source {Source}",
+                                        nameof(CommunicationsBgService), commsEvent.Source);
+                                }
+                            }
+                            else if (logger.IsEnabled(LogLevel.Debug))
+                            {
+                                logger.LogDebug("{ClassName} skipping event from unrecognised source {Source}",
+                                    nameof(CommunicationsBgService), commsEvent.Source);
+                            }
                             await Db.StreamAcknowledgeAsync(
                                 commsConfig.Value.StreamKey,
                                 commsConfig.Value.ConsumerGroup,
@@ -111,7 +121,7 @@ public sealed partial class CommunicationsBgService
             return;
         }
 
-        LogProcessingStreamEvent(logger, nameof(CommunicationsBgService), commsEvent.Source, commsEvent.Message);
+        LogProcessingStreamEvent(logger, nameof(CommunicationsBgService), commsEvent.Source, commsEvent.Message.Length);
 
         // Wait until the gateway serves the chat group before attempting delivery.
         await _groupReady.Task.WaitAsync(cancellationToken);
@@ -165,7 +175,7 @@ public sealed partial class CommunicationsBgService
         }
         catch (RedisException ex)
         {
-            LogMediaFetchFailed(logger, ex, nameof(CommunicationsBgService), ex.GetType().Name);
+            LogMediaFetchFailed(logger, ex, nameof(CommunicationsBgService));
             return null;
         }
     }
@@ -235,7 +245,7 @@ public sealed partial class CommunicationsBgService
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not TaskCanceledException)
         {
-            LogDropNoticeFailed(logger, ex, nameof(CommunicationsBgService), ex.GetType().Name, ex.Message);
+            LogDropNoticeFailed(logger, ex, nameof(CommunicationsBgService));
         }
     }
 

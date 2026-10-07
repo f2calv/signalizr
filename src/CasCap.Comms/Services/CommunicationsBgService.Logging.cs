@@ -56,8 +56,8 @@ public sealed partial class CommunicationsBgService
     private static partial void LogStreamReadError(ILogger logger, Exception ex, string className);
 
     [LoggerMessage(Level = LogLevel.Information,
-        Message = "{ClassName} processing stream event from {Source}: {Message}")]
-    private static partial void LogProcessingStreamEvent(ILogger logger, string className, string source, string message);
+        Message = "{ClassName} processing stream event from {Source}, messageChars={MessageLength}")]
+    private static partial void LogProcessingStreamEvent(ILogger logger, string className, string source, int messageLength);
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} sent stream event from {Source} directly, timestamp={Timestamp}")]
@@ -72,8 +72,8 @@ public sealed partial class CommunicationsBgService
     private static partial void LogMediaNotFound(ILogger logger, string className, string mediaRedisKey);
 
     [LoggerMessage(Level = LogLevel.Warning,
-        Message = "{ClassName} could not fetch the event media ({ExceptionType}), sending without it")]
-    private static partial void LogMediaFetchFailed(ILogger logger, Exception ex, string className, string exceptionType);
+        Message = "{ClassName} could not fetch the event media, sending without it")]
+    private static partial void LogMediaFetchFailed(ILogger logger, Exception ex, string className);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "{ClassName} stream event from {Source} suppressed by rate limiter ({SuppressedCount} suppressed since last notice)")]
@@ -88,8 +88,8 @@ public sealed partial class CommunicationsBgService
     private static partial void LogDropNoticeSent(ILogger logger, string className, long droppedCount, bool delivered);
 
     [LoggerMessage(Level = LogLevel.Warning,
-        Message = "{ClassName} failed to send drop notice ({ExceptionType}: {ExceptionMessage})")]
-    private static partial void LogDropNoticeFailed(ILogger logger, Exception ex, string className, string exceptionType, string exceptionMessage);
+        Message = "{ClassName} failed to send drop notice")]
+    private static partial void LogDropNoticeFailed(ILogger logger, Exception ex, string className);
 
     // ── Messaging partial ────────────────────────────────────────────────
 
@@ -98,8 +98,8 @@ public sealed partial class CommunicationsBgService
     private static partial void LogPollingStarted(ILogger logger, string className);
 
     [LoggerMessage(Level = LogLevel.Error,
-        Message = "{ClassName} error during subscription ({ExceptionType}: {ExceptionMessage})")]
-    private static partial void LogPollCycleError(ILogger logger, Exception ex, string className, string exceptionType, string exceptionMessage);
+        Message = "{ClassName} error during subscription")]
+    private static partial void LogPollCycleError(ILogger logger, Exception ex, string className);
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} no responder available, ignoring message of {MessageLength} character(s) and {AttachmentCount} attachment(s)")]
@@ -127,11 +127,11 @@ public sealed partial class CommunicationsBgService
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} voice transcription outcome={Outcome}, transcriptChars={TranscriptChars}")]
-    private static partial void LogVoiceTranscription(ILogger logger, string className, string outcome, int transcriptChars);
+    private static partial void LogVoiceTranscription(ILogger logger, string className, VoiceTranscriptionOutcome outcome, int transcriptChars);
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} voice message acquired but no turn produced, mode={VoiceProcessingMode}")]
-    private static partial void LogVoiceTurnSuppressed(ILogger logger, string className, string voiceProcessingMode);
+    private static partial void LogVoiceTurnSuppressed(ILogger logger, string className, VoiceProcessingMode voiceProcessingMode);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "{ClassName} failed to send the voice transcript to the configured monitor group")]
@@ -166,6 +166,6 @@ public sealed partial class CommunicationsBgService
     private static partial void LogEmptyReply(ILogger logger, string className);
 
     [LoggerMessage(Level = LogLevel.Error,
-        Message = "{ClassName} error processing queued turn ({ExceptionType}: {ExceptionMessage})")]
-    private static partial void LogReplyProcessingError(ILogger logger, Exception ex, string className, string exceptionType, string exceptionMessage);
+        Message = "{ClassName} error processing queued turn")]
+    private static partial void LogReplyProcessingError(ILogger logger, Exception ex, string className);
 }

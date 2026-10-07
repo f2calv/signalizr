@@ -1,5 +1,5 @@
-using CasCap.Exceptions;
 using CasCap.Diagnostics;
+using CasCap.Exceptions;
 using CasCap.Grpc;
 using Grpc.Core;
 using Microsoft.Extensions.Options;

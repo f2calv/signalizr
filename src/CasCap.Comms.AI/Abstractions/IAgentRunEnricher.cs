@@ -11,22 +11,22 @@ public interface IAgentRunEnricher
     /// <summary>Captures state before the agent runs, for example a hardware snapshot.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>State passed back to <see cref="AfterRunAsync"/>, or <see langword="null"/>.</returns>
-    Task<object?> BeforeRunAsync(CancellationToken cancellationToken);
+    public Task<object?> BeforeRunAsync(CancellationToken cancellationToken);
 
     /// <summary>Records measurements on the completed run, typically in <see cref="CommsAgentRunResult.AdditionalProperties"/>.</summary>
     /// <param name="result">The completed run.</param>
     /// <param name="state">The state returned by <see cref="BeforeRunAsync"/>.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task AfterRunAsync(CommsAgentRunResult result, object? state, CancellationToken cancellationToken);
+    public Task AfterRunAsync(CommsAgentRunResult result, object? state, CancellationToken cancellationToken);
 
     /// <summary>Formats an extra line for the reply's stats footer.</summary>
     /// <param name="result">The completed run.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The line, or <see langword="null"/> to add nothing.</returns>
-    Task<string?> FormatFooterLineAsync(CommsAgentRunResult result, CancellationToken cancellationToken);
+    public Task<string?> FormatFooterLineAsync(CommsAgentRunResult result, CancellationToken cancellationToken);
 
     /// <summary>Formats extra lines for a run or sub-agent step in the monitor-group timeline.</summary>
     /// <param name="result">The run or step.</param>
     /// <returns>The lines, which may be empty.</returns>
-    IEnumerable<string> FormatDebugLines(CommsAgentRunResult result);
+    public IEnumerable<string> FormatDebugLines(CommsAgentRunResult result);
 }

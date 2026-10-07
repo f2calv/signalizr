@@ -11,7 +11,7 @@ public interface ISignalizrClient
     /// The gateway rejected the send or could not be reached. A 404 means the group is not
     /// configured on that gateway.
     /// </exception>
-    Task<string> SendAsync(string groupName, string message, CancellationToken cancellationToken = default);
+    public Task<string> SendAsync(string groupName, string message, CancellationToken cancellationToken = default);
 
     /// <summary>Sends a message and optional binary signal-cli data-URI attachments to a group.</summary>
     /// <param name="groupName">Exact configured Signal group name.</param>
@@ -21,19 +21,19 @@ public interface ISignalizrClient
     /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The Signal server's message timestamp.</returns>
-    Task<string> SendAsync(
+    public Task<string> SendAsync(
         string groupName,
         string message,
         IReadOnlyList<string>? base64Attachments,
         CancellationToken cancellationToken = default);
 
     /// <summary>Downloads durable attachment bytes by identifier.</summary>
-    Task<byte[]> GetAttachmentAsync(
+    public Task<byte[]> GetAttachmentAsync(
         string attachmentId,
         CancellationToken cancellationToken = default);
 
     /// <summary>The groups the gateway currently has resolved.</summary>
-    Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default);
+    public Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Sets a reaction on a message in a group, replacing any earlier one.</summary>
     /// <param name="groupName">Exact configured Signal group name.</param>
@@ -45,7 +45,7 @@ public interface ISignalizrClient
     /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <exception cref="HttpRequestException">The gateway rejected the request or could not be reached.</exception>
-    Task SetReactionAsync(
+    public Task SetReactionAsync(
         string groupName,
         string reaction,
         long targetTimestamp,
@@ -54,7 +54,7 @@ public interface ISignalizrClient
 
     /// <summary>Removes a reaction from a message in a group.</summary>
     /// <inheritdoc cref="SetReactionAsync(string, string, long, string?, CancellationToken)"/>
-    Task RemoveReactionAsync(
+    public Task RemoveReactionAsync(
         string groupName,
         string reaction,
         long targetTimestamp,
@@ -70,11 +70,11 @@ public interface ISignalizrClient
     /// The gateway rejected the request or could not be reached. A 404 also means the message is
     /// no longer retained.
     /// </exception>
-    Task SetReactionAsync(SignalizrMessage message, string reaction, CancellationToken cancellationToken = default);
+    public Task SetReactionAsync(SignalizrMessage message, string reaction, CancellationToken cancellationToken = default);
 
     /// <summary>Removes a reaction from a delivered message.</summary>
     /// <inheritdoc cref="SetReactionAsync(SignalizrMessage, string, CancellationToken)"/>
-    Task RemoveReactionAsync(SignalizrMessage message, string reaction, CancellationToken cancellationToken = default);
+    public Task RemoveReactionAsync(SignalizrMessage message, string reaction, CancellationToken cancellationToken = default);
 
     /// <summary>Shows the typing indicator in a group and holds it until stopped.</summary>
     /// <remarks>
@@ -82,11 +82,11 @@ public interface ISignalizrClient
     /// maximum if no stop arrives, so a consumer that fails before stopping cannot leave it showing.
     /// </remarks>
     /// <exception cref="HttpRequestException">The gateway rejected the request or could not be reached.</exception>
-    Task StartTypingAsync(string groupName, CancellationToken cancellationToken = default);
+    public Task StartTypingAsync(string groupName, CancellationToken cancellationToken = default);
 
     /// <summary>Clears the typing indicator in a group.</summary>
     /// <exception cref="HttpRequestException">The gateway rejected the request or could not be reached.</exception>
-    Task StopTypingAsync(string groupName, CancellationToken cancellationToken = default);
+    public Task StopTypingAsync(string groupName, CancellationToken cancellationToken = default);
 
     /// <summary>Creates a poll in a group.</summary>
     /// <param name="groupName">Exact configured Signal group name.</param>
@@ -96,7 +96,7 @@ public interface ISignalizrClient
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The poll identifier, which votes carry and closing requires.</returns>
     /// <exception cref="HttpRequestException">The gateway rejected the request or could not be reached.</exception>
-    Task<string> CreatePollAsync(
+    public Task<string> CreatePollAsync(
         string groupName,
         string question,
         IReadOnlyList<string> answers,
@@ -105,7 +105,7 @@ public interface ISignalizrClient
 
     /// <summary>Closes a poll so it accepts no further votes.</summary>
     /// <exception cref="HttpRequestException">The gateway rejected the request or could not be reached.</exception>
-    Task ClosePollAsync(string groupName, string pollId, CancellationToken cancellationToken = default);
+    public Task ClosePollAsync(string groupName, string pollId, CancellationToken cancellationToken = default);
 
     /// <summary>Streams inbound messages until the token is cancelled or the stream ends.</summary>
     /// <remarks>
@@ -118,5 +118,5 @@ public interface ISignalizrClient
     /// restart must loop, which keeps the reconnect visible rather than hiding a gap in delivery.
     /// </para>
     /// </remarks>
-    IAsyncEnumerable<SignalizrMessage> SubscribeAsync(CancellationToken cancellationToken = default);
+    public IAsyncEnumerable<SignalizrMessage> SubscribeAsync(CancellationToken cancellationToken = default);
 }

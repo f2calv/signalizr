@@ -17,18 +17,22 @@ public sealed class DbMigratorBgService(
     /// <inheritdoc/>
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        if (databaseConfig.Value.Provider is DatabaseProvider.InMemory)
+        var config = databaseConfig.Value;
+
+        if (config.Provider is DatabaseProvider.InMemory)
         {
             throw new InvalidOperationException(
                 $"{nameof(FeatureNames.DbMigrator)} requires a relational database provider.");
         }
 
-        logger.LogInformation("{ClassName} applying pending migrations", nameof(DbMigratorBgService));
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{ClassName} applying pending migrations", nameof(DbMigratorBgService));
         await using var dbContext = await dbContextFactory
             .CreateDbContextAsync(cancellationToken)
             .ConfigureAwait(false);
         await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
-        logger.LogInformation("{ClassName} migrations applied", nameof(DbMigratorBgService));
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{ClassName} migrations applied", nameof(DbMigratorBgService));
 
         await Task.Delay(Timeout.InfiniteTimeSpan, appLifetime.ApplicationStarted)
             .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);

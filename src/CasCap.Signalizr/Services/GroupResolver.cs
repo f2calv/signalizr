@@ -43,8 +43,11 @@ public sealed class GroupResolver(
         Volatile.Write(ref _groups, BuildInboundLookup(resolved, groups));
         Volatile.Write(ref _groupNames, Array.AsReadOnly(resolved.Keys.ToArray()));
 
-        logger.LogInformation("{ClassName} resolved {GroupCount} Signal group(s)",
-            nameof(GroupResolver), resolved.Count);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("{ClassName} resolved {GroupCount} Signal group(s)",
+                nameof(GroupResolver), resolved.Count);
+        }
     }
 
     /// <summary>Matches configured group names against the account's groups.</summary>

@@ -60,6 +60,16 @@ public sealed record CommsConfig : IAppConfig
     /// </remarks>
     public bool StreamEventTurnsEnabled { get; init; } = true;
 
+    /// <summary>
+    /// <see cref="CommsEvent.Source"/> values whose chat-bound events are always formatted and sent
+    /// directly, never becoming responder turns.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to none. Use it for high-volume notifications, such as media alerts, that need no
+    /// agent reply, so they cost no inference while other sources still reach the responder.
+    /// </remarks>
+    public HashSet<string> DirectDeliverySources { get; init; } = [];
+
     /// <summary>Whether to echo a successful voice transcript to <see cref="MonitorGroupName"/>.</summary>
     /// <remarks>Defaults to <see langword="false"/>. This is communications orchestration policy, not voice processing.</remarks>
     public bool EchoTranscriptToDebugChat { get; init; }

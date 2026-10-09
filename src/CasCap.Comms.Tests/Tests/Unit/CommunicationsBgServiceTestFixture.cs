@@ -22,6 +22,7 @@ namespace CasCap.Tests.Unit;
 /// <param name="streamSendRatePerMinute">Token-bucket refill rate for stream-originated sends.</param>
 /// <param name="monitorSources">Stream event sources routed to the monitor group.</param>
 /// <param name="streamEventTurnsEnabled">Whether chat-bound stream events become responder turns.</param>
+/// <param name="directDeliverySources">Stream event sources always sent directly, bypassing the responder.</param>
 public sealed class CommunicationsBgServiceTestFixture(
     VoiceProcessingMode voiceMode = VoiceProcessingMode.Enabled,
     bool responderEnabled = true,
@@ -32,7 +33,8 @@ public sealed class CommunicationsBgServiceTestFixture(
     int streamSendBurst = 10,
     int streamSendRatePerMinute = 20,
     string[]? monitorSources = null,
-    bool streamEventTurnsEnabled = true) : IAsyncDisposable
+    bool streamEventTurnsEnabled = true,
+    string[]? directDeliverySources = null) : IAsyncDisposable
 {
     /// <summary>The gateway's own account, whose messages the service must ignore.</summary>
     public const string Account = "+10000000000";
@@ -65,7 +67,8 @@ public sealed class CommunicationsBgServiceTestFixture(
         streamSendBurst,
         streamSendRatePerMinute,
         monitorSources,
-        streamEventTurnsEnabled);
+        streamEventTurnsEnabled,
+        directDeliverySources);
 
     /// <summary>The duplicate-suppression fake.</summary>
     public FakeSignalMessageDeduplicator Deduplicator => _state.Deduplicator;
@@ -284,7 +287,8 @@ public sealed class CommunicationsBgServiceTestFixture(
             int streamSendBurst,
             int streamSendRatePerMinute,
             string[]? monitorSources,
-            bool streamEventTurnsEnabled)
+            bool streamEventTurnsEnabled,
+            string[]? directDeliverySources)
         {
             var deduplicator = new FakeSignalMessageDeduplicator();
             var pollTracker = new FakePollTracker();
@@ -298,6 +302,7 @@ public sealed class CommunicationsBgServiceTestFixture(
                 MonitorGroupName = MonitorGroupName,
                 MonitorSources = [.. monitorSources ?? []],
                 StreamEventTurnsEnabled = streamEventTurnsEnabled,
+                DirectDeliverySources = [.. directDeliverySources ?? []],
                 //Short so the idle stream loop and resubscription react within a test's timeout.
                 PollingIntervalMs = 20,
                 HealthCheckProbeDelayMs = 1,

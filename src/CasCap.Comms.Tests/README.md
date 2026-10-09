@@ -19,13 +19,13 @@ AI provider.
 | Class | Methods | Cases | Category | Description |
 | --- | ---: | ---: | --- | --- |
 | `CommunicationsBgServiceTests` | 13 | 18 | Messaging | Inbound admission, duplicate suppression, durable attachments, voice-processing modes, transcript echo and reply-queue backpressure |
-| `CommunicationsBgServiceStreamTests` | 13 | 16 | Comms | Direct and responder stream delivery, disabled stream turns, monitor routing, stale and throttled drops, cached media, startup retry, the missing-group fault, resubscription, the no-responder inbound behaviour and the inbound filter |
+| `CommunicationsBgServiceStreamTests` | 14 | 17 | Comms | Direct and responder stream delivery, disabled stream turns, direct-delivery sources, monitor routing, stale and throttled drops, cached media, startup retry, the missing-group fault, resubscription, the no-responder inbound behaviour and the inbound filter |
 | `SignalMessageDeduplicatorTests` | 9 | 11 | Comms | Redis-backed duplicate Signal message suppression |
 | `MonitorSourcesGroupRouterTests` | 2 | 3 | Comms | Routing of configured operational sources to the monitor group |
 | `CommsEventFormatterTests` | 2 | 2 | Comms | The plain and timestamped direct-send formats |
 | `InMemoryPollTrackerTests` | 2 | 2 | Messaging | Poll vote summaries and TTL expiry |
 | `AgentCommsResponderTests` | 3 | 3 | Agent Runtime | Streamed live progress, attachments, diagnostics, remote overrides and local bypass |
-| **Total** | **44** | **55** | | |
+| **Total** | **45** | **56** | | |
 
 ## Trait Categories
 

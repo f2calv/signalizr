@@ -59,6 +59,24 @@ public sealed class CommunicationsBgServiceStreamTests
     }
 
     [Fact]
+    public async Task DirectDeliverySource_IsSentWithMediaDespiteResponder()
+    {
+        await using var fixture = new CommunicationsBgServiceTestFixture(directDeliverySources: [EventSource]);
+        await fixture.StartAsync();
+        const string mediaKey = "comms:cache:media:clip";
+        fixture.Redis.Strings[mediaKey] = [1, 2, 3];
+        var payload = JsonSerializer.Serialize(new MediaReference { MediaRedisKey = mediaKey, MimeType = "video/mp4", FileName = "clip.mp4" });
+
+        fixture.AddStreamEvent(EventSource, "Motion detected", DateTime.UtcNow, payload);
+
+        await WaitForAsync(() => fixture.Signalizr.SentTo(ChatGroupName).Any());
+        var sent = Assert.Single(fixture.Signalizr.SentTo(ChatGroupName));
+        Assert.Equal("Motion detected", sent.Message);
+        Assert.Equal("data:video/mp4;filename=clip.mp4;base64,AQID", Assert.Single(sent.Attachments!));
+        Assert.Empty(fixture.Signalizr.SentTo(MonitorGroupName));
+    }
+
+    [Fact]
     public async Task MonitorSource_IsSentDirectlyToMonitorGroupEvenWithResponder()
     {
         await using var fixture = new CommunicationsBgServiceTestFixture(monitorSources: [SchedulerSource]);

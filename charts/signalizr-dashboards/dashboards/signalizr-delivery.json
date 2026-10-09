@@ -602,6 +602,294 @@
             ],
             "title": "Persistence latency",
             "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "{{ .Values.datasources.prometheus }}"
+            },
+            "description": "4xx and 5xx responses from the gateway API over the selected range, excluding 499 client cancellations.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 1
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 6,
+                "x": 0,
+                "y": 21
+            },
+            "id": 9,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "textMode": "auto",
+                "wideLayout": true
+            },
+            "targets": [
+                {
+                    "editorMode": "code",
+                    "expr": "sum(increase(http_server_request_duration_seconds_count{job=~\".+/CasCap.Signalizr\", http_response_status_code=~\"[45]..\", http_response_status_code!=\"499\"}[$__range])) or vector(0)",
+                    "legendFormat": "Non-success",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Non-success API responses",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "{{ .Values.datasources.prometheus }}"
+            },
+            "description": "Gateway API responses by status code, excluding health probes.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic-by-name"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "requests/s",
+                        "axisPlacement": "auto",
+                        "drawStyle": "line",
+                        "fillOpacity": 12,
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "pointSize": 5,
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 18,
+                "x": 6,
+                "y": 21
+            },
+            "id": 10,
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "list",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "editorMode": "code",
+                    "expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{job=~\".+/CasCap.Signalizr\", http_route!~\"/healthz/.*\"}[$__rate_interval]))",
+                    "legendFormat": "{{http_response_status_code}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "API responses by status",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "{{ .Values.datasources.prometheus }}"
+            },
+            "description": "4xx and 5xx gateway API responses over the selected range, by route.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "custom": {
+                        "align": "auto",
+                        "cellOptions": {
+                            "type": "auto"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 29
+            },
+            "id": 11,
+            "options": {
+                "cellHeight": "sm",
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "desc": true,
+                        "displayName": "Responses"
+                    }
+                ]
+            },
+            "targets": [
+                {
+                    "editorMode": "code",
+                    "expr": "sum by (http_request_method, http_route, http_response_status_code) (increase(http_server_request_duration_seconds_count{job=~\".+/CasCap.Signalizr\", http_response_status_code=~\"[45]..\"}[$__range])) > 0",
+                    "format": "table",
+                    "instant": true,
+                    "range": false,
+                    "refId": "A"
+                }
+            ],
+            "title": "Non-success responses by route",
+            "transformations": [
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": true
+                        },
+                        "indexByName": {
+                            "http_request_method": 0,
+                            "http_route": 1,
+                            "http_response_status_code": 2,
+                            "Value": 3
+                        },
+                        "renameByName": {
+                            "Value": "Responses",
+                            "http_request_method": "Method",
+                            "http_response_status_code": "Status",
+                            "http_route": "Route"
+                        }
+                    }
+                }
+            ],
+            "type": "table"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "{{ .Values.datasources.prometheus }}"
+            },
+            "description": "Outbound HTTP responses from the gateway, chiefly the SignalCli REST wrapper; transport failures have no status code and report an error type.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic-by-name"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "requests/s",
+                        "axisPlacement": "auto",
+                        "drawStyle": "line",
+                        "fillOpacity": 12,
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "pointSize": 5,
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 29
+            },
+            "id": 12,
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "list",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "editorMode": "code",
+                    "expr": "sum by (server_address, http_response_status_code, error_type) (rate(http_client_request_duration_seconds_count{job=~\".+/CasCap.Signalizr\"}[$__rate_interval]))",
+                    "legendFormat": "{{server_address}} {{http_response_status_code}} {{error_type}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Outbound HTTP responses",
+            "type": "timeseries"
         }
     ],
     "refresh": "30s",
@@ -621,6 +909,6 @@
     "timezone": "browser",
     "title": "Signalizr Delivery",
     "uid": "signalizr-delivery",
-    "version": 1,
+    "version": 2,
     "weekStart": ""
 }

@@ -85,7 +85,7 @@ datasources:
 
 | File | Title | Scope |
 | --- | --- | --- |
-| `signalizr-delivery.json` | Signalizr Delivery | Ingress, persistence, subscriber acknowledgements, and SignalCli receive health |
+| `signalizr-delivery.json` | Signalizr Delivery | Ingress, persistence, subscriber acknowledgements, SignalCli receive health, and inbound and outbound HTTP status codes |
 
 ## Related Projects
 

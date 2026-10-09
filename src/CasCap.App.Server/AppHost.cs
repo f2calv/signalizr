@@ -50,7 +50,8 @@ public static partial class AppHost
             new GitMetadata(),
             configureMetrics: metrics => metrics
                 .AddMeter(appConfig.MetricNamePrefix)
-                .AddMeter(SignalCliTelemetry.MeterName),
+                .AddMeter(SignalCliTelemetry.MeterName)
+                .AddMeter("System.Net.Http"),
             configureTracing: tracing => tracing
                 .AddSource(appConfig.MetricNamePrefix)
                 .AddSource(SignalCliTelemetry.ActivitySourceName));

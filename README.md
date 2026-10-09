@@ -376,8 +376,8 @@ Two first-class targets, sharing one configuration shape:
 - **Helm** — a documented [umbrella chart](charts/signalizr/README.md) pairing the upstream wrapper
   with the gateway.
 
-The independent [dashboard chart](charts/signalizr-dashboards/README.md) publishes the
-`charts/signalizr-dashboards` OCI package for deployment into a Grafana monitoring namespace.
+The bundled [dashboard subchart](charts/signalizr-dashboards/README.md) ships with the application
+chart and renders its ConfigMaps in the release namespace when `dashboards.enabled` is set.
 
 ### Deployment Flow
 

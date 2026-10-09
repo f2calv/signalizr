@@ -8,6 +8,12 @@ sources:
   - https://github.com/f2calv/signalizr
 
 dependencies:
+  - name: signalizr-dashboards
+    version: 0.1.0
+    repository: file://../signalizr-dashboards
+    alias: dashboards
+    condition: dashboards.enabled
+
   # The upstream signal-cli REST wrapper. Owns the registered account and its on-disk state.
   - name: signalcli
     version: 1.0.2

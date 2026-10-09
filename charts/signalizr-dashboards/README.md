@@ -1,59 +1,9 @@
 # Signalizr Grafana dashboards
 
 Publishes Signalizr delivery and SignalCli transport dashboards as sidecar-discoverable ConfigMaps.
-The chart is independent of the [`signalizr`](../signalizr/README.md) application chart and is
-versioned by its own `Chart.yaml`. It is published to
-`oci://ghcr.io/f2calv/charts/signalizr-dashboards`.
-
-## Install
-
-### Helm
-
-Install the dashboards into the namespace your Grafana sidecar watches:
-
-```bash
-helm install signalizr-dashboards oci://ghcr.io/f2calv/charts/signalizr-dashboards --version 0.1.1 \
-  --namespace my-namespace --create-namespace \
-  --set-string datasources.prometheus=prometheus
-```
-
-Upgrade to the latest stable chart published in GHCR:
-
-```bash
-helm upgrade --install signalizr-dashboards oci://ghcr.io/f2calv/charts/signalizr-dashboards \
-  --namespace my-namespace --create-namespace \
-  --set-string datasources.prometheus=prometheus
-```
-
-### Argo CD Application
-
-[Argo CD](https://argo-cd.readthedocs.io/) can consume the same OCI package directly:
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: signalizr-dashboards
-  namespace: argocd
-spec:
-  project: default
-  destination:
-    namespace: my-namespace
-    server: https://kubernetes.default.svc
-  source:
-    repoURL: ghcr.io/f2calv
-    chart: charts/signalizr-dashboards
-    targetRevision: 0.1.1
-    helm:
-      valuesObject:
-        dashboardFolder: Signalizr
-        datasources:
-          prometheus: prometheus
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-```
+The [`signalizr`](../signalizr/README.md) application chart bundles it as a `file://` subchart enabled by
+`dashboards.enabled`; its version stays fixed at `0.1.0`. Set the values below under the application
+chart's `dashboards` key.
 
 ## Configuration
 

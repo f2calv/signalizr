@@ -7,6 +7,12 @@
 # other account-linked identifier.
 # ─────────────────────────────────────────────────────────────────────
 
+dashboards:
+  enabled: true
+  dashboardFolder: Signalizr
+  datasources:
+    prometheus: prometheus
+
 # The upstream signal-cli REST wrapper. One account, one owner.
 signalcli:
   # The dedicated chart owns the image, service, probes and wrapper environment. Keep the

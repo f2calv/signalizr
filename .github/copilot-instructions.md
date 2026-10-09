@@ -58,5 +58,4 @@ documentation there rather than in these repository-specific constraints.
   consuming applications.
 - Use the shared Helm guidance for chart authoring, fixtures, packaging, validation, and dashboard
   JSON handling.
-- The application chart receives the application version during packaging. The independently
-  versioned dashboard chart publishes from its committed chart version.
+- The application chart receives the application version during packaging.

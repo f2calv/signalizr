@@ -352,5 +352,5 @@ notes before moving or resizing it.
   migration and demo workloads.
 - [bbernhard/signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api) is the upstream
   wrapper image.
-- [Signalizr Grafana dashboards](../signalizr-dashboards/README.md) is the independent dashboard
-  chart.
+- [Signalizr Grafana dashboards](../signalizr-dashboards/README.md) is the bundled dashboard
+  subchart, enabled by `dashboards.enabled`.

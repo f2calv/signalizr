@@ -24,9 +24,9 @@ public sealed partial class AgentCommsResponder
 
     private async Task<string> GetSessionInfoAsync(CancellationToken cancellationToken)
     {
-        var session = await _agentRuntimeClient.GetSessionAsync(
-            _profile.AgentName,
-            _profile.SessionId,
+        var session = await AgentRuntimeClient.GetSessionAsync(
+            Profile.AgentName,
+            Profile.SessionId,
             cancellationToken);
         if (session is null)
             return "Agent is unavailable.";
@@ -46,7 +46,7 @@ public sealed partial class AgentCommsResponder
     }
 
     private async Task<string> ResetSessionAsync(CancellationToken cancellationToken) =>
-        await _agentRuntimeClient.ResetSessionAsync(_profile.AgentName, _profile.SessionId, cancellationToken)
+        await AgentRuntimeClient.ResetSessionAsync(Profile.AgentName, Profile.SessionId, cancellationToken)
             ? "Session reset. The next message will start a fresh conversation."
             : "Agent is unavailable.";
 
@@ -54,9 +54,9 @@ public sealed partial class AgentCommsResponder
     {
         if (!int.TryParse(argument, out var retainMessageCount) || retainMessageCount <= 0)
             return "Usage: /session compact <count> (positive integer)";
-        var result = await _agentRuntimeClient.CompactSessionAsync(
-            _profile.AgentName,
-            _profile.SessionId,
+        var result = await AgentRuntimeClient.CompactSessionAsync(
+            Profile.AgentName,
+            Profile.SessionId,
             new CompactAgentSessionRequest { RetainMessageCount = retainMessageCount },
             cancellationToken);
         if (result is null)
@@ -91,9 +91,9 @@ public sealed partial class AgentCommsResponder
     {
         if (string.IsNullOrWhiteSpace(snapshotName))
             return "Usage: /session save <name>";
-        return await _agentRuntimeClient.SaveSessionSnapshotAsync(
-            _profile.AgentName,
-            _profile.SessionId,
+        return await AgentRuntimeClient.SaveSessionSnapshotAsync(
+            Profile.AgentName,
+            Profile.SessionId,
             snapshotName,
             cancellationToken)
             ? $"Session saved as \"{snapshotName}\"."
@@ -104,9 +104,9 @@ public sealed partial class AgentCommsResponder
     {
         if (string.IsNullOrWhiteSpace(snapshotName))
             return "Usage: /session load <name>";
-        return await _agentRuntimeClient.LoadSessionSnapshotAsync(
-            _profile.AgentName,
-            _profile.SessionId,
+        return await AgentRuntimeClient.LoadSessionSnapshotAsync(
+            Profile.AgentName,
+            Profile.SessionId,
             snapshotName,
             cancellationToken)
             ? $"Snapshot \"{snapshotName}\" loaded into the active session."
@@ -117,9 +117,9 @@ public sealed partial class AgentCommsResponder
     {
         if (string.IsNullOrWhiteSpace(snapshotName))
             return "Usage: /session delete <name>";
-        return await _agentRuntimeClient.DeleteSessionSnapshotAsync(
-            _profile.AgentName,
-            _profile.SessionId,
+        return await AgentRuntimeClient.DeleteSessionSnapshotAsync(
+            Profile.AgentName,
+            Profile.SessionId,
             snapshotName,
             cancellationToken)
             ? $"Snapshot \"{snapshotName}\" deleted."
@@ -181,10 +181,10 @@ public sealed partial class AgentCommsResponder
     }
 
     private Task<AgentOverridesResponse?> GetOverridesAsync(CancellationToken cancellationToken) =>
-        _agentRuntimeClient.GetOverridesAsync(_profile.AgentName, _profile.SessionId, cancellationToken);
+        AgentRuntimeClient.GetOverridesAsync(Profile.AgentName, Profile.SessionId, cancellationToken);
 
     private Task<AgentOverridesResponse?> SetOverridesAsync(
         UpdateAgentOverridesRequest request,
         CancellationToken cancellationToken) =>
-        _agentRuntimeClient.SetOverridesAsync(_profile.AgentName, _profile.SessionId, request, cancellationToken);
+        AgentRuntimeClient.SetOverridesAsync(Profile.AgentName, Profile.SessionId, request, cancellationToken);
 }

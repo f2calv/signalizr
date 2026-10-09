@@ -519,8 +519,8 @@ public sealed class SignalizrMcpTests
         var result = await client.CallToolAsync(name, arguments, cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotEqual(true, result.IsError);
         Assert.NotNull(result.StructuredContent);
-        Assert.Single(result.Content);
-        var text = Assert.IsType<TextContentBlock>(result.Content[0]);
+        var content = Assert.Single(result.Content);
+        var text = Assert.IsType<TextContentBlock>(content);
         Assert.True(JsonElement.DeepEquals(result.StructuredContent.Value, JsonSerializer.Deserialize<JsonElement>(text.Text)));
         return result.StructuredContent.Value;
     }

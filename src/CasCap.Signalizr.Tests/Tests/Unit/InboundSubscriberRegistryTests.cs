@@ -188,33 +188,18 @@ public sealed class InboundSubscriberRegistryTests
         return enumerator.Current;
     }
 
-    private sealed class RegistryFixture : IDisposable
+    private sealed class RegistryFixture(int maxOutstanding = 4) : IDisposable
     {
-        private readonly SignalizrMetrics _metrics = new();
-        private readonly TestDbContextFactory _dbContextFactory = new();
+        private readonly (SignalizrMetrics Metrics, TestDbContextFactory DbContextFactory,
+            FakeOperatorNotifier Notifier, InboundSubscriberRegistry Registry) _state = CreateState(maxOutstanding);
 
-        public RegistryFixture(int maxOutstanding = 4)
-        {
-            Registry = new InboundSubscriberRegistry(
-                NullLogger<InboundSubscriberRegistry>.Instance,
-                Options.Create(new SubscriberConfig
-                {
-                    ReplayBatchSize = 10,
-                    MaxOutstanding = maxOutstanding
-                }),
-                TimeProvider.System,
-                _metrics,
-                _dbContextFactory,
-                Notifier);
-        }
+        public InboundSubscriberRegistry Registry => _state.Registry;
 
-        public InboundSubscriberRegistry Registry { get; }
-
-        public FakeOperatorNotifier Notifier { get; } = new();
+        public FakeOperatorNotifier Notifier => _state.Notifier;
 
         public async Task AddMessageAsync(string message)
         {
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync();
+            await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
             dbContext.InboundMessages.Add(new InboundMessageEntity
             {
                 Message = message,
@@ -223,7 +208,27 @@ public sealed class InboundSubscriberRegistryTests
             await dbContext.SaveChangesAsync();
         }
 
-        public void Dispose() => _metrics.Dispose();
+        public void Dispose() => _state.Metrics.Dispose();
+
+        private static (SignalizrMetrics Metrics, TestDbContextFactory DbContextFactory,
+            FakeOperatorNotifier Notifier, InboundSubscriberRegistry Registry) CreateState(int maxOutstanding)
+        {
+            var metrics = new SignalizrMetrics();
+            var dbContextFactory = new TestDbContextFactory();
+            var notifier = new FakeOperatorNotifier();
+            var registry = new InboundSubscriberRegistry(
+                NullLogger<InboundSubscriberRegistry>.Instance,
+                Options.Create(new SubscriberConfig
+                {
+                    ReplayBatchSize = 10,
+                    MaxOutstanding = maxOutstanding
+                }),
+                TimeProvider.System,
+                metrics,
+                dbContextFactory,
+                notifier);
+            return (metrics, dbContextFactory, notifier, registry);
+        }
     }
 
     private sealed class TestDbContextFactory : IDbContextFactory<SignalizrDbContext>

@@ -124,35 +124,21 @@ public class InboundGrpcServiceTests
             await Task.Delay(10, timeout.Token);
     }
 
-    private sealed class RegistryFixture : IDisposable
+    private sealed class RegistryFixture(int maxOutstanding) : IDisposable
     {
-        private readonly TestDbContextFactory _dbContextFactory = new();
+        private readonly (SignalizrMetrics Metrics, FakeOperatorNotifier Notifier,
+            TestDbContextFactory DbContextFactory, InboundSubscriberRegistry Registry) _state =
+            CreateState(maxOutstanding);
 
-        public RegistryFixture(int maxOutstanding)
-        {
-            Metrics = new SignalizrMetrics();
-            Registry = new InboundSubscriberRegistry(
-                NullLogger<InboundSubscriberRegistry>.Instance,
-                Options.Create(new SubscriberConfig
-                {
-                    ReplayBatchSize = 10,
-                    MaxOutstanding = maxOutstanding
-                }),
-                TimeProvider.System,
-                Metrics,
-                _dbContextFactory,
-                Notifier);
-        }
+        public SignalizrMetrics Metrics => _state.Metrics;
 
-        public SignalizrMetrics Metrics { get; }
+        public FakeOperatorNotifier Notifier => _state.Notifier;
 
-        public FakeOperatorNotifier Notifier { get; } = new();
-
-        public InboundSubscriberRegistry Registry { get; }
+        public InboundSubscriberRegistry Registry => _state.Registry;
 
         public async Task AddMessageAsync(string message)
         {
-            await using var dbContext = await _dbContextFactory.CreateDbContextAsync();
+            await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
             dbContext.InboundMessages.Add(new InboundMessageEntity
             {
                 Message = message,
@@ -163,6 +149,26 @@ public class InboundGrpcServiceTests
         }
 
         public void Dispose() => Metrics.Dispose();
+
+        private static (SignalizrMetrics Metrics, FakeOperatorNotifier Notifier,
+            TestDbContextFactory DbContextFactory, InboundSubscriberRegistry Registry) CreateState(int maxOutstanding)
+        {
+            var metrics = new SignalizrMetrics();
+            var notifier = new FakeOperatorNotifier();
+            var dbContextFactory = new TestDbContextFactory();
+            var registry = new InboundSubscriberRegistry(
+                NullLogger<InboundSubscriberRegistry>.Instance,
+                Options.Create(new SubscriberConfig
+                {
+                    ReplayBatchSize = 10,
+                    MaxOutstanding = maxOutstanding
+                }),
+                TimeProvider.System,
+                metrics,
+                dbContextFactory,
+                notifier);
+            return (metrics, notifier, dbContextFactory, registry);
+        }
     }
 
     private sealed class TestDbContextFactory : IDbContextFactory<SignalizrDbContext>
@@ -251,17 +257,11 @@ public class InboundGrpcServiceTests
         }
     }
 
-    private sealed class TestServerStreamWriter<T> : IServerStreamWriter<T>
+    private sealed class TestServerStreamWriter<T>(bool pauseWrites = false) : IServerStreamWriter<T>
     {
         private readonly Channel<T> _channel = Channel.CreateUnbounded<T>();
-        private readonly TaskCompletionSource _writeGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _writeGate = CreateWriteGate(pauseWrites);
         private readonly TaskCompletionSource _writeStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public TestServerStreamWriter(bool pauseWrites = false)
-        {
-            if (!pauseWrites)
-                _writeGate.TrySetResult();
-        }
 
         public WriteOptions? WriteOptions { get; set; }
 
@@ -279,6 +279,14 @@ public class InboundGrpcServiceTests
 
         public ValueTask<T> ReadAsync(CancellationToken cancellationToken) =>
             _channel.Reader.ReadAsync(cancellationToken);
+
+        private static TaskCompletionSource CreateWriteGate(bool pauseWrites)
+        {
+            var writeGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!pauseWrites)
+                writeGate.TrySetResult();
+            return writeGate;
+        }
     }
 
     private sealed class TestServerCallContext(CancellationToken cancellationToken) : ServerCallContext

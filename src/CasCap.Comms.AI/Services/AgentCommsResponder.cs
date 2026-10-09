@@ -14,52 +14,35 @@ namespace CasCap.Services;
 /// <see cref="CommsDebugNotifier"/>.
 /// </para>
 /// </remarks>
-public sealed partial class AgentCommsResponder : ICommsResponder
+public sealed partial class AgentCommsResponder(
+    ILogger<AgentCommsResponder> logger,
+    IOptions<CommsConfig> commsConfig,
+    CommsAgentProfile profile,
+    IAgentRuntimeClient agentRuntimeClient,
+    ISignalizrClient signalizrClient,
+    IPollTracker pollTracker,
+    CommsDebugNotifier debugNotifier,
+    IEnumerable<IAgentRunEnricher> enrichers) : ICommsResponder
 {
     private const string Hourglass = "\u23F3";
     private const string TwistedArrows = "\U0001F500";
 
-    private readonly ILogger _logger;
-    private readonly IOptions<CommsConfig> _commsConfig;
-    private readonly CommsAgentProfile _profile;
-    private readonly IAgentRuntimeClient _agentRuntimeClient;
-    private readonly ISignalizrClient _signalizrClient;
-    private readonly IPollTracker _pollTracker;
-    private readonly CommsDebugNotifier _debugNotifier;
-    private readonly IReadOnlyList<IAgentRunEnricher> _enrichers;
-
-    /// <summary>Initializes a new instance of the <see cref="AgentCommsResponder"/> class.</summary>
-    public AgentCommsResponder(ILogger<AgentCommsResponder> logger,
-        IOptions<CommsConfig> commsConfig,
-        CommsAgentProfile profile,
-        IAgentRuntimeClient agentRuntimeClient,
-        ISignalizrClient signalizrClient,
-        IPollTracker pollTracker,
-        CommsDebugNotifier debugNotifier,
-        IEnumerable<IAgentRunEnricher> enrichers)
-    {
-        _logger = logger;
-        _commsConfig = commsConfig;
-        _profile = profile;
-        _agentRuntimeClient = agentRuntimeClient;
-        _signalizrClient = signalizrClient;
-        _pollTracker = pollTracker;
-        _debugNotifier = debugNotifier;
-        _enrichers = [.. enrichers];
-    }
+    private readonly IReadOnlyList<IAgentRunEnricher> _enrichers = [.. enrichers];
+    private IAgentRuntimeClient AgentRuntimeClient => agentRuntimeClient;
+    private CommsAgentProfile Profile => profile;
 
     /// <inheritdoc/>
     public bool IsAvailable => true;
 
     /// <inheritdoc/>
-    public string DefaultPrompt => _profile.DefaultPrompt;
+    public string DefaultPrompt => profile.DefaultPrompt;
 
     /// <inheritdoc/>
     public async Task<CommsTurn> CreateStreamTurnAsync(CommsEvent commsEvent, IReadOnlyList<string>? base64Attachments,
         CancellationToken cancellationToken)
     {
         // Copy the raw event to the monitor group, so it can be read alongside the agent's reply.
-        await _debugNotifier.SendStreamEventDebugAsync(commsEvent, cancellationToken);
+        await debugNotifier.SendStreamEventDebugAsync(commsEvent, cancellationToken);
 
         var prompt = $"[{commsEvent.Source}] {commsEvent.Message}";
         if (commsEvent.JsonPayload is not null)
@@ -72,18 +55,18 @@ public sealed partial class AgentCommsResponder : ICommsResponder
     {
         var pollId = pollVote.PollId;
         var selectedIndices = pollVote.OptionIndexes.ToArray();
-        if (_logger.IsEnabled(LogLevel.Information))
+        if (logger.IsEnabled(LogLevel.Information))
         {
             var selectedIndicesText = string.Join(", ", selectedIndices);
-            LogPollVoteReceived(_logger, nameof(AgentCommsResponder), pollId, selectedIndicesText);
+            LogPollVoteReceived(logger, nameof(AgentCommsResponder), pollId, selectedIndicesText);
         }
 
         // Fetch the poll first so we have its metadata even if it expires between RecordVote and
         // building the prompt.
-        var poll = _pollTracker.GetPoll(pollId);
-        if (!_pollTracker.RecordVote(pollId, voter, selectedIndices) || poll is null)
+        var poll = pollTracker.GetPoll(pollId);
+        if (!pollTracker.RecordVote(pollId, voter, selectedIndices) || poll is null)
         {
-            LogPollNotTracked(_logger, nameof(AgentCommsResponder), pollId);
+            LogPollNotTracked(logger, nameof(AgentCommsResponder), pollId);
             return Task.FromResult<CommsTurn?>(null);
         }
 
@@ -106,7 +89,7 @@ public sealed partial class AgentCommsResponder : ICommsResponder
         if (!CommsAgentCommandParser.TryParse(text, out var command, out var argument))
             return null;
 
-        LogSlashCommand(_logger, nameof(AgentCommsResponder), command);
+        LogSlashCommand(logger, nameof(AgentCommsResponder), command);
 
         if (command is CommsAgentCommand.SessionBypass && !string.IsNullOrWhiteSpace(argument))
             return new CommsCommandOutcome(null, new CommsTurn(argument, BypassSession: true));
@@ -121,7 +104,7 @@ public sealed partial class AgentCommsResponder : ICommsResponder
         if (result is null || string.IsNullOrWhiteSpace(result.OutputText))
             return null;
 
-        var footer = await _debugNotifier.FormatStatsFooterAsync(result, cancellationToken);
+        var footer = await debugNotifier.FormatStatsFooterAsync(result, cancellationToken);
 
         // Convert any image attachments from tool results into Signal base64 attachments.
         var attachments = result.Attachments.Count > 0
@@ -133,11 +116,11 @@ public sealed partial class AgentCommsResponder : ICommsResponder
         return new CommsReply(result.OutputText, footer, attachments, async ct =>
         {
             // Send the detailed pipeline timeline to the monitor group.
-            if (_logger.IsEnabled(LogLevel.Information))
+            if (logger.IsEnabled(LogLevel.Information))
             {
                 var stepsWithResult = debugSteps.Count(s => s.Result is not null);
                 var stepsWithUsage = debugSteps.Count(s => s.Result?.Usage is not null);
-                LogDebugStats(_logger, nameof(AgentCommsResponder),
+                LogDebugStats(logger, nameof(AgentCommsResponder),
                     result.Usage is not null,
                     result.Usage?.InputTokenCount,
                     result.Usage?.OutputTokenCount,
@@ -145,7 +128,7 @@ public sealed partial class AgentCommsResponder : ICommsResponder
                     stepsWithResult,
                     stepsWithUsage);
             }
-            await _debugNotifier.SendDebugStatsAsync(turn.Prompt, result, debugSteps, turn.Timestamp, ct);
+            await debugNotifier.SendDebugStatsAsync(turn.Prompt, result, debugSteps, turn.Timestamp, ct);
         });
     }
 
@@ -154,13 +137,13 @@ public sealed partial class AgentCommsResponder : ICommsResponder
     {
         try
         {
-            LogAgentInferenceStarting(_logger, nameof(AgentCommsResponder), turn.Prompt.Length,
-                turn.BinaryContent is not null, _profile.AgentName);
+            LogAgentInferenceStarting(logger, nameof(AgentCommsResponder), turn.Prompt.Length,
+                turn.BinaryContent is not null, profile.AgentName);
 
             var debugSteps = new List<CommsDebugStep>();
             var pipelineSw = Stopwatch.StartNew();
             debugSteps.Add(new CommsDebugStep(
-                $"\U0001F680 {_profile.AgentName}",
+                $"\U0001F680 {profile.AgentName}",
                 null,
                 TimeSpan.Zero));
 
@@ -169,16 +152,16 @@ public sealed partial class AgentCommsResponder : ICommsResponder
                 enrichmentState[i] = await _enrichers[i].BeforeRunAsync(cancellationToken);
 
             RunAgentResponse? response = null;
-            await foreach (var item in _agentRuntimeClient.StreamAgentAsync(
-                _profile.AgentName,
+            await foreach (var item in agentRuntimeClient.StreamAgentAsync(
+                profile.AgentName,
                 new RunAgentRequest
                 {
-                    SessionId = _profile.SessionId,
+                    SessionId = profile.SessionId,
                     Input = turn.Prompt,
                     BinaryContent = turn.BinaryContent,
                     MimeType = turn.MimeType,
                     BypassSession = turn.BypassSession,
-                    IncludeDiagnosticDetails = _commsConfig.Value.MonitorGroupName is { Length: > 0 }
+                    IncludeDiagnosticDetails = commsConfig.Value.MonitorGroupName is { Length: > 0 }
                         || _enrichers.Count > 0,
                 },
                 cancellationToken))
@@ -196,13 +179,13 @@ public sealed partial class AgentCommsResponder : ICommsResponder
             for (var i = 0; i < _enrichers.Count; i++)
                 await _enrichers[i].AfterRunAsync(result, enrichmentState[i], cancellationToken);
 
-            LogAgentCompleted(_logger, nameof(AgentCommsResponder), result.Elapsed,
+            LogAgentCompleted(logger, nameof(AgentCommsResponder), result.Elapsed,
                 result.Session is { Exists: true } ? "present" : "missing");
             await SetReactionAsync(Hourglass, turn, cancellationToken);
 
             pipelineSw.Stop();
             debugSteps.Add(new CommsDebugStep(
-                $"\U0001F3C1 {_profile.AgentName}",
+                $"\U0001F3C1 {profile.AgentName}",
                 result.ModelName,
                 pipelineSw.Elapsed,
                 result));
@@ -210,7 +193,7 @@ public sealed partial class AgentCommsResponder : ICommsResponder
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            LogAgentInferenceFailed(_logger, ex, nameof(AgentCommsResponder));
+            LogAgentInferenceFailed(logger, ex, nameof(AgentCommsResponder));
             return (null, []);
         }
     }
@@ -228,15 +211,15 @@ public sealed partial class AgentCommsResponder : ICommsResponder
             var depthLabel = depth switch { 1 => "sub-agent", 2 => "sub-sub-agent", _ => $"depth-{depth} agent" };
             var agentName = executionEvent.AgentName ?? "agent";
             var modelName = executionEvent.ModelName ?? "unknown model";
-            LogAgentDelegating(_logger, nameof(AgentCommsResponder), agentName, depthLabel, modelName);
+            LogAgentDelegating(logger, nameof(AgentCommsResponder), agentName, depthLabel, modelName);
             debugSteps.Add(new CommsDebugStep(
                 $"{TwistedArrows} {agentName} ({depthLabel})",
                 modelName,
                 pipelineStopwatch.Elapsed));
-            if (_commsConfig.Value.DelegationMessagesEnabled)
+            if (commsConfig.Value.DelegationMessagesEnabled)
             {
-                await _signalizrClient.SendAsync(
-                    _commsConfig.Value.GroupName,
+                await signalizrClient.SendAsync(
+                    commsConfig.Value.GroupName,
                     $"{TwistedArrows} Consulting {agentName} ({depthLabel}) \u2022 {modelName}",
                     cancellationToken);
             }
@@ -261,8 +244,8 @@ public sealed partial class AgentCommsResponder : ICommsResponder
             var toolDropped = executionEvent.ToolMessagesDropped ?? 0;
             var windowTrimmed = executionEvent.WindowMessagesTrimmed ?? 0;
             var target = executionEvent.TargetMessageCount ?? 0;
-            LogSessionCompaction(_logger, nameof(AgentCommsResponder), input, output, toolDropped, windowTrimmed, target);
-            await _debugNotifier.SendCompactionDebugAsync(
+            LogSessionCompaction(logger, nameof(AgentCommsResponder), input, output, toolDropped, windowTrimmed, target);
+            await debugNotifier.SendCompactionDebugAsync(
                 input,
                 output,
                 toolDropped,
@@ -292,7 +275,7 @@ public sealed partial class AgentCommsResponder : ICommsResponder
     /// <summary>Sets a progress reaction on the turn's inbound message, best effort.</summary>
     private Task SetReactionAsync(string reaction, CommsTurn turn, CancellationToken cancellationToken) =>
         turn is { Sender: { } sender, Timestamp: { } timestamp }
-            ? _signalizrClient.TrySetReactionAsync(_commsConfig.Value.GroupName, reaction, timestamp, sender,
-                ex => LogGroupInteractionFailed(_logger, ex, nameof(AgentCommsResponder)), cancellationToken)
+            ? signalizrClient.TrySetReactionAsync(commsConfig.Value.GroupName, reaction, timestamp, sender,
+                ex => LogGroupInteractionFailed(logger, ex, nameof(AgentCommsResponder)), cancellationToken)
             : Task.CompletedTask;
 }

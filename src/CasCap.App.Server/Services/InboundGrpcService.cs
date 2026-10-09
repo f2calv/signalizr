@@ -111,8 +111,9 @@ public sealed class InboundGrpcService(
         {
             // The subscriber's half of the stream ended abnormally. The delivery loop already
             // stops when its budget runs out, so this only needs recording.
-            logger.LogDebug(ex, "{ClassName} acknowledgement stream for {Subscriber} ended",
-                nameof(InboundGrpcService), subscription.Name);
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug(ex, "{ClassName} acknowledgement stream for {Subscriber} ended",
+                    nameof(InboundGrpcService), subscription.Name);
         }
     }
 

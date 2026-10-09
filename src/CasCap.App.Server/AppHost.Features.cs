@@ -10,7 +10,7 @@ public static partial class AppHost
 {
     private static void AddFeatures(
         WebApplicationBuilder builder,
-        IReadOnlySet<string> enabledFeatures)
+        HashSet<string> enabledFeatures)
     {
         if (enabledFeatures.Contains(FeatureNames.DbMigrator))
         {
@@ -80,7 +80,7 @@ public static partial class AppHost
 
     private static bool ConfigureGrpc(
         WebApplicationBuilder builder,
-        IReadOnlySet<string> enabledFeatures,
+        HashSet<string> enabledFeatures,
         ILogger logger)
     {
         // Only the receiver holds the inbound stream, so only it serves subscriptions and only it needs
@@ -103,8 +103,9 @@ public static partial class AppHost
             options.ListenAnyIP(grpcHostConfig.Http2Port, listen => listen.Protocols = HttpProtocols.Http2);
         });
 
-        logger.LogInformation("{AppName} serving HTTP/1.1 on {Http1Port} and gRPC on {Http2Port}",
-            AppDomain.CurrentDomain.FriendlyName, grpcHostConfig.Http1Port, grpcHostConfig.Http2Port);
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{AppName} serving HTTP/1.1 on {Http1Port} and gRPC on {Http2Port}",
+                AppDomain.CurrentDomain.FriendlyName, grpcHostConfig.Http1Port, grpcHostConfig.Http2Port);
 
         return true;
     }

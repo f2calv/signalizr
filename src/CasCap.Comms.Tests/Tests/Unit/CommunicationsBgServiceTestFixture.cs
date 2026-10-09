@@ -12,7 +12,27 @@ namespace CasCap.Tests.Unit;
 /// <see cref="Signalizr"/> and <see cref="Redis"/>. The responder is a real <see cref="AgentCommsResponder"/>
 /// over the typed Agent Runtime client and a fake HTTP handler whose default response has no reply text.
 /// </remarks>
-public sealed class CommunicationsBgServiceTestFixture : IAsyncDisposable
+/// <param name="voiceMode">The voice-processing mode under test.</param>
+/// <param name="responderEnabled">Whether an agent responder answers, enabling the reply queue.</param>
+/// <param name="replyQueueCapacity">Bound applied to the reply queue.</param>
+/// <param name="echoTranscriptToDebugChat">Whether voice transcripts are echoed to the monitor group.</param>
+/// <param name="voiceReplyMode">The spoken-reply mode under test.</param>
+/// <param name="formatter">Formatter for directly forwarded stream events; defaults to <see cref="PlainCommsEventFormatter"/>.</param>
+/// <param name="streamSendBurst">Token-bucket capacity for stream-originated sends.</param>
+/// <param name="streamSendRatePerMinute">Token-bucket refill rate for stream-originated sends.</param>
+/// <param name="monitorSources">Stream event sources routed to the monitor group.</param>
+/// <param name="streamEventTurnsEnabled">Whether chat-bound stream events become responder turns.</param>
+public sealed class CommunicationsBgServiceTestFixture(
+    VoiceProcessingMode voiceMode = VoiceProcessingMode.Enabled,
+    bool responderEnabled = true,
+    int replyQueueCapacity = 100,
+    bool echoTranscriptToDebugChat = false,
+    VoiceReplyMode voiceReplyMode = VoiceReplyMode.Disabled,
+    ICommsEventFormatter? formatter = null,
+    int streamSendBurst = 10,
+    int streamSendRatePerMinute = 20,
+    string[]? monitorSources = null,
+    bool streamEventTurnsEnabled = true) : IAsyncDisposable
 {
     /// <summary>The gateway's own account, whose messages the service must ignore.</summary>
     public const string Account = "+10000000000";
@@ -35,100 +55,48 @@ public sealed class CommunicationsBgServiceTestFixture : IAsyncDisposable
     /// <summary>The environment acronym written to every stream entry.</summary>
     public const string EnvironmentAcronym = "DEV";
 
-    private readonly CancellationTokenSource _cts = new();
-    private HttpClient? _agentRuntimeHttpClient;
-    private Task? _execution;
-
-    /// <summary>Builds the service.</summary>
-    /// <param name="voiceMode">The voice-processing mode under test.</param>
-    /// <param name="responderEnabled">Whether an agent responder answers, enabling the reply queue.</param>
-    /// <param name="replyQueueCapacity">Bound applied to the reply queue.</param>
-    /// <param name="echoTranscriptToDebugChat">Whether voice transcripts are echoed to the monitor group.</param>
-    /// <param name="voiceReplyMode">The spoken-reply mode under test.</param>
-    /// <param name="formatter">Formatter for directly forwarded stream events; defaults to <see cref="PlainCommsEventFormatter"/>.</param>
-    /// <param name="streamSendBurst">Token-bucket capacity for stream-originated sends.</param>
-    /// <param name="streamSendRatePerMinute">Token-bucket refill rate for stream-originated sends.</param>
-    /// <param name="monitorSources">Stream event sources routed to the monitor group.</param>
-    /// <param name="streamEventTurnsEnabled">Whether chat-bound stream events become responder turns.</param>
-    public CommunicationsBgServiceTestFixture(
-        VoiceProcessingMode voiceMode = VoiceProcessingMode.Enabled,
-        bool responderEnabled = true,
-        int replyQueueCapacity = 100,
-        bool echoTranscriptToDebugChat = false,
-        VoiceReplyMode voiceReplyMode = VoiceReplyMode.Disabled,
-        ICommsEventFormatter? formatter = null,
-        int streamSendBurst = 10,
-        int streamSendRatePerMinute = 20,
-        string[]? monitorSources = null,
-        bool streamEventTurnsEnabled = true)
-    {
-        var commsConfig = Options.Create(new CommsConfig
-        {
-            GroupName = ChatGroupName,
-            MonitorGroupName = MonitorGroupName,
-            MonitorSources = [.. monitorSources ?? []],
-            StreamEventTurnsEnabled = streamEventTurnsEnabled,
-            //Short so the idle stream loop and resubscription react within a test's timeout.
-            PollingIntervalMs = 20,
-            HealthCheckProbeDelayMs = 1,
-            ReplyQueueCapacity = replyQueueCapacity,
-            StreamSendBurst = streamSendBurst,
-            StreamSendRatePerMinute = streamSendRatePerMinute,
-            EchoTranscriptToDebugChat = echoTranscriptToDebugChat,
-        });
-        var speechToTextConfig = Options.Create(new SpeechToTextConfig { Mode = voiceMode });
-
-#pragma warning disable MEAI001 // ISpeechToTextClient is experimental; see WhisperAsrSpeechToTextClient.
-        var transcriptionSvc = new VoiceMessageTranscriptionService(
-            NullLogger<VoiceMessageTranscriptionService>.Instance, speechToTextConfig, SpeechToText,
-            TestMetrics.Voice());
-        var voiceReplySvc = new VoiceReplySynthesisService(
-            NullLogger<VoiceReplySynthesisService>.Instance, TextToSpeech,
-            Options.Create(new TextToSpeechConfig { Mode = voiceReplyMode }));
-#pragma warning restore MEAI001
-
-        Service = new CommunicationsBgService(
-            NullLogger<CommunicationsBgService>.Instance,
-            commsConfig,
-            speechToTextConfig,
-            TimeProvider.System,
-            new FakeHostEnvironment(),
-            Signalizr,
-            Deduplicator,
-            transcriptionSvc,
-            voiceReplySvc,
-            formatter ?? new PlainCommsEventFormatter(),
-            new MonitorSourcesGroupRouter(commsConfig),
-            Redis,
-            responderEnabled ? BuildResponder(commsConfig) : null);
-    }
+    private readonly FixtureState _state = FixtureState.Create(
+        voiceMode,
+        responderEnabled,
+        replyQueueCapacity,
+        echoTranscriptToDebugChat,
+        voiceReplyMode,
+        formatter,
+        streamSendBurst,
+        streamSendRatePerMinute,
+        monitorSources,
+        streamEventTurnsEnabled);
 
     /// <summary>The duplicate-suppression fake.</summary>
-    public FakeSignalMessageDeduplicator Deduplicator { get; } = new();
+    public FakeSignalMessageDeduplicator Deduplicator => _state.Deduplicator;
 
     /// <summary>The poll tracker fake.</summary>
-    public FakePollTracker PollTracker { get; } = new();
+    public FakePollTracker PollTracker => _state.PollTracker;
 
     /// <summary>The speech-to-text backend behind the transcription service.</summary>
-    public FakeSpeechToTextClient SpeechToText { get; } = new();
+    public FakeSpeechToTextClient SpeechToText => _state.SpeechToText;
 
     /// <summary>The synthesis backend behind the spoken-reply service.</summary>
-    public FakeTextToSpeechClient TextToSpeech { get; } = new();
+    public FakeTextToSpeechClient TextToSpeech => _state.TextToSpeech;
 
     /// <summary>The gateway fake feeding deliveries in and recording every group operation.</summary>
-    public FakeSignalizrClient Signalizr { get; } = new() { Groups = [ChatGroupName, MonitorGroupName] };
+    public FakeSignalizrClient Signalizr => _state.Signalizr;
 
     /// <summary>The Redis fake backing the comms stream and cached media.</summary>
-    public InMemoryCommsRedis Redis { get; } = new();
+    public InMemoryCommsRedis Redis => _state.Redis;
 
     /// <summary>Bytes returned for every attachment the tests queue.</summary>
-    public byte[] AttachmentContent { get; set; } = SyntheticWav();
+    public byte[] AttachmentContent
+    {
+        get => _state.AttachmentContent;
+        set => _state.AttachmentContent = value;
+    }
 
     /// <summary>The service under test.</summary>
-    public CommunicationsBgService Service { get; }
+    public CommunicationsBgService Service => _state.Service;
 
     /// <summary>The running <see cref="CommunicationsBgService.ExecuteAsync"/> task.</summary>
-    public Task Execution => _execution ?? throw new InvalidOperationException("The fixture has not been started.");
+    public Task Execution => _state.Execution ?? throw new InvalidOperationException("The fixture has not been started.");
 
     /// <summary>
     /// Builds a silent 16 kHz mono signed 16-bit PCM WAV, which is what the transcription service
@@ -167,7 +135,7 @@ public sealed class CommunicationsBgServiceTestFixture : IAsyncDisposable
     }
 
     /// <summary>Launches execution without waiting for the gateway, so a test can observe startup itself.</summary>
-    public void LaunchWithoutWaiting() => _execution = Service.ExecuteAsync(_cts.Token);
+    public void LaunchWithoutWaiting() => _state.Execution = Service.ExecuteAsync(_state.Cancellation.Token);
 
     /// <summary>
     /// Starts execution and waits until the groups are ready and the subscription is open, so
@@ -275,12 +243,12 @@ public sealed class CommunicationsBgServiceTestFixture : IAsyncDisposable
     {
         //Release any gate first, or a held drain loop would never observe the cancellation.
         Signalizr.ReleaseStartTyping();
-        await _cts.CancelAsync();
-        if (_execution is not null)
+        await _state.Cancellation.CancelAsync();
+        if (_state.Execution is not null)
         {
             try
             {
-                await _execution.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
+                await _state.Execution.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
             }
             catch (Exception ex) when (ex is OperationCanceledException or TimeoutException
                 or CasCap.Signalizr.Client.Exceptions.SignalizrGroupNotConfiguredException)
@@ -288,28 +256,115 @@ public sealed class CommunicationsBgServiceTestFixture : IAsyncDisposable
                 //Cancellation is the expected shutdown path; a configuration fault is asserted by its own test.
             }
         }
-        _cts.Dispose();
-        _agentRuntimeHttpClient?.Dispose();
+        _state.Cancellation.Dispose();
+        _state.AgentRuntimeHttpClient?.Dispose();
     }
 
-    private AgentCommsResponder BuildResponder(IOptions<CommsConfig> commsConfig)
+    private sealed class FixtureState
     {
-        var debugNotifier = new CommsDebugNotifier(NullLogger<CommsDebugNotifier>.Instance, commsConfig,
-            TimeProvider.System, Signalizr, []);
-        _agentRuntimeHttpClient = new HttpClient(new FakeAgentRuntimeHttpMessageHandler())
-        {
-            BaseAddress = new Uri("http://agent-runtime.test"),
-        };
-        var agentRuntimeClient = new AgentRuntimeClient(_agentRuntimeHttpClient);
+        public required CancellationTokenSource Cancellation { get; init; }
+        public required FakeSignalMessageDeduplicator Deduplicator { get; init; }
+        public required FakePollTracker PollTracker { get; init; }
+        public required FakeSpeechToTextClient SpeechToText { get; init; }
+        public required FakeTextToSpeechClient TextToSpeech { get; init; }
+        public required FakeSignalizrClient Signalizr { get; init; }
+        public required InMemoryCommsRedis Redis { get; init; }
+        public required CommunicationsBgService Service { get; init; }
+        public required byte[] AttachmentContent { get; set; }
+        public HttpClient? AgentRuntimeHttpClient { get; init; }
+        public Task? Execution { get; set; }
 
-        return new AgentCommsResponder(
-            NullLogger<AgentCommsResponder>.Instance,
-            commsConfig,
-            new CommsAgentProfile(AgentKey, "test-group-session", "respond"),
-            agentRuntimeClient,
-            Signalizr,
-            PollTracker,
-            debugNotifier,
-            []);
+        public static FixtureState Create(
+            VoiceProcessingMode voiceMode,
+            bool responderEnabled,
+            int replyQueueCapacity,
+            bool echoTranscriptToDebugChat,
+            VoiceReplyMode voiceReplyMode,
+            ICommsEventFormatter? formatter,
+            int streamSendBurst,
+            int streamSendRatePerMinute,
+            string[]? monitorSources,
+            bool streamEventTurnsEnabled)
+        {
+            var deduplicator = new FakeSignalMessageDeduplicator();
+            var pollTracker = new FakePollTracker();
+            var speechToText = new FakeSpeechToTextClient();
+            var textToSpeech = new FakeTextToSpeechClient();
+            var signalizr = new FakeSignalizrClient { Groups = [ChatGroupName, MonitorGroupName] };
+            var redis = new InMemoryCommsRedis();
+            var commsConfig = Options.Create(new CommsConfig
+            {
+                GroupName = ChatGroupName,
+                MonitorGroupName = MonitorGroupName,
+                MonitorSources = [.. monitorSources ?? []],
+                StreamEventTurnsEnabled = streamEventTurnsEnabled,
+                //Short so the idle stream loop and resubscription react within a test's timeout.
+                PollingIntervalMs = 20,
+                HealthCheckProbeDelayMs = 1,
+                ReplyQueueCapacity = replyQueueCapacity,
+                StreamSendBurst = streamSendBurst,
+                StreamSendRatePerMinute = streamSendRatePerMinute,
+                EchoTranscriptToDebugChat = echoTranscriptToDebugChat,
+            });
+            var speechToTextConfig = Options.Create(new SpeechToTextConfig { Mode = voiceMode });
+
+#pragma warning disable MEAI001 // ISpeechToTextClient is experimental; see WhisperAsrSpeechToTextClient.
+            var transcriptionSvc = new VoiceMessageTranscriptionService(
+                NullLogger<VoiceMessageTranscriptionService>.Instance, speechToTextConfig, speechToText,
+                TestMetrics.Voice());
+            var voiceReplySvc = new VoiceReplySynthesisService(
+                NullLogger<VoiceReplySynthesisService>.Instance, textToSpeech,
+                Options.Create(new TextToSpeechConfig { Mode = voiceReplyMode }));
+#pragma warning restore MEAI001
+
+            AgentCommsResponder? responder = null;
+            HttpClient? agentRuntimeHttpClient = null;
+            if (responderEnabled)
+            {
+                var debugNotifier = new CommsDebugNotifier(NullLogger<CommsDebugNotifier>.Instance, commsConfig,
+                    TimeProvider.System, signalizr, []);
+                agentRuntimeHttpClient = new HttpClient(new FakeAgentRuntimeHttpMessageHandler())
+                {
+                    BaseAddress = new Uri("http://agent-runtime.test"),
+                };
+                responder = new AgentCommsResponder(
+                    NullLogger<AgentCommsResponder>.Instance,
+                    commsConfig,
+                    new CommsAgentProfile(AgentKey, "test-group-session", "respond"),
+                    new AgentRuntimeClient(agentRuntimeHttpClient),
+                    signalizr,
+                    pollTracker,
+                    debugNotifier,
+                    []);
+            }
+
+            var service = new CommunicationsBgService(
+                NullLogger<CommunicationsBgService>.Instance,
+                commsConfig,
+                speechToTextConfig,
+                TimeProvider.System,
+                new FakeHostEnvironment(),
+                signalizr,
+                deduplicator,
+                transcriptionSvc,
+                voiceReplySvc,
+                formatter ?? new PlainCommsEventFormatter(),
+                new MonitorSourcesGroupRouter(commsConfig),
+                redis,
+                responder);
+            return new FixtureState
+            {
+                Cancellation = new CancellationTokenSource(),
+                Deduplicator = deduplicator,
+                PollTracker = pollTracker,
+                SpeechToText = speechToText,
+                TextToSpeech = textToSpeech,
+                Signalizr = signalizr,
+                Redis = redis,
+                Service = service,
+                AttachmentContent = SyntheticWav(),
+                AgentRuntimeHttpClient = agentRuntimeHttpClient
+            };
+        }
     }
 }

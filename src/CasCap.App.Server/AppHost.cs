@@ -58,8 +58,9 @@ public static partial class AppHost
         // Feature validation and startup diagnostics
         var enabledFeatures = featureConfig.GetEnabledFeatures();
 
-        logger.LogInformation("{AppName} starting with features {@Features}",
-            AppDomain.CurrentDomain.FriendlyName, enabledFeatures);
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{AppName} starting with features {@Features}",
+                AppDomain.CurrentDomain.FriendlyName, enabledFeatures);
 
         // Feature registration
         AddFeatures(builder, enabledFeatures);

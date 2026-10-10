@@ -25,7 +25,7 @@ public static partial class AppHost
             var builder = WebApplication.CreateBuilder(args);
 
             // Configuration
-            var (appConfig, enabledFeatures, gitMetadata) = builder.InitializeConfiguration(entryAssembly);
+            var (appConfig, enabledFeatures, applicationMetadata) = builder.InitializeConfiguration(entryAssembly);
 
             // Logging
             var logger = SerilogWebApplicationBuilderExtensions.InitializeSerilog(builder);
@@ -37,7 +37,7 @@ public static partial class AppHost
             // Observability
             builder.InitializeOpenTelemetry(
                 appConfig,
-                gitMetadata,
+                applicationMetadata,
                 configureMetrics: metrics => metrics
                     .AddMeter(appConfig.MetricNamePrefix)
                     .AddMeter(SignalCliTelemetry.MeterName)

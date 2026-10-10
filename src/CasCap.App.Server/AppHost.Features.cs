@@ -75,7 +75,7 @@ public static partial class AppHost
             builder.Services.AddSingleton<IBgFeature, DemoClientBgService>();
         }
 
-        builder.Services.AddFeatureFlagService(enabledFeatures, addGitMetadataService: true);
+        builder.Services.AddFeatureFlagService(enabledFeatures, addApplicationMetadataService: true);
     }
 
     private static bool ConfigureGrpc(

@@ -1,9 +1,10 @@
 using CasCap.Common.Extensions;
-using CasCap.Common.Models;
 using CasCap.Diagnostics;
+using CasCap.Extensions;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Serilog;
+using System.Reflection;
 
 namespace CasCap;
 
@@ -12,73 +13,76 @@ public static partial class AppHost
 {
     /// <summary>Bootstraps and runs the application.</summary>
     /// <param name="args">Command-line arguments forwarded from the entry point.</param>
-    public static async Task RunAsync(string[] args)
+    /// <param name="entryAssembly">Entry assembly used for configuration and user-secrets resolution.</param>
+    /// <returns>The process exit code.</returns>
+    public static async Task<int> RunAsync(string[] args, Assembly entryAssembly)
     {
-        // Host builder
-        // TODO: Add shared bootstrap logging before CreateBuilder so pre-host configuration failures are captured consistently with other hosts.
-        var builder = WebApplication.CreateBuilder(args);
+        SerilogExtensions.GetBootstrapLogger();
 
-        // Logging
-        // Logging stays before local binding so configuration failures remain observable.
-        var logger = builder.InitializeSerilog(nameof(Program));
+        try
+        {
+            // Host builder
+            var builder = WebApplication.CreateBuilder(args);
 
-        // Configuration
-        var appConfig = builder.Configuration
-            .GetSection(AppConfig.ConfigurationSectionName)
-            .Get<AppConfig>() ?? new AppConfig();
-        builder.Services.AddOptionsWithValidateOnStart<AppConfig>()
-            .BindConfiguration(AppConfig.ConfigurationSectionName)
-            .ValidateDataAnnotations();
+            // Configuration
+            var (appConfig, enabledFeatures, gitMetadata) = builder.InitializeConfiguration(entryAssembly);
 
-        var featureConfig = builder.Configuration
-            .GetSection(FeatureConfig.ConfigurationSectionName)
-            .Get<FeatureConfig>()
-            ?? throw new InvalidOperationException(
-                $"Configuration section '{FeatureConfig.ConfigurationSectionName}' is missing.");
-        builder.Services.AddOptionsWithValidateOnStart<FeatureConfig>()
-            .BindConfiguration(FeatureConfig.ConfigurationSectionName)
-            .ValidateDataAnnotations();
+            // Logging
+            var logger = SerilogWebApplicationBuilderExtensions.InitializeSerilog(builder);
 
-        // Infrastructure
-        builder.Services.AddSingleton(TimeProvider.System);
-        builder.Services.AddSingleton<SignalizrMetrics>();
+            // Infrastructure
+            builder.Services.AddSingleton(TimeProvider.System);
+            builder.Services.AddSingleton<SignalizrMetrics>();
 
-        // Observability
-        // TODO: Source GitMetadata from configuration instead of constructing defaults so telemetry carries deployed build metadata consistently.
-        builder.InitializeOpenTelemetry(
-            appConfig,
-            new GitMetadata(),
-            configureMetrics: metrics => metrics
-                .AddMeter(appConfig.MetricNamePrefix)
-                .AddMeter(SignalCliTelemetry.MeterName)
-                .AddMeter("System.Net.Http"),
-            configureTracing: tracing => tracing
-                .AddSource(appConfig.MetricNamePrefix)
-                .AddSource(SignalCliTelemetry.ActivitySourceName));
+            // Observability
+            builder.InitializeOpenTelemetry(
+                appConfig,
+                gitMetadata,
+                configureMetrics: metrics => metrics
+                    .AddMeter(appConfig.MetricNamePrefix)
+                    .AddMeter(SignalCliTelemetry.MeterName)
+                    .AddMeter("System.Net.Http"),
+                configureTracing: tracing => tracing
+                    .AddSource(appConfig.MetricNamePrefix)
+                    .AddSource(SignalCliTelemetry.ActivitySourceName));
 
-        // Feature validation and startup diagnostics
-        var enabledFeatures = featureConfig.GetEnabledFeatures();
+            // Feature validation and startup diagnostics
+            if (logger.IsEnabled(LogLevel.Information))
+                logger.LogInformation("{ClassName} {AppName} running with features {@Features}",
+                    nameof(AppHost), AppDomain.CurrentDomain.FriendlyName, enabledFeatures);
 
-        if (logger.IsEnabled(LogLevel.Information))
-            logger.LogInformation("{AppName} starting with features {@Features}",
-                AppDomain.CurrentDomain.FriendlyName, enabledFeatures);
+            // Feature registration
+            AddFeatures(builder, enabledFeatures);
 
-        // Feature registration
-        AddFeatures(builder, enabledFeatures);
+            // Web API registration
+            AddWebApi(builder, enabledFeatures);
 
-        // Web API registration
-        AddWebApi(builder, enabledFeatures);
+            // Transport registration
+            var servesGrpc = ConfigureGrpc(builder, enabledFeatures, logger);
 
-        // Transport registration
-        var servesGrpc = ConfigureGrpc(builder, enabledFeatures, logger);
+            // Build
+            var app = builder.Build();
 
-        // Build
-        var app = builder.Build();
+            if (logger.IsEnabled(LogLevel.Information))
+                logger.LogInformation("{ClassName} starting", nameof(AppHost));
 
-        // Endpoint mapping
-        MapEndpoints(app, enabledFeatures, servesGrpc);
+            // Endpoint mapping
+            MapEndpoints(app, enabledFeatures, servesGrpc);
 
-        // Run
-        await app.RunAsync();
+            // Run
+            await app.RunAsync();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException and not TaskCanceledException)
+        {
+            Log.Fatal(exception, "{AppName} terminated unexpectedly", AppDomain.CurrentDomain.FriendlyName);
+            throw new InvalidOperationException("Application host terminated unexpectedly.", exception);
+        }
+        finally
+        {
+            Log.Information("Stopped {AppName}", AppDomain.CurrentDomain.FriendlyName);
+            await Log.CloseAndFlushAsync();
+        }
+
+        return 0;
     }
 }

@@ -5,18 +5,48 @@
 namespace CasCap.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AddGroupNameToInboundMessages : Migration
+    public partial class CompleteInboundMessageGroupName : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql("UPDATE inbound_messages SET group_name = channel WHERE group_name IS NULL;");
+
+            if (ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                migrationBuilder.Sql("""
+                    DROP TRIGGER sync_inbound_message_group_name ON inbound_messages;
+                    DROP FUNCTION sync_inbound_message_group_name();
+                    """);
+                migrationBuilder.DropColumn(
+                    name: "channel",
+                    table: "inbound_messages");
+            }
+            else if (ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
+                migrationBuilder.Sql("""
+                    DROP TRIGGER sync_inbound_message_group_name_insert;
+                    DROP TRIGGER sync_inbound_message_group_name_update;
+                    ALTER TABLE inbound_messages DROP COLUMN channel;
+                    """);
+            }
+            else
+            {
+                throw new System.NotSupportedException("Group-name migration requires PostgreSQL or SQLite.");
+            }
+
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
             migrationBuilder.AddColumn<string>(
-                name: "group_name",
+                name: "channel",
                 table: "inbound_messages",
                 type: "text",
                 nullable: true);
 
-            migrationBuilder.Sql("UPDATE inbound_messages SET group_name = channel;");
+            migrationBuilder.Sql("UPDATE inbound_messages SET channel = group_name;");
 
             if (ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
             {
@@ -66,32 +96,7 @@ namespace CasCap.Data.Migrations
             {
                 throw new System.NotSupportedException("Group-name migration requires PostgreSQL or SQLite.");
             }
-        }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.Sql("UPDATE inbound_messages SET channel = group_name;");
-            if (ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
-            {
-                migrationBuilder.Sql("""
-                    DROP TRIGGER sync_inbound_message_group_name ON inbound_messages;
-                    DROP FUNCTION sync_inbound_message_group_name();
-                    ALTER TABLE inbound_messages DROP COLUMN group_name;
-                    """);
-            }
-            else if (ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
-            {
-                migrationBuilder.Sql("""
-                    DROP TRIGGER sync_inbound_message_group_name_insert;
-                    DROP TRIGGER sync_inbound_message_group_name_update;
-                    ALTER TABLE inbound_messages DROP COLUMN group_name;
-                    """);
-            }
-            else
-            {
-                throw new System.NotSupportedException("Group-name migration requires PostgreSQL or SQLite.");
-            }
         }
     }
 }

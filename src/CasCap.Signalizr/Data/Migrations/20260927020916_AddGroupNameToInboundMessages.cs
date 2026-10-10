@@ -18,8 +18,9 @@ namespace CasCap.Data.Migrations
 
             migrationBuilder.Sql("UPDATE inbound_messages SET group_name = channel;");
 
-            // TODO: Remove the synchronization and old column in a later contract migration after
-            // old writers retire. Both remain writable here to support rolling upgrades and rollback.
+            // TODO: In the release after the GroupName-only writer has shipped and its rollback window has
+            // closed, drop these synchronization objects and channel in a contract migration. Both remain
+            // writable in this release to support rolling upgrades and rollback.
             if (ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
             {
                 migrationBuilder.Sql("""

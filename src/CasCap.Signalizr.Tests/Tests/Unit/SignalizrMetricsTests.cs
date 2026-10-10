@@ -29,7 +29,7 @@ public sealed class SignalizrMetricsTests
             MetricNamePrefix = prefix
         }));
 
-        Assert.Equal(11, instruments.Count);
+        Assert.Equal(13, instruments.Count);
         Assert.All(instruments, instrument =>
         {
             Assert.Equal(prefix, instrument.Meter.Name);
@@ -62,5 +62,31 @@ public sealed class SignalizrMetricsTests
 
         Assert.NotNull(gauge);
         Assert.Equal("{message}", gauge.Unit);
+    }
+
+    [Fact]
+    public void OutboundMethods_RecordSentAndWarningCounters()
+    {
+        const string prefix = "custom_signalizr";
+        var measurements = new List<string>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == prefix)
+                meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, _, _, _) => measurements.Add(instrument.Name));
+        listener.Start();
+
+        using var metrics = new SignalizrMetrics(Options.Create(new AppConfig
+        {
+            MetricNamePrefix = prefix
+        }));
+
+        metrics.RecordSent();
+        metrics.RecordSendRateWarning();
+
+        Assert.Contains($"{prefix}.outbound.sent", measurements);
+        Assert.Contains($"{prefix}.outbound.send_rate_warnings", measurements);
     }
 }

@@ -1,4 +1,5 @@
 using CasCap.Data;
+using CasCap.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Globalization;
@@ -11,6 +12,7 @@ public sealed class MessageGateway(
     IOptions<SignalCliConfig> signalCliConfig,
     IOptions<GatewayConfig> gatewayConfig,
     TimeProvider timeProvider,
+    SignalizrMetrics metrics,
     ISignalCliClient client,
     IGroupResolver groupResolver,
     IOperatorNotifier operatorNotifier,
@@ -41,6 +43,7 @@ public sealed class MessageGateway(
         if (logger.IsEnabled(LogLevel.Information))
             logger.LogInformation("{ClassName} sent a message to a configured Signal group",
                 nameof(MessageGateway));
+        metrics.RecordSent();
         TrackSendRate(groupName);
 
         return new SendMessageResponse { GroupName = groupName, Timestamp = response.Timestamp };
@@ -174,9 +177,9 @@ public sealed class MessageGateway(
     /// <remarks>
     /// A fixed one-minute window: cheap, and precise enough to say "this group is flooding".
     /// </remarks>
-    // TODO: enforce a per-group and per-account send budget (queue or reject with 429) once the
-    // warnings show real production rates. Detection comes first so a limit is not guessed; until
-    // then producers such as CAS keep their own throttles.
+    // TODO: Choose and enforce a per-group and per-account send budget after the outbound sent and
+    // warning counters establish real production rates. Detection comes first so a queue or rejection
+    // threshold is not guessed; until then producers such as CAS keep their own throttles.
     private void TrackSendRate(string groupName)
     {
         var threshold = gatewayConfig.Value.SendRateWarningPerMinute;
@@ -206,6 +209,7 @@ public sealed class MessageGateway(
             logger.LogWarning("{ClassName} a configured Signal group exceeded {Threshold} sends within a minute, a possible flood",
                 nameof(MessageGateway), threshold);
         }
+        metrics.RecordSendRateWarning();
         operatorNotifier.Notify($"flood warning: groupName {groupName} sent more than {threshold} messages within a minute; " +
             "Signal may start rate-limiting the account");
     }

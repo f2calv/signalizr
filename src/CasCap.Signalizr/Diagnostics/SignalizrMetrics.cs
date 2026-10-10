@@ -40,6 +40,12 @@ public sealed class SignalizrMetrics(IOptions<AppConfig>? appConfig = null) : ID
     /// <summary>Records a delivery written to a subscriber stream.</summary>
     public void RecordDelivered() => _instruments.Delivered.Add(1);
 
+    /// <summary>Records a message successfully accepted by the upstream Signal wrapper.</summary>
+    public void RecordSent() => _instruments.Sent.Add(1);
+
+    /// <summary>Records a configured send-rate threshold breach.</summary>
+    public void RecordSendRateWarning() => _instruments.SendRateWarnings.Add(1);
+
     /// <summary>Records a durable subscriber acknowledgement.</summary>
     public void RecordAcknowledged() => _instruments.Acknowledged.Add(1);
 
@@ -99,6 +105,10 @@ public sealed class SignalizrMetrics(IOptions<AppConfig>? appConfig = null) : ID
                 $"{prefix}.inbound.queue_depth", "1", "Current messages in the bounded inbound process queue."),
             Received = meter.CreateCounter<long>(
                 $"{prefix}.inbound.received", "1", "Inbound messages accepted into the process queue."),
+            SendRateWarnings = meter.CreateCounter<long>(
+                $"{prefix}.outbound.send_rate_warnings", "1", "Configured outbound send-rate threshold breaches."),
+            Sent = meter.CreateCounter<long>(
+                $"{prefix}.outbound.sent", "1", "Messages accepted by the upstream Signal wrapper."),
             Subscribers = meter.CreateUpDownCounter<long>(
                 $"{prefix}.subscribers.active", "1", "Current connected durable subscribers."),
             ActivitySource = new ActivitySource(prefix)
@@ -136,6 +146,10 @@ public sealed class SignalizrMetrics(IOptions<AppConfig>? appConfig = null) : ID
         public required UpDownCounter<long> QueueDepth { get; init; }
 
         public required Counter<long> Received { get; init; }
+
+        public required Counter<long> SendRateWarnings { get; init; }
+
+        public required Counter<long> Sent { get; init; }
 
         public required UpDownCounter<long> Subscribers { get; init; }
 

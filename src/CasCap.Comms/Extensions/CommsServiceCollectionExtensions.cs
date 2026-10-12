@@ -18,6 +18,23 @@ public static class CommsServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers the <see cref="ITrackedOperationService"/> that reports the progress of long-running
+    /// operations to the communications stream.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The same <see cref="IServiceCollection"/> for chaining.</returns>
+    public static IServiceCollection AddTrackedOperations(this IServiceCollection services)
+    {
+        services.AddCommsStreamSink();
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(TrackedOperationService)))
+            return services;
+        services.AddSingleton<TrackedOperationService>();
+        services.AddSingleton<ITrackedOperationService>(sp => sp.GetRequiredService<TrackedOperationService>());
+        services.AddHostedService(sp => sp.GetRequiredService<TrackedOperationService>());
+        return services;
+    }
+
+    /// <summary>
     /// Registers the Signalizr client, the voice pipeline, duplicate suppression and the default
     /// <see cref="ICommsEventFormatter"/> and <see cref="ICommsGroupRouter"/>, then the
     /// <see cref="CommunicationsBgService"/> background feature.

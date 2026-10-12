@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace CasCap.Tests.Unit;
 
-/// <summary>Verifies that monitor diagnostics disclose message content only when explicitly enabled.</summary>
+/// <summary>Verifies that monitor diagnostics disclose content only when enabled, and the reply footer's optional details.</summary>
 [Trait("Category", "Comms")]
 public sealed class CommsDebugNotifierTests
 {
@@ -61,7 +61,32 @@ public sealed class CommsDebugNotifierTests
         Assert.Equal(contentEnabled, message.Contains("courier", StringComparison.Ordinal));
     }
 
-    private static CommsDebugNotifier CreateNotifier(FakeSignalizrClient signalizr, bool contentEnabled)
+    [Theory]
+    [InlineData(false, "💾 9.5KB")]
+    [InlineData(true, "💾 9.5KB, 11u/22a")]
+    public async Task FormatStatsFooterAsync_ShowsSessionCountsOnlyWhenEnabled(bool countsEnabled, string expectedSession)
+    {
+        var result = new CommsAgentRunResult
+        {
+            OutputText = "done",
+            ModelName = "model",
+            Elapsed = TimeSpan.FromSeconds(12.9),
+            Session = new AgentSessionInfoResponse
+            {
+                Exists = true,
+                SizeBytes = 9728,
+                Entries = [new AgentSessionEntry { Key = "primary", UserMessageCount = 11, AssistantMessageCount = 22 }],
+            },
+        };
+
+        var footer = await CreateNotifier(new FakeSignalizrClient(), contentEnabled: false, footerSessionCounts: countsEnabled)
+            .FormatStatsFooterAsync(result, TestContext.Current.CancellationToken);
+
+        Assert.Contains("⏱ 12.9s", footer, StringComparison.Ordinal);
+        Assert.EndsWith(expectedSession, footer, StringComparison.Ordinal);
+    }
+
+    private static CommsDebugNotifier CreateNotifier(FakeSignalizrClient signalizr, bool contentEnabled, bool footerSessionCounts = false)
         => new(
             NullLogger<CommsDebugNotifier>.Instance,
             Options.Create(new CommsConfig
@@ -69,6 +94,7 @@ public sealed class CommsDebugNotifierTests
                 GroupName = "group",
                 MonitorGroupName = MonitorGroup,
                 MonitorContentEnabled = contentEnabled,
+                FooterSessionCountsEnabled = footerSessionCounts,
             }),
             TimeProvider.System,
             signalizr,

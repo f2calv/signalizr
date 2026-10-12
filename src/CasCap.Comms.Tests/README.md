@@ -25,10 +25,10 @@ AI provider.
 | `CommsEventFormatterTests` | 2 | 2 | Comms | The plain and timestamped direct-send formats |
 | `InMemoryPollTrackerTests` | 2 | 2 | Messaging | Poll vote summaries and TTL expiry |
 | `AgentCommsResponderTests` | 3 | 3 | Agent Runtime | Streamed live progress, attachments, diagnostics, remote overrides and local bypass |
-| `CommsDebugNotifierTests` | 2 | 4 | Comms | Monitor diagnostics disclose prompts, tool arguments and event text only when `MonitorContentEnabled` is set |
+| `CommsDebugNotifierTests` | 3 | 6 | Comms | Monitor diagnostics disclose prompts, tool arguments and event text only when `MonitorContentEnabled` is set; footer session counts only when `FooterSessionCountsEnabled` is set |
 | `MessagingMcpQueryServiceTests` | 1 | 1 | Comms | Poll tools activated per call by the MCP server use the configured group |
 | `TrackedOperationServiceTests` | 2 | 2 | Comms | Tracked-operation progress, completion and timeout messages |
-| **Total** | **50** | **63** | | |
+| **Total** | **51** | **65** | | |
 
 ## Trait Categories
 

@@ -97,6 +97,10 @@ public sealed record CommsConfig : IAppConfig
     /// </remarks>
     public bool DelegationMessagesEnabled { get; init; } = true;
 
+    /// <summary>Whether the reply footer shows the session's user and assistant message counts beside its size.</summary>
+    /// <remarks>Defaults to <see langword="false"/>. The monitor-group timeline always includes them.</remarks>
+    public bool FooterSessionCountsEnabled { get; init; }
+
     /// <summary>Redis Stream key for cross-instance communication of key events.</summary>
     /// <remarks>Defaults to <c>"comms:stream:events"</c>.</remarks>
     [Required, MinLength(1)]

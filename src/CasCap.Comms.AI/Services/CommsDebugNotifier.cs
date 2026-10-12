@@ -44,7 +44,7 @@ public sealed class CommsDebugNotifier(
 
         // Session context size (best-effort).
         if (result.Session is { Exists: true } session)
-            sb.Append($" | 💾 {DescribeSession(session)}");
+            sb.Append($" | 💾 {(commsConfig.Value.FooterSessionCountsEnabled ? DescribeSession(session) : DescribeSessionSize(session))}");
 
         // Host-specific lines, such as energy and GPU metrics.
         foreach (var enricher in enrichers)
@@ -251,7 +251,9 @@ public sealed class CommsDebugNotifier(
     }
 
     private static string DescribeSession(AgentSessionInfoResponse session) =>
-        $"{session.SizeBytes / 1024.0:F1}KB, "
+        $"{DescribeSessionSize(session)}, "
         + $"{session.Entries.Sum(entry => entry.UserMessageCount)}u/"
         + $"{session.Entries.Sum(entry => entry.AssistantMessageCount)}a";
+
+    private static string DescribeSessionSize(AgentSessionInfoResponse session) => $"{session.SizeBytes / 1024.0:F1}KB";
 }

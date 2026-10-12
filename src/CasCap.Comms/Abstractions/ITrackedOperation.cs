@@ -12,7 +12,7 @@ public interface ITrackedOperation
     /// <summary>Gets the delay between progress polls.</summary>
     public TimeSpan PollInterval => TimeSpan.FromSeconds(5);
 
-    /// <summary>Gets the minimum delay between intermediate progress messages.</summary>
+    /// <summary>Gets the minimum delay between progress messages; an unchanged status is repeated after three intervals.</summary>
     public TimeSpan ProgressInterval => TimeSpan.FromSeconds(20);
 
     /// <summary>Gets the time after which the operation is reported as incomplete.</summary>

@@ -40,6 +40,7 @@ public sealed partial class TrackedOperationService(
     {
         var started = timeProvider.GetTimestamp();
         var lastReported = started;
+        var lastReportedCompleted = -1;
         TrackedOperationProgress? progress = null;
         try
         {
@@ -70,12 +71,13 @@ public sealed partial class TrackedOperationService(
                     return;
                 }
 
-                if (progress is not null && timeProvider.GetElapsedTime(lastReported) >= operation.ProgressInterval)
+                if (progress is not null && IsProgressDue(operation, progress.Completed != lastReportedCompleted, timeProvider.GetElapsedTime(lastReported)))
                 {
                     await PublishAsync(
                         $"{operation.Description}: {progress.Completed} of {progress.Total} done, still in progress: {FormatNames(progress.Pending)}.",
                         cancellationToken);
                     lastReported = timeProvider.GetTimestamp();
+                    lastReportedCompleted = progress.Completed;
                 }
             }
         }
@@ -88,6 +90,10 @@ public sealed partial class TrackedOperationService(
             LogPollFailed(logger, ex, nameof(TrackedOperationService), operationId);
         }
     }
+
+    // An unchanged status is repeated less often so a stalled operation still shows signs of life without flooding the chat.
+    private static bool IsProgressDue(ITrackedOperation operation, bool changed, TimeSpan sinceLastReport)
+        => sinceLastReport >= (changed ? operation.ProgressInterval : operation.ProgressInterval * 3);
 
     private static string FormatTimeout(ITrackedOperation operation, TrackedOperationProgress? progress, TimeSpan elapsed)
         => progress is null

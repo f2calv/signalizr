@@ -17,6 +17,7 @@ public sealed class TrackedOperationServiceTests
 
         Assert.Equal(
             [
+                "Closing 2 shutters: 0 of 2 done, still in progress: Kitchen, Office.",
                 "Closing 2 shutters: 1 of 2 done, still in progress: Office.",
                 "Closing 2 shutters: done, all 2 reached their target.",
             ],

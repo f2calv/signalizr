@@ -40,7 +40,6 @@ public sealed partial class TrackedOperationService(
     {
         var started = timeProvider.GetTimestamp();
         var lastReported = started;
-        var lastReportedCompleted = 0;
         TrackedOperationProgress? progress = null;
         try
         {
@@ -71,15 +70,12 @@ public sealed partial class TrackedOperationService(
                     return;
                 }
 
-                if (progress is not null
-                    && progress.Completed != lastReportedCompleted
-                    && timeProvider.GetElapsedTime(lastReported) >= operation.ProgressInterval)
+                if (progress is not null && timeProvider.GetElapsedTime(lastReported) >= operation.ProgressInterval)
                 {
                     await PublishAsync(
                         $"{operation.Description}: {progress.Completed} of {progress.Total} done, still in progress: {FormatNames(progress.Pending)}.",
                         cancellationToken);
                     lastReported = timeProvider.GetTimestamp();
-                    lastReportedCompleted = progress.Completed;
                 }
             }
         }

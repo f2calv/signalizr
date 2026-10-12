@@ -20,7 +20,7 @@ public sealed partial class MessagingMcpQueryService(
     /// <summary>
     /// Creates a poll in the configured chat group.
     /// </summary>
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
     [Description("Sends a multiple-choice question to the user's messaging group. ALWAYS use this tool when you would list options, choices, suggestions, recommendations, or alternatives — even if the user does not say 'poll'. Trigger phrases include 'give me options', 'what are my choices', 'suggest some', 'which should I', or any request that results in a numbered/bulleted list of possibilities. After calling this tool, do NOT send a follow-up text message — the poll itself is the response.")]
     public async Task<PollCreatedResult> CreatePoll(
         [Description("Short question for the poll, e.g. 'Which room lights should I turn off?'")] string question,
@@ -38,7 +38,7 @@ public sealed partial class MessagingMcpQueryService(
     /// <summary>
     /// Closes an existing poll in the chat group.
     /// </summary>
-    [McpServerTool]
+    [McpServerTool(ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Closes a previously created poll. Use the identifier from the create response.")]
     public async Task<bool> ClosePoll(
         [Description("The poll identifier returned when the poll was created.")] string pollId,
@@ -52,7 +52,7 @@ public sealed partial class MessagingMcpQueryService(
     /// <summary>
     /// Returns the current vote tally for a tracked poll.
     /// </summary>
-    [McpServerTool]
+    [McpServerTool(ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Gets the current vote status of a previously created poll. Returns the question, options, vote counts, and a summary. Returns null if no poll with the given identifier is tracked.")]
     public Task<PollStatusResult?> GetPollStatus(
         [Description("The poll identifier returned when the poll was created.")] string pollId,

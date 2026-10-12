@@ -161,7 +161,7 @@ public sealed partial class AgentCommsResponder(
                     BinaryContent = turn.BinaryContent,
                     MimeType = turn.MimeType,
                     BypassSession = turn.BypassSession,
-                    IncludeDiagnosticDetails = commsConfig.Value.MonitorGroupName is { Length: > 0 }
+                    IncludeDiagnosticDetails = commsConfig.Value is { MonitorGroupName.Length: > 0, MonitorContentEnabled: true }
                         || _enrichers.Count > 0,
                 },
                 cancellationToken))

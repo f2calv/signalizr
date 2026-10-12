@@ -5,9 +5,10 @@ namespace CasCap.Services;
 /// Signalizr group for observability of the agent pipeline.
 /// </summary>
 /// <remarks>
-/// The monitor group is operator diagnostics: it carries prompts and tool arguments, so its Signal
-/// group must contain only the operator. Leaving the group name unset disables every message sent
-/// from here. Host-specific measurements come from the registered <see cref="IAgentRunEnricher"/> instances.
+/// The monitor group is operator diagnostics. Message content (prompts, tool arguments and stream-event
+/// text) is included only when <see cref="CommsConfig.MonitorContentEnabled"/> is set. Leaving the group
+/// name unset disables every message sent from here. Host-specific measurements come from the
+/// registered <see cref="IAgentRunEnricher"/> instances.
 /// </remarks>
 public sealed class CommsDebugNotifier(
     ILogger<CommsDebugNotifier> logger,
@@ -59,7 +60,7 @@ public sealed class CommsDebugNotifier(
     }
 
     /// <summary>
-    /// Sends a copy of an incoming stream event to <see cref="CommsConfig.MonitorGroupName"/>
+    /// Sends a notice of an incoming stream event to <see cref="CommsConfig.MonitorGroupName"/>
     /// so automated sensor messages can be observed alongside the agent's response.
     /// </summary>
     public async Task SendStreamEventDebugAsync(CommsEvent commsEvent, CancellationToken cancellationToken)
@@ -72,9 +73,19 @@ public sealed class CommsDebugNotifier(
             var sb = new StringBuilder();
             sb.AppendLine($"\U0001F4E5 {commsEvent.Source}");
             sb.AppendLine($"\u23F0 {commsEvent.TimestampUtc:u}");
-            sb.AppendLine(commsEvent.Message);
-            if (commsEvent.JsonPayload is not null)
-                sb.AppendLine($"\U0001F4CE {commsEvent.JsonPayload}");
+            if (commsConfig.Value.MonitorContentEnabled)
+            {
+                sb.AppendLine(commsEvent.Message);
+                if (commsEvent.JsonPayload is not null)
+                    sb.AppendLine($"\U0001F4CE {commsEvent.JsonPayload}");
+            }
+            else
+            {
+                sb.Append($"\U0001F4DD {commsEvent.Message.Length:N0} chars");
+                if (commsEvent.JsonPayload is not null)
+                    sb.Append($" | \U0001F4CE {commsEvent.JsonPayload.Length:N0} chars");
+                sb.AppendLine();
+            }
 
             await signalizrClient.SendAsync(monitorGroupName, sb.ToString().TrimEnd(), cancellationToken);
             if (logger.IsEnabled(LogLevel.Debug))
@@ -139,9 +150,13 @@ public sealed class CommsDebugNotifier(
         {
             var sb = new StringBuilder();
 
-            // ── Quoted prompt ──────────────────────────────────────
-            var truncated = prompt.Length > 200 ? prompt[..200] + "\u2026" : prompt;
-            sb.AppendLine($"\u201C{truncated}\u201D");
+            if (commsConfig.Value.MonitorContentEnabled)
+            {
+                var truncated = prompt.Length > 200 ? prompt[..200] + "\u2026" : prompt;
+                sb.AppendLine($"\u201C{truncated}\u201D");
+            }
+            else
+                sb.AppendLine($"\U0001F4AC Prompt: {prompt.Length:N0} chars");
 
             // ── End-to-end turnaround as the sender experienced it ────
             if (inboundTimestamp is { } received)
@@ -224,7 +239,7 @@ public sealed class CommsDebugNotifier(
         {
             foreach (var tc in r.ToolCalls)
             {
-                var args = tc.Arguments.Count > 0
+                var args = commsConfig.Value.MonitorContentEnabled && tc.Arguments.Count > 0
                     ? $"({string.Join(", ", tc.Arguments.Select(a => $"{a.Key}={a.Value}"))})"
                     : string.Empty;
                 sb.AppendLine($"   \U0001F527 {tc.Name}{args}");

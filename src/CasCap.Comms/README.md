@@ -53,10 +53,11 @@ groups exactly, including spaces and case.
 | --- | --- | --- |
 | `GroupName` | `"My Test Group Name"` | User-facing chat group |
 | `MonitorGroupName` | `null` | Operator-only diagnostics group; unset disables diagnostics |
+| `MonitorContentEnabled` | `false` | Include prompts, tool arguments and stream-event text in monitor diagnostics; otherwise only timings, counts, tool names and sizes |
 | `MonitorSources` | empty | Event sources delivered directly to the monitor group |
 | `StreamEventTurnsEnabled` | `true` | Turn chat-bound stream events into responder turns; `false` sends them directly |
 | `DirectDeliverySources` | empty | Event sources always sent directly to the chat group, never becoming responder turns |
-| `EchoTranscriptToDebugChat` | `false` | Echo voice transcripts to the monitor group |
+| `EchoTranscriptToDebugChat` | `false` | Echo voice transcripts to the monitor group; discloses content like `MonitorContentEnabled` |
 | `DelegationMessagesEnabled` | `true` | Let an agent responder announce sub-agent delegation |
 | `StreamKey` | `"comms:stream:events"` | Redis Stream key |
 | `ConsumerGroup` | `"comms:agents"` | Redis consumer group |
@@ -100,12 +101,14 @@ With an operator monitor group and operational sources:
     "CommsConfig": {
       "GroupName": "My Test Group Name",
       "MonitorGroupName": "My Test Monitor Group Name",
-      "MonitorSources": [ "SchedulerBgService" ],
-      "EchoTranscriptToDebugChat": true
+      "MonitorSources": [ "SchedulerBgService" ]
     }
   }
 }
 ```
+
+Monitor messages persist in Signal history on every member device. Enable `MonitorContentEnabled`
+or `EchoTranscriptToDebugChat` only while diagnosing a problem.
 
 `AddComms` also registers `CasCap:SignalizrClientConfig`, `CasCap:SpeechToTextConfig` and
 `CasCap:TextToSpeechConfig`; voice processing does no work until its `Mode` enables it.

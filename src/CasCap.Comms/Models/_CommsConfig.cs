@@ -33,10 +33,9 @@ public sealed record CommsConfig : IAppConfig
     /// </summary>
     /// <remarks>
     /// Receives drop notices, events from <see cref="MonitorSources"/> and, when an agent responder is
-    /// registered, pipeline timelines, stream-event copies, compaction notices and, when
-    /// <see cref="EchoTranscriptToDebugChat"/> is enabled, voice transcripts. Its Signal group must
-    /// contain only the operator, because these messages repeat other people's content. Preserve
-    /// spaces and case.
+    /// registered, pipeline timelines, stream-event notices and compaction notices. Message content is
+    /// included only when <see cref="MonitorContentEnabled"/> or <see cref="EchoTranscriptToDebugChat"/>
+    /// is enabled. Its Signal group must contain only the operator. Preserve spaces and case.
     /// </remarks>
     public string? MonitorGroupName { get; init; }
 
@@ -71,8 +70,22 @@ public sealed record CommsConfig : IAppConfig
     public HashSet<string> DirectDeliverySources { get; init; } = [];
 
     /// <summary>Whether to echo a successful voice transcript to <see cref="MonitorGroupName"/>.</summary>
-    /// <remarks>Defaults to <see langword="false"/>. This is communications orchestration policy, not voice processing.</remarks>
+    /// <remarks>
+    /// Defaults to <see langword="false"/>. This discloses message content into Signal history, which
+    /// outlives the debugging session; enable it only while diagnosing.
+    /// </remarks>
     public bool EchoTranscriptToDebugChat { get; init; }
+
+    /// <summary>
+    /// Whether monitor diagnostics include message content: the agent prompt, tool-call arguments and
+    /// stream-event text and payloads.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="false"/>, which keeps timings, token counts, tool names and sizes only.
+    /// Content may belong to other group members and persists in Signal history on every member
+    /// device, so enable it only while diagnosing.
+    /// </remarks>
+    public bool MonitorContentEnabled { get; init; }
 
     /// <summary>
     /// Whether an agent responder sends a separate status message (e.g. "🔀 Consulting SecurityAgent…")

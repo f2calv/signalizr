@@ -25,7 +25,10 @@ AI provider.
 | `CommsEventFormatterTests` | 2 | 2 | Comms | The plain and timestamped direct-send formats |
 | `InMemoryPollTrackerTests` | 2 | 2 | Messaging | Poll vote summaries and TTL expiry |
 | `AgentCommsResponderTests` | 3 | 3 | Agent Runtime | Streamed live progress, attachments, diagnostics, remote overrides and local bypass |
-| **Total** | **45** | **56** | | |
+| `CommsDebugNotifierTests` | 2 | 4 | Comms | Monitor diagnostics disclose prompts, tool arguments and event text only when `MonitorContentEnabled` is set |
+| `MessagingMcpQueryServiceTests` | 1 | 1 | Comms | Poll tools activated per call by the MCP server use the configured group |
+| `TrackedOperationServiceTests` | 2 | 2 | Comms | Tracked-operation progress, completion and timeout messages |
+| **Total** | **50** | **63** | | |
 
 ## Trait Categories
 
@@ -46,6 +49,7 @@ Tests/
 └── Unit/
     ├── CommsEventFormatterTests.cs
     ├── AgentCommsResponderTests.cs
+    ├── CommsDebugNotifierTests.cs
     ├── CommunicationsBgServiceStreamTests.cs
     ├── CommunicationsBgServiceTestFixture.cs   # Service over deterministic fakes
     ├── CommunicationsBgServiceTests.cs
@@ -57,10 +61,12 @@ Tests/
     ├── FakeSignalMessageDeduplicator.cs
     ├── InMemoryCommsRedis.cs                   # Stream and string commands only
     ├── InMemoryPollTrackerTests.cs
+    ├── MessagingMcpQueryServiceTests.cs
     ├── MonitorSourcesGroupRouterTests.cs
     ├── SignalMessageDeduplicatorTests.cs
     ├── TestMetrics.cs
-    └── ThrowingRemoteCache.cs
+    ├── ThrowingRemoteCache.cs
+    └── TrackedOperationServiceTests.cs
 ```
 
 ## Running

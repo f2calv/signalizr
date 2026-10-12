@@ -10,7 +10,7 @@ sources:
 dependencies:
   # The upstream signal-cli REST wrapper. Owns the registered account and its on-disk state.
   - name: signalcli
-    version: 1.0.2
+    version: 1.0.5
     repository: oci://ghcr.io/f2calv/charts
 
   # The gateway itself: Gateway and Receiver roles from one image.

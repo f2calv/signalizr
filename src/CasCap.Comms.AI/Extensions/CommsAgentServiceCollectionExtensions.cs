@@ -35,27 +35,7 @@ public static class CommsAgentServiceCollectionExtensions
     public static IServiceCollection AddMessagingMcp(this IServiceCollection services)
     {
         services.TryAddSingleton<IPollTracker, InMemoryPollTracker>();
-        services.TryAddSingleton(sp => new MessagingMcpQueryService(
-            sp.GetRequiredService<ISignalizrClient>(),
-            sp.GetRequiredService<IPollTracker>(),
-            sp.GetRequiredService<IOptions<CommsConfig>>().Value.GroupName));
-        return services;
-    }
-
-    /// <summary>
-    /// Registers a stub <see cref="MessagingMcpQueryService"/> so agent configurations that reference it
-    /// pass dependency-injection validation without a Signalizr gateway.
-    /// </summary>
-    /// <remarks>Its tools fail at invocation time. Use it only where the <c>Comms</c> feature is disabled.</remarks>
-    /// <param name="services">The service collection.</param>
-    /// <returns>The same <see cref="IServiceCollection"/> for chaining.</returns>
-    public static IServiceCollection AddMessagingMcpStub(this IServiceCollection services)
-    {
-        services.TryAddSingleton<IPollTracker, InMemoryPollTracker>();
-        services.TryAddSingleton(sp => new MessagingMcpQueryService(
-            null!,
-            sp.GetRequiredService<IPollTracker>(),
-            string.Empty));
+        services.TryAddSingleton<MessagingMcpQueryService>();
         return services;
     }
 }

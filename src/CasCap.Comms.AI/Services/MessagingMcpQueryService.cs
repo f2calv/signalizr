@@ -6,14 +6,17 @@ namespace CasCap.Services;
 /// </summary>
 /// <remarks>
 /// Bakes in the chat group name so the agent only needs to provide the poll question and answer
-/// options. The gateway owns the account and resolves the exact Signal group name.
+/// options. The gateway owns the account and resolves the exact Signal group name. The MCP server
+/// activates this type per call, so every constructor parameter must be resolvable from DI.
 /// </remarks>
 [McpServerToolType]
 public sealed partial class MessagingMcpQueryService(
     ISignalizrClient signalizrClient,
     IPollTracker pollTracker,
-    string groupName)
+    IOptions<CommsConfig> commsConfig)
 {
+    private readonly string _groupName = commsConfig.Value.GroupName;
+
     /// <summary>
     /// Creates a poll in the configured chat group.
     /// </summary>
@@ -25,9 +28,9 @@ public sealed partial class MessagingMcpQueryService(
         CancellationToken cancellationToken = default)
     {
         var answerArray = answers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var pollId = await signalizrClient.CreatePollAsync(groupName, question, answerArray,
+        var pollId = await signalizrClient.CreatePollAsync(_groupName, question, answerArray,
             cancellationToken: cancellationToken);
-        pollTracker.TrackPoll(pollId, question, answerArray, groupName);
+        pollTracker.TrackPoll(pollId, question, answerArray, _groupName);
 
         return new PollCreatedResult { PollId = pollId };
     }
@@ -41,7 +44,7 @@ public sealed partial class MessagingMcpQueryService(
         [Description("The poll identifier returned when the poll was created.")] string pollId,
         CancellationToken cancellationToken = default)
     {
-        await signalizrClient.ClosePollAsync(groupName, pollId, cancellationToken);
+        await signalizrClient.ClosePollAsync(_groupName, pollId, cancellationToken);
         pollTracker.RemovePoll(pollId);
         return true;
     }

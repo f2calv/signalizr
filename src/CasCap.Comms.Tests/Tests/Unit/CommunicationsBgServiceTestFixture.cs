@@ -23,6 +23,7 @@ namespace CasCap.Tests.Unit;
 /// <param name="monitorSources">Stream event sources routed to the monitor group.</param>
 /// <param name="streamEventTurnsEnabled">Whether chat-bound stream events become responder turns.</param>
 /// <param name="directDeliverySources">Stream event sources always sent directly, bypassing the responder.</param>
+/// <param name="agentRuntimeResponder">Replaces the fake Agent Runtime's default empty-answer response.</param>
 public sealed class CommunicationsBgServiceTestFixture(
     VoiceProcessingMode voiceMode = VoiceProcessingMode.Enabled,
     bool responderEnabled = true,
@@ -34,7 +35,8 @@ public sealed class CommunicationsBgServiceTestFixture(
     int streamSendRatePerMinute = 20,
     string[]? monitorSources = null,
     bool streamEventTurnsEnabled = true,
-    string[]? directDeliverySources = null) : IAsyncDisposable
+    string[]? directDeliverySources = null,
+    Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? agentRuntimeResponder = null) : IAsyncDisposable
 {
     /// <summary>The gateway's own account, whose messages the service must ignore.</summary>
     public const string Account = "+10000000000";
@@ -68,7 +70,8 @@ public sealed class CommunicationsBgServiceTestFixture(
         streamSendRatePerMinute,
         monitorSources,
         streamEventTurnsEnabled,
-        directDeliverySources);
+        directDeliverySources,
+        agentRuntimeResponder);
 
     /// <summary>The duplicate-suppression fake.</summary>
     public FakeSignalMessageDeduplicator Deduplicator => _state.Deduplicator;
@@ -288,7 +291,8 @@ public sealed class CommunicationsBgServiceTestFixture(
             int streamSendRatePerMinute,
             string[]? monitorSources,
             bool streamEventTurnsEnabled,
-            string[]? directDeliverySources)
+            string[]? directDeliverySources,
+            Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? agentRuntimeResponder)
         {
             var deduplicator = new FakeSignalMessageDeduplicator();
             var pollTracker = new FakePollTracker();
@@ -328,7 +332,7 @@ public sealed class CommunicationsBgServiceTestFixture(
             {
                 var debugNotifier = new CommsDebugNotifier(NullLogger<CommsDebugNotifier>.Instance, commsConfig,
                     TimeProvider.System, signalizr, []);
-                agentRuntimeHttpClient = new HttpClient(new FakeAgentRuntimeHttpMessageHandler())
+                agentRuntimeHttpClient = new HttpClient(new FakeAgentRuntimeHttpMessageHandler(agentRuntimeResponder))
                 {
                     BaseAddress = new Uri("http://agent-runtime.test"),
                 };
@@ -340,6 +344,7 @@ public sealed class CommunicationsBgServiceTestFixture(
                     signalizr,
                     pollTracker,
                     debugNotifier,
+                    TestMetrics.CommsAgent(),
                     []);
             }
 

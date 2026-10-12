@@ -18,17 +18,17 @@ AI provider.
 
 | Class | Methods | Cases | Category | Description |
 | --- | ---: | ---: | --- | --- |
-| `CommunicationsBgServiceTests` | 13 | 18 | Messaging | Inbound admission, duplicate suppression, durable attachments, voice-processing modes, transcript echo and reply-queue backpressure |
+| `CommunicationsBgServiceTests` | 14 | 19 | Messaging | Inbound admission, duplicate suppression, durable attachments, voice-processing modes, transcript echo, reply-queue backpressure and the runtime failure notice |
 | `CommunicationsBgServiceStreamTests` | 14 | 17 | Comms | Direct and responder stream delivery, disabled stream turns, direct-delivery sources, monitor routing, stale and throttled drops, cached media, startup retry, the missing-group fault, resubscription, the no-responder inbound behaviour and the inbound filter |
 | `SignalMessageDeduplicatorTests` | 9 | 11 | Comms | Redis-backed duplicate Signal message suppression |
 | `MonitorSourcesGroupRouterTests` | 2 | 3 | Comms | Routing of configured operational sources to the monitor group |
 | `CommsEventFormatterTests` | 2 | 2 | Comms | The plain and timestamped direct-send formats |
 | `InMemoryPollTrackerTests` | 2 | 2 | Messaging | Poll vote summaries and TTL expiry |
-| `AgentCommsResponderTests` | 3 | 3 | Agent Runtime | Streamed live progress, attachments, diagnostics, remote overrides and local bypass |
+| `AgentCommsResponderTests` | 6 | 10 | Agent Runtime | Streamed live progress, attachments, diagnostics, run outcomes, failure notices for unreachable, HTTP-error, timed-out, response-less and malformed runs, empty answers, caller cancellation, remote overrides and local bypass |
 | `CommsDebugNotifierTests` | 3 | 6 | Comms | Monitor diagnostics disclose prompts, tool arguments and event text only when `MonitorContentEnabled` is set; footer session counts only when `FooterSessionCountsEnabled` is set |
 | `MessagingMcpQueryServiceTests` | 1 | 1 | Comms | Poll tools activated per call by the MCP server use the configured group |
 | `TrackedOperationServiceTests` | 2 | 2 | Comms | Tracked-operation progress, completion and timeout messages |
-| **Total** | **51** | **65** | | |
+| **Total** | **55** | **73** | | |
 
 ## Trait Categories
 

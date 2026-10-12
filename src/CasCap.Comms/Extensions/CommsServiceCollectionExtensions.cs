@@ -55,6 +55,7 @@ public static class CommsServiceCollectionExtensions
     public static IServiceCollection AddComms(this IServiceCollection services, IConfiguration configuration, bool lite = false)
     {
         services.AddCommsStreamSink();
+        services.AddCasCapConfiguration<CommsMetricsConfig>();
         services.AddSignalizrClient(configuration);
         services.AddSpeechToText();
         services.AddTextToSpeech();

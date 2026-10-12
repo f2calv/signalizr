@@ -15,7 +15,25 @@ public class CommunicationsBgServiceTests
     private const string Ear = "\U0001F442";
     private const string Hourglass = "\u23F3";
     private const string RedCross = "\u274C";
+    private const string GreenTick = "\u2705";
     private const string WavMediaType = "audio/wav";
+
+    [Fact]
+    public async Task RuntimeFailure_SendsTheFailureNoticeAndMarksTheMessageFailed()
+    {
+        await using var fixture = new CommunicationsBgServiceTestFixture(
+            voiceReplyMode: VoiceReplyMode.Always,
+            agentRuntimeResponder: (_, _) => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.BadGateway)));
+        await fixture.StartAsync();
+
+        fixture.Enqueue(CommunicationsBgServiceTestFixture.TextEnvelope("close the shutters", 9_001));
+
+        await CommunicationsBgServiceTestFixture.WaitForAsync(() => fixture.Signalizr.ReactionCount(RedCross) == 1);
+        var notice = Assert.Single(fixture.Signalizr.SentTo(CommunicationsBgServiceTestFixture.ChatGroupName));
+        Assert.Contains("returned HTTP 502", notice.Message, StringComparison.Ordinal);
+        Assert.Null(notice.Attachments);
+        Assert.Equal(0, fixture.Signalizr.ReactionCount(GreenTick));
+    }
 
     [Fact]
     public async Task EarIsSentBeforeTranscriptionCompletes()

@@ -22,6 +22,7 @@ public sealed partial class AgentCommsResponder(
     ISignalizrClient signalizrClient,
     IPollTracker pollTracker,
     CommsDebugNotifier debugNotifier,
+    CommsAgentMetrics metrics,
     IEnumerable<IAgentRunEnricher> enrichers) : ICommsResponder
 {
     private const string Hourglass = "\u23F3";
@@ -100,9 +101,21 @@ public sealed partial class AgentCommsResponder(
     /// <inheritdoc/>
     public async Task<CommsReply?> RespondAsync(CommsTurn turn, CancellationToken cancellationToken)
     {
-        var (result, debugSteps) = await RunAgentAsync(turn, cancellationToken);
+        var (result, debugSteps, failure) = await RunAgentAsync(turn, cancellationToken);
+        if (failure is { } failed)
+        {
+            metrics.Record(failed.Outcome);
+            return new CommsReply(failed.Notice, Failed: true);
+        }
+
         if (result is null || string.IsNullOrWhiteSpace(result.OutputText))
+        {
+            // An empty answer is the agent's choice, for example to stay quiet about a stream event.
+            metrics.Record(CommsAgentRunOutcome.EmptyOutput);
             return null;
+        }
+
+        metrics.Record(CommsAgentRunOutcome.Succeeded);
 
         var footer = await debugNotifier.FormatStatsFooterAsync(result, cancellationToken);
 
@@ -132,8 +145,8 @@ public sealed partial class AgentCommsResponder(
         });
     }
 
-    private async Task<(CommsAgentRunResult? Result, List<CommsDebugStep> DebugSteps)> RunAgentAsync(CommsTurn turn,
-        CancellationToken cancellationToken)
+    private async Task<(CommsAgentRunResult? Result, List<CommsDebugStep> DebugSteps, (CommsAgentRunOutcome Outcome, string Notice)? Failure)> RunAgentAsync(
+        CommsTurn turn, CancellationToken cancellationToken)
     {
         try
         {
@@ -173,7 +186,10 @@ public sealed partial class AgentCommsResponder(
             }
 
             if (response is null)
-                return (null, debugSteps);
+            {
+                LogAgentInferenceFailed(logger, null, nameof(AgentCommsResponder), CommsAgentRunOutcome.NoResponse);
+                return (null, debugSteps, (CommsAgentRunOutcome.NoResponse, FailureNotice("the run ended without a response")));
+            }
 
             var result = CommsAgentRunResult.FromResponse(response);
             for (var i = 0; i < _enrichers.Count; i++)
@@ -189,14 +205,27 @@ public sealed partial class AgentCommsResponder(
                 result.ModelName,
                 pipelineSw.Elapsed,
                 result));
-            return (result, debugSteps);
+            return (result, debugSteps, null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            LogAgentInferenceFailed(logger, ex, nameof(AgentCommsResponder));
-            return (null, []);
+            var failure = ClassifyFailure(ex);
+            LogAgentInferenceFailed(logger, ex, nameof(AgentCommsResponder), failure.Outcome);
+            return (null, [], failure);
         }
     }
+
+    private static (CommsAgentRunOutcome Outcome, string Notice) ClassifyFailure(Exception ex) => ex switch
+    {
+        HttpRequestException { StatusCode: { } status } =>
+            (CommsAgentRunOutcome.HttpError, FailureNotice($"the agent runtime returned HTTP {(int)status}")),
+        HttpRequestException => (CommsAgentRunOutcome.Unreachable, FailureNotice("the agent runtime could not be reached")),
+        // The caller's token is not cancelled here, so this is the HTTP client's own timeout.
+        OperationCanceledException => (CommsAgentRunOutcome.Timeout, FailureNotice("the agent runtime timed out")),
+        _ => (CommsAgentRunOutcome.Error, FailureNotice("an unexpected error occurred")),
+    };
+
+    private static string FailureNotice(string reason) => $"\u26A0\uFE0F Assistant unavailable: {reason}.";
 
     private async Task HandleExecutionEventAsync(
         RunAgentEvent executionEvent,

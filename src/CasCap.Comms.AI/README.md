@@ -11,8 +11,13 @@ pipeline.
   model and instruction overrides and optional session bypass;
 - owns slash-command syntax while the runtime owns session/override mutations, and handles poll votes through `IPollTracker`;
 - reports sub-agent delegation with a reaction swap and, optionally, a status message;
-- appends a stats footer to each reply and posts a pipeline timeline, stream-event copies and
-  compaction notices to the monitor group through `CommsDebugNotifier`.
+- appends a stats footer to each reply and posts a pipeline timeline, stream-event notices and
+  compaction notices to the monitor group through `CommsDebugNotifier`;
+- answers a failed runtime call with a short notice such as `Assistant unavailable: the agent
+  runtime returned HTTP 503.`, which is sent but never spoken and marks the message with ❌. An empty
+  answer is treated as the agent choosing to stay quiet and sends nothing;
+- counts every run in `{prefix}.comms.agent.runs`, tagged with a bounded `outcome`
+  (`Succeeded`, `EmptyOutput`, `NoResponse`, `Unreachable`, `HttpError`, `Timeout`, `Error`).
 
 The runtime owns tenant definitions, credentials, agent construction, tools and version-qualified
 session state. Comms retains Signal delivery, typing, reactions, polls, attachments and diagnostics.
@@ -27,12 +32,13 @@ published package in Release.
 | --- | --- |
 | `AgentCommsResponder` | `ICommsResponder` backed by the streamed Agent Runtime client |
 | `CommsDebugNotifier` | Stats footer and monitor-group diagnostics |
+| `CommsAgentMetrics` | Run counter by `CommsAgentRunOutcome` |
 | `IAgentRunEnricher` | Host seam for measurements around each run, such as GPU energy use |
 | `CommsAgentProfile` | Runtime agent name, opaque session identifier and attachment fallback prompt |
 | `CommsDebugStep` | One step of the monitor-group pipeline timeline |
 | `MessagingMcpQueryService` | MCP poll tools (`create_poll`, `close_poll`, `get_poll_status`) on the chat group |
 | `IPollTracker`, `InMemoryPollTracker` | Comms-owned poll lifecycle, votes, result summaries, and TTL expiry |
-| `CommsAgentServiceCollectionExtensions` | `AddCommsAgent()`, `AddMessagingMcp()` and `AddMessagingMcpStub()` |
+| `CommsAgentServiceCollectionExtensions` | `AddCommsAgent()` and `AddMessagingMcp()` |
 
 ## Configuration
 
@@ -41,6 +47,9 @@ runtime address and timeout under `CasCap:AgentRuntimeClientOptions`; the host a
 authentication and resilience to the `IHttpClientBuilder` returned by `AddCommsAgent`.
 
 `CommsConfig.PollTtlMs` controls how long an agent-created poll remains available for votes.
+
+The run counter uses `CasCap:CommsMetricsConfig:MetricNamePrefix` (default `comms`). Set it to the
+host's exported meter prefix so its OpenTelemetry pipeline collects the counter.
 
 ```csharp
 services.AddComms(configuration);

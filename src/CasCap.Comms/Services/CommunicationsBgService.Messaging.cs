@@ -360,8 +360,10 @@ public sealed partial class CommunicationsBgService
                 {
                     List<string> attachments = [.. reply.Base64Attachments ?? [], .. turn.ExtraBase64Attachments ?? []];
 
-                    // The answer is spoken, never the diagnostic footer appended below.
-                    var spoken = await voiceReplySvc.TrySynthesizeAsync(reply.Text, turn.InboundWasVoice, cancellationToken);
+                    // The answer is spoken, never the diagnostic footer appended below or a failure notice.
+                    var spoken = reply.Failed
+                        ? null
+                        : await voiceReplySvc.TrySynthesizeAsync(reply.Text, turn.InboundWasVoice, cancellationToken);
                     if (spoken is not null)
                         attachments.Add($"data:{spoken.MediaType};filename={spoken.FileName};base64," +
                             Convert.ToBase64String(spoken.Audio.Span));
@@ -374,9 +376,9 @@ public sealed partial class CommunicationsBgService
                     if (reply.AfterSendAsync is not null)
                         await reply.AfterSendAsync(cancellationToken);
 
-                    // Green tick reaction to indicate successful processing.
+                    // Green tick for a delivered answer, red cross for a delivered failure notice.
                     if (turn.Sender is not null && turn.Timestamp is not null)
-                        await SetReactionAsync(GreenTick, turn.Sender, turn.Timestamp.Value, cancellationToken);
+                        await SetReactionAsync(reply.Failed ? RedCross : GreenTick, turn.Sender, turn.Timestamp.Value, cancellationToken);
                 }
                 else
                 {

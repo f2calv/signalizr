@@ -33,8 +33,8 @@ public sealed partial class AgentCommsResponder
     private static partial void LogAgentCompleted(ILogger logger, string className, TimeSpan duration, string sessionStatus);
 
     [LoggerMessage(Level = LogLevel.Error,
-        Message = "{ClassName} agent inference failed")]
-    private static partial void LogAgentInferenceFailed(ILogger logger, Exception ex, string className);
+        Message = "{ClassName} agent inference failed, outcome={Outcome}")]
+    private static partial void LogAgentInferenceFailed(ILogger logger, Exception? ex, string className, CommsAgentRunOutcome outcome);
 
     [LoggerMessage(Level = LogLevel.Information, SkipEnabledCheck = true,
         Message = "{ClassName} debug stats: parentUsage={HasUsage}, inputTokens={InputTokens}, outputTokens={OutputTokens}, debugSteps={StepCount}, stepsWithResult={StepsWithResult}, stepsWithUsage={StepsWithUsage}")]

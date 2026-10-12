@@ -21,6 +21,7 @@ public static class CommsAgentServiceCollectionExtensions
             return new CommsAgentProfile(config.AgentName, config.AgentSessionId, config.AgentDefaultPrompt);
         });
         services.TryAddSingleton<CommsDebugNotifier>();
+        services.TryAddSingleton<CommsAgentMetrics>();
         services.TryAddSingleton<ICommsResponder, AgentCommsResponder>();
         services.AddMessagingMcp();
         return services.AddAgentRuntimeClient();

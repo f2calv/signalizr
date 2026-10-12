@@ -5,8 +5,10 @@ namespace CasCap.Models;
 /// <param name="Footer">Text appended to the sent message but never spoken, such as run statistics.</param>
 /// <param name="Base64Attachments">Signal data-URI attachments the responder produced.</param>
 /// <param name="AfterSendAsync">Invoked after the reply is delivered, for example to post diagnostics.</param>
+/// <param name="Failed">Whether the reply explains a failure; it is sent but never spoken, and the turn is marked failed.</param>
 public sealed record CommsReply(
     string Text,
     string? Footer = null,
     IReadOnlyList<string>? Base64Attachments = null,
-    Func<CancellationToken, Task>? AfterSendAsync = null);
+    Func<CancellationToken, Task>? AfterSendAsync = null,
+    bool Failed = false);

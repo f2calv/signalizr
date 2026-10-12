@@ -28,3 +28,22 @@ public enum CommsAgentCommand
     /// <summary>Gets or sets the runtime instruction override.</summary>
     Instructions,
 }
+
+/// <summary>Outcome of an Agent Runtime run requested by the communications responder.</summary>
+public enum CommsAgentRunOutcome
+{
+    /// <summary>The run returned an answer.</summary>
+    Succeeded,
+    /// <summary>The run completed without answer text; nothing is sent.</summary>
+    EmptyOutput,
+    /// <summary>The response stream ended without a final response.</summary>
+    NoResponse,
+    /// <summary>The runtime could not be reached.</summary>
+    Unreachable,
+    /// <summary>The runtime returned an unsuccessful HTTP status.</summary>
+    HttpError,
+    /// <summary>The runtime request timed out.</summary>
+    Timeout,
+    /// <summary>Any other failure, such as a malformed response stream.</summary>
+    Error,
+}

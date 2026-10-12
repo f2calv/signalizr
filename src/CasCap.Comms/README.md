@@ -111,8 +111,9 @@ With an operator monitor group and operational sources:
 Monitor messages persist in Signal history on every member device. Enable `MonitorContentEnabled`
 or `EchoTranscriptToDebugChat` only while diagnosing a problem.
 
-`AddComms` also registers `CasCap:SignalizrClientConfig`, `CasCap:SpeechToTextConfig` and
-`CasCap:TextToSpeechConfig`; voice processing does no work until its `Mode` enables it.
+`AddComms` also registers `CasCap:CommsMetricsConfig`, `CasCap:SignalizrClientConfig`,
+`CasCap:SpeechToTextConfig` and `CasCap:TextToSpeechConfig`; voice processing does no work until its
+`Mode` enables it.
 
 ## Dependencies
 

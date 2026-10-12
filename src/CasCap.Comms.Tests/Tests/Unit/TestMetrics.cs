@@ -16,4 +16,13 @@ internal static class TestMetrics
             .GetRequiredService<IMeterFactory>();
         return new(config, Options.Create(new SpeechToTextConfig()), meterFactory);
     }
+
+    /// <summary>Creates a <see cref="CommsAgentMetrics"/> backed by a throwaway meter factory.</summary>
+    /// <param name="metricNamePrefix">Meter and instrument prefix; use a unique value to observe measurements.</param>
+    public static CommsAgentMetrics CommsAgent(string metricNamePrefix = "comms")
+    {
+        var meterFactory = new ServiceCollection().AddMetrics().BuildServiceProvider()
+            .GetRequiredService<IMeterFactory>();
+        return new(Options.Create(new CommsMetricsConfig { MetricNamePrefix = metricNamePrefix }), meterFactory);
+    }
 }

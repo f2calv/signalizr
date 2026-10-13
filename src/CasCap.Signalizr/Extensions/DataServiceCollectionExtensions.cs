@@ -40,7 +40,11 @@ public static class DataServiceCollectionExtensions
                     options.UseSqlite(databaseConfig.ConnectionString);
                     break;
                 case DatabaseProvider.Postgres:
-                    options.UseNpgsql(databaseConfig.ConnectionString);
+                    // No Kerberos in this deployment; GSS probing loads libgssapi, which the chiseled image lacks.
+                    options.UseNpgsql(new Npgsql.NpgsqlConnectionStringBuilder(databaseConfig.ConnectionString)
+                    {
+                        GssEncryptionMode = Npgsql.GssEncryptionMode.Disable,
+                    }.ConnectionString);
                     break;
                 default:
                     throw new InvalidOperationException(

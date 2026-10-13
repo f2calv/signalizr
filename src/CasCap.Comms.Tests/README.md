@@ -24,11 +24,11 @@ AI provider.
 | `MonitorSourcesGroupRouterTests` | 2 | 3 | Comms | Routing of configured operational sources to the monitor group |
 | `CommsEventFormatterTests` | 2 | 2 | Comms | The plain and timestamped direct-send formats |
 | `InMemoryPollTrackerTests` | 2 | 2 | Messaging | Poll vote summaries and TTL expiry |
-| `AgentCommsResponderTests` | 7 | 11 | Agent Runtime | Streamed live progress, attachments, diagnostics, run outcomes, failed-tool footer, failure notices for unreachable, HTTP-error, timed-out, response-less and malformed runs, empty answers, caller cancellation, remote overrides and local bypass |
+| `AgentCommsResponderTests` | 8 | 13 | Agent Runtime | Streamed live progress, attachments, diagnostics, run outcomes, failed-tool footer, failure notices for unreachable, HTTP-error, timed-out, response-less and malformed runs, empty answers, caller cancellation, diagnostic details requested only when an enricher needs them, remote overrides and local bypass |
 | `CommsDebugNotifierTests` | 3 | 6 | Comms | Monitor diagnostics disclose prompts, tool arguments and event text only when `MonitorContentEnabled` is set; footer session counts only when `FooterSessionCountsEnabled` is set |
 | `MessagingMcpQueryServiceTests` | 1 | 1 | Comms | Poll tools activated per call by the MCP server use the configured group |
 | `TrackedOperationServiceTests` | 2 | 2 | Comms | Tracked-operation progress, completion and timeout messages |
-| **Total** | **56** | **74** | | |
+| **Total** | **57** | **76** | | |
 
 ## Trait Categories
 

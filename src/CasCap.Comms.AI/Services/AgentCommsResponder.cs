@@ -181,7 +181,7 @@ public sealed partial class AgentCommsResponder(
                     MimeType = turn.MimeType,
                     BypassSession = turn.BypassSession,
                     IncludeDiagnosticDetails = commsConfig.Value is { MonitorGroupName.Length: > 0, MonitorContentEnabled: true }
-                        || _enrichers.Count > 0,
+                        || _enrichers.Any(enricher => enricher.RequiresDiagnosticDetails),
                 },
                 cancellationToken))
             {

@@ -8,6 +8,12 @@ namespace CasCap.Abstractions;
 /// </remarks>
 public interface IAgentRunEnricher
 {
+    /// <summary>
+    /// Gets whether this enricher reads operator-only diagnostic details, such as tool arguments or the
+    /// runtime's property bags. Request them only when needed; they can contain user content.
+    /// </summary>
+    public bool RequiresDiagnosticDetails { get; }
+
     /// <summary>Captures state before the agent runs, for example a hardware snapshot.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>State passed back to <see cref="AfterRunAsync"/>, or <see langword="null"/>.</returns>

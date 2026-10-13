@@ -37,7 +37,7 @@ published package in Release.
 | `AgentCommsResponder` | `ICommsResponder` backed by the streamed Agent Runtime client |
 | `CommsDebugNotifier` | Stats footer and monitor-group diagnostics |
 | `CommsAgentMetrics` | Run counter by `CommsAgentRunOutcome` |
-| `IAgentRunEnricher` | Host seam for measurements around each run, such as GPU energy use |
+| `IAgentRunEnricher` | Host seam for measurements around each run, such as GPU energy use; `RequiresDiagnosticDetails` opts in to tool arguments and runtime property bags |
 | `CommsAgentProfile` | Runtime agent name, opaque session identifier and attachment fallback prompt |
 | `CommsDebugStep` | One step of the monitor-group pipeline timeline |
 | `MessagingMcpQueryService` | MCP poll tools (`create_poll`, `close_poll`, `get_poll_status`) on the chat group |

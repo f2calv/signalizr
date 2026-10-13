@@ -190,6 +190,40 @@ public sealed class AgentCommsResponderTests
         Assert.Empty(outcomes.Outcomes);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task RespondAsync_RequestsDiagnosticDetailsOnlyWhenAnEnricherNeedsThem(bool enricherNeedsDetails, bool expected)
+    {
+        RunAgentRequest? sent = null;
+        var handler = new FakeAgentRuntimeHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            sent = await request.Content!.ReadFromJsonAsync<RunAgentRequest>(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new[]
+                {
+                    new RunAgentStreamItem
+                    {
+                        Response = new RunAgentResponse
+                        {
+                            SessionId = "session",
+                            OutputText = string.Empty,
+                            DefinitionVersion = "test-v1",
+                            ModelName = "test-model",
+                        },
+                    },
+                }),
+            };
+        });
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+
+        await CreateResponder(httpClient, new FakeSignalizrClient(), UniquePrefix(), [new StubEnricher(enricherNeedsDetails)])
+            .RespondAsync(new CommsTurn("run"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, sent?.IncludeDiagnosticDetails);
+    }
+
     [Fact]
     public async Task TryHandleCommandAsync_UpdatesRemoteModelOverride()
     {
@@ -244,7 +278,11 @@ public sealed class AgentCommsResponderTests
         Assert.Empty(handler.Calls);
     }
 
-    private static AgentCommsResponder CreateResponder(HttpClient httpClient, FakeSignalizrClient signalizr, string metricNamePrefix = "comms")
+    private static AgentCommsResponder CreateResponder(
+        HttpClient httpClient,
+        FakeSignalizrClient signalizr,
+        string metricNamePrefix = "comms",
+        IAgentRunEnricher[]? enrichers = null)
     {
         var config = Options.Create(new CommsConfig { GroupName = "group" });
         return new AgentCommsResponder(
@@ -259,9 +297,22 @@ public sealed class AgentCommsResponderTests
                 config,
                 TimeProvider.System,
                 signalizr,
-                []),
+                enrichers ?? []),
             TestMetrics.CommsAgent(metricNamePrefix),
-            []);
+            enrichers ?? []);
+    }
+
+    private sealed class StubEnricher(bool requiresDiagnosticDetails) : IAgentRunEnricher
+    {
+        public bool RequiresDiagnosticDetails => requiresDiagnosticDetails;
+
+        public Task<object?> BeforeRunAsync(CancellationToken cancellationToken) => Task.FromResult<object?>(null);
+
+        public Task AfterRunAsync(CommsAgentRunResult result, object? state, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<string?> FormatFooterLineAsync(CommsAgentRunResult result, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+
+        public IEnumerable<string> FormatDebugLines(CommsAgentRunResult result) => [];
     }
 
     private static string UniquePrefix() => $"comms-{Guid.NewGuid():N}";

@@ -115,9 +115,15 @@ public sealed partial class AgentCommsResponder(
             return null;
         }
 
-        metrics.Record(CommsAgentRunOutcome.Succeeded);
+        var failedTools = result.ToolCalls
+            .Concat(debugSteps.SelectMany(step => step.Result?.ToolCalls ?? []))
+            .Where(toolCall => toolCall.Failed)
+            .Select(toolCall => toolCall.Name)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        metrics.Record(failedTools.Length > 0 ? CommsAgentRunOutcome.CompletedWithToolErrors : CommsAgentRunOutcome.Succeeded);
 
-        var footer = await debugNotifier.FormatStatsFooterAsync(result, cancellationToken);
+        var footer = await debugNotifier.FormatStatsFooterAsync(result, failedTools, cancellationToken);
 
         // Convert any image attachments from tool results into Signal base64 attachments.
         var attachments = result.Attachments.Count > 0

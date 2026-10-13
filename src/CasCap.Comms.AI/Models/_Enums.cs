@@ -34,6 +34,8 @@ public enum CommsAgentRunOutcome
 {
     /// <summary>The run returned an answer.</summary>
     Succeeded,
+    /// <summary>The run returned an answer, but at least one tool failed; the footer names them.</summary>
+    CompletedWithToolErrors,
     /// <summary>The run completed without answer text; nothing is sent.</summary>
     EmptyOutput,
     /// <summary>The response stream ended without a final response.</summary>

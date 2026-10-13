@@ -80,7 +80,7 @@ public sealed class CommsDebugNotifierTests
         };
 
         var footer = await CreateNotifier(new FakeSignalizrClient(), contentEnabled: false, footerSessionCounts: countsEnabled)
-            .FormatStatsFooterAsync(result, TestContext.Current.CancellationToken);
+            .FormatStatsFooterAsync(result, [], TestContext.Current.CancellationToken);
 
         Assert.Contains("⏱ 12.9s", footer, StringComparison.Ordinal);
         Assert.EndsWith(expectedSession, footer, StringComparison.Ordinal);

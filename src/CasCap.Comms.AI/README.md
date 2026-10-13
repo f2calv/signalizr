@@ -16,8 +16,12 @@ pipeline.
 - answers a failed runtime call with a short notice such as `Assistant unavailable: the agent
   runtime returned HTTP 503.`, which is sent but never spoken and marks the message with ❌. An empty
   answer is treated as the agent choosing to stay quiet and sends nothing;
+- names every tool that failed, including inside delegated agents, on a `⚠️ Tool failed:` footer
+  line, because the model's answer may not mention it, and marks failed calls with ❌ in the
+  monitor timeline;
 - counts every run in `{prefix}.comms.agent.runs`, tagged with a bounded `outcome`
-  (`Succeeded`, `EmptyOutput`, `NoResponse`, `Unreachable`, `HttpError`, `Timeout`, `Error`).
+  (`Succeeded`, `CompletedWithToolErrors`, `EmptyOutput`, `NoResponse`, `Unreachable`, `HttpError`,
+  `Timeout`, `Error`).
 
 The runtime owns tenant definitions, credentials, agent construction, tools and version-qualified
 session state. Comms retains Signal delivery, typing, reactions, polls, attachments and diagnostics.

@@ -69,6 +69,53 @@ public sealed class AgentCommsResponderTests
         Assert.Equal([nameof(CommsAgentRunOutcome.Succeeded)], outcomes.Outcomes);
     }
 
+    [Fact]
+    public async Task RespondAsync_ToolFailures_AreNamedInTheFooterAndRecorded()
+    {
+        var handler = new FakeAgentRuntimeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new[]
+            {
+                new RunAgentStreamItem
+                {
+                    Event = new RunAgentEvent
+                    {
+                        Type = RunAgentEventTypes.DelegationCompleted,
+                        AgentName = "specialist",
+                        Result = new RunAgentStepResult { ToolCalls = [new RunAgentToolCall { Name = "create_poll", Failed = true }] },
+                    },
+                },
+                new RunAgentStreamItem
+                {
+                    Response = new RunAgentResponse
+                    {
+                        SessionId = "session",
+                        OutputText = "All shutters are closed.",
+                        DefinitionVersion = "v1",
+                        ModelName = "model",
+                        ToolCalls =
+                        [
+                            new RunAgentToolCall { Name = "invoke_specialist" },
+                            new RunAgentToolCall { Name = "close_all_house_shutters", Failed = true },
+                        ],
+                    },
+                },
+            }),
+        }));
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        var prefix = UniquePrefix();
+        using var outcomes = new OutcomeRecorder(prefix);
+
+        var reply = await CreateResponder(httpClient, new FakeSignalizrClient(), prefix).RespondAsync(
+            new CommsTurn("close all shutters"),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(reply);
+        Assert.False(reply.Failed);
+        Assert.Contains("\u26A0\uFE0F Tool failed: close_all_house_shutters, create_poll", reply.Footer, StringComparison.Ordinal);
+        Assert.Equal([nameof(CommsAgentRunOutcome.CompletedWithToolErrors)], outcomes.Outcomes);
+    }
+
     [Theory]
     [InlineData("unreachable", CommsAgentRunOutcome.Unreachable, "could not be reached")]
     [InlineData("503", CommsAgentRunOutcome.HttpError, "returned HTTP 503")]

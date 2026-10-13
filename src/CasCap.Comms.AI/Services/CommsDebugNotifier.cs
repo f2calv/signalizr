@@ -18,11 +18,18 @@ public sealed class CommsDebugNotifier(
     IEnumerable<IAgentRunEnricher> enrichers)
 {
     /// <summary>Builds a compact stats footer to append to the group message.</summary>
-    public async Task<string> FormatStatsFooterAsync(CommsAgentRunResult result, CancellationToken cancellationToken)
+    /// <param name="result">The completed run.</param>
+    /// <param name="failedTools">Names of tools that failed anywhere in the run, including delegated agents.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<string> FormatStatsFooterAsync(CommsAgentRunResult result, IReadOnlyCollection<string> failedTools,
+        CancellationToken cancellationToken)
     {
         var sb = new StringBuilder();
         sb.AppendLine();
         sb.AppendLine("───");
+        // Stated deterministically, because the model's answer may not mention the failure.
+        if (failedTools.Count > 0)
+            sb.AppendLine($"\u26A0\uFE0F Tool failed: {string.Join(", ", failedTools)}");
         sb.Append($"⏱ {result.Elapsed.TotalSeconds:F1}s");
 
         if (result.Usage is not null)
@@ -242,7 +249,7 @@ public sealed class CommsDebugNotifier(
                 var args = commsConfig.Value.MonitorContentEnabled && tc.Arguments.Count > 0
                     ? $"({string.Join(", ", tc.Arguments.Select(a => $"{a.Key}={a.Value}"))})"
                     : string.Empty;
-                sb.AppendLine($"   \U0001F527 {tc.Name}{args}");
+                sb.AppendLine($"   \U0001F527 {tc.Name}{args}{(tc.Failed ? " \u274C" : string.Empty)}");
             }
         }
 

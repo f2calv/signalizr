@@ -17,7 +17,6 @@
   </Folder>
   <Folder Name="/signalizr/CasCap.Common/">
     <Project Path="../CasCap.Common/src/CasCap.Common.Abstractions/CasCap.Common.Abstractions.csproj" />
-    <Project Path="../CasCap.Common/src/CasCap.Common.AI/CasCap.Common.AI.csproj" />
     <Project Path="../CasCap.Common/src/CasCap.Common.Caching/CasCap.Common.Caching.csproj" />
     <Project Path="../CasCap.Common/src/CasCap.Common.Configuration/CasCap.Common.Configuration.csproj" />
     <Project Path="../CasCap.Common/src/CasCap.Common.Extensions/CasCap.Common.Extensions.csproj" />

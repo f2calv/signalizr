@@ -9,8 +9,12 @@ namespace CasCap.Services;
 /// <remarks>
 /// Polls older than <see cref="CommsConfig.PollTtlMs"/> are automatically pruned during
 /// <see cref="GetActivePolls"/> and <see cref="GetPoll"/> calls to prevent
-/// unbounded memory growth.
+/// unbounded memory growth. State is process-local: a restart forgets open polls, and votes on them
+/// are then ignored. That is accepted because polls live for at most an hour and Comms runs as a
+/// single replica.
 /// </remarks>
+// TODO: back polls with a Redis hash per poll if Comms ever runs more than one replica, or if a vote
+// lost across a deployment becomes unacceptable; that requires an asynchronous IPollTracker.
 public sealed class InMemoryPollTracker(IOptions<CommsConfig> commsConfig, TimeProvider timeProvider) : IPollTracker
 {
     private readonly ConcurrentDictionary<string, ActivePoll> _polls = new();

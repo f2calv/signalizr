@@ -41,7 +41,7 @@ published package in Release.
 | `CommsAgentProfile` | Runtime agent name, opaque session identifier and attachment fallback prompt |
 | `CommsDebugStep` | One step of the monitor-group pipeline timeline |
 | `MessagingMcpQueryService` | MCP poll tools (`create_poll`, `close_poll`, `get_poll_status`) on the chat group |
-| `IPollTracker`, `InMemoryPollTracker` | Comms-owned poll lifecycle, votes, result summaries, and TTL expiry |
+| `IPollTracker`, `InMemoryPollTracker` | Comms-owned poll lifecycle, votes, result summaries, and TTL expiry; process-local, so a restart forgets open polls |
 | `CommsAgentServiceCollectionExtensions` | `AddCommsAgent()` and `AddMessagingMcp()` |
 
 ## Configuration

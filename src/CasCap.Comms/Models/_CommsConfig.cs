@@ -97,8 +97,16 @@ public sealed record CommsConfig : IAppConfig
     /// </remarks>
     public bool DelegationMessagesEnabled { get; init; } = true;
 
-    /// <summary>Whether the reply footer shows the session's user and assistant message counts beside its size.</summary>
-    /// <remarks>Defaults to <see langword="false"/>. The monitor-group timeline always includes them.</remarks>
+    /// <summary>Whether the reply footer shows input, output and total token counts.</summary>
+    /// <remarks>Defaults to <see langword="false"/>, leaving the duration and tool calls. The monitor-group timeline always includes them.</remarks>
+    public bool FooterTokenCountsEnabled { get; init; }
+
+    /// <summary>Whether the reply footer shows the session's stored size.</summary>
+    /// <remarks>Defaults to <see langword="false"/>. The monitor-group timeline always includes it.</remarks>
+    public bool FooterSessionSizeEnabled { get; init; }
+
+    /// <summary>Whether the reply footer adds the session's user and assistant message counts to its size.</summary>
+    /// <remarks>Defaults to <see langword="false"/>. Only read when <see cref="FooterSessionSizeEnabled"/> is set.</remarks>
     public bool FooterSessionCountsEnabled { get; init; }
 
     /// <summary>Redis Stream key for cross-instance communication of key events.</summary>

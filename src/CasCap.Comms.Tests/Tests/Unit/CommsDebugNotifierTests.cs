@@ -62,15 +62,21 @@ public sealed class CommsDebugNotifierTests
     }
 
     [Theory]
-    [InlineData(false, "💾 9.5KB")]
-    [InlineData(true, "💾 9.5KB, 11u/22a")]
-    public async Task FormatStatsFooterAsync_ShowsSessionCountsOnlyWhenEnabled(bool countsEnabled, string expectedSession)
+    [InlineData(false, false, false, "⏱ 12.9s | 🔧 1 (get_state)")]
+    [InlineData(true, false, false, "⏱ 12.9s | ⬆ 100 | ⬇ 20 | Σ 120 | 🔧 1 (get_state)")]
+    [InlineData(false, true, false, "⏱ 12.9s | 🔧 1 (get_state) | 💾 9.5KB")]
+    [InlineData(false, true, true, "⏱ 12.9s | 🔧 1 (get_state) | 💾 9.5KB, 11u/22a")]
+    [InlineData(false, false, true, "⏱ 12.9s | 🔧 1 (get_state)")]
+    public async Task FormatStatsFooterAsync_ShowsOnlyDurationAndToolsUnlessEnabled(
+        bool tokenCounts, bool sessionSize, bool sessionCounts, string expectedLine)
     {
         var result = new CommsAgentRunResult
         {
             OutputText = "done",
             ModelName = "model",
             Elapsed = TimeSpan.FromSeconds(12.9),
+            Usage = new RunAgentUsage { InputTokenCount = 100, OutputTokenCount = 20, TotalTokenCount = 120 },
+            ToolCalls = [new RunAgentToolCall { Name = "get_state" }],
             Session = new AgentSessionInfoResponse
             {
                 Exists = true,
@@ -79,14 +85,16 @@ public sealed class CommsDebugNotifierTests
             },
         };
 
-        var footer = await CreateNotifier(new FakeSignalizrClient(), contentEnabled: false, footerSessionCounts: countsEnabled)
+        var footer = await CreateNotifier(new FakeSignalizrClient(), contentEnabled: false,
+                new CommsFooterOptions(tokenCounts, sessionSize, sessionCounts))
             .FormatStatsFooterAsync(result, [], TestContext.Current.CancellationToken);
 
-        Assert.Contains("⏱ 12.9s", footer, StringComparison.Ordinal);
-        Assert.EndsWith(expectedSession, footer, StringComparison.Ordinal);
+        Assert.EndsWith(expectedLine, footer, StringComparison.Ordinal);
     }
 
-    private static CommsDebugNotifier CreateNotifier(FakeSignalizrClient signalizr, bool contentEnabled, bool footerSessionCounts = false)
+    private sealed record CommsFooterOptions(bool TokenCounts, bool SessionSize, bool SessionCounts);
+
+    private static CommsDebugNotifier CreateNotifier(FakeSignalizrClient signalizr, bool contentEnabled, CommsFooterOptions? footer = null)
         => new(
             NullLogger<CommsDebugNotifier>.Instance,
             Options.Create(new CommsConfig
@@ -94,7 +102,9 @@ public sealed class CommsDebugNotifierTests
                 GroupName = "group",
                 MonitorGroupName = MonitorGroup,
                 MonitorContentEnabled = contentEnabled,
-                FooterSessionCountsEnabled = footerSessionCounts,
+                FooterTokenCountsEnabled = footer?.TokenCounts ?? false,
+                FooterSessionSizeEnabled = footer?.SessionSize ?? false,
+                FooterSessionCountsEnabled = footer?.SessionCounts ?? false,
             }),
             TimeProvider.System,
             signalizr,

@@ -61,7 +61,8 @@ public sealed class AgentCommsResponderTests
         Assert.NotNull(reply);
         Assert.False(reply.Failed);
         Assert.Equal("completed", reply.Text);
-        Assert.Contains("15", reply.Footer, StringComparison.Ordinal);
+        Assert.Contains("\u23F1", reply.Footer, StringComparison.Ordinal);
+        Assert.DoesNotContain("\u03A3", reply.Footer, StringComparison.Ordinal);
         Assert.Single(reply.Base64Attachments!, attachment =>
             attachment == "data:image/png;filename=result.png;base64,AQID");
         Assert.Contains(signalizr.Reactions, reaction => reaction.Emoji == "\U0001F500");

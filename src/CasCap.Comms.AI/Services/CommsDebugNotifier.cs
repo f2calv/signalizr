@@ -32,7 +32,7 @@ public sealed class CommsDebugNotifier(
             sb.AppendLine($"\u26A0\uFE0F Tool failed: {string.Join(", ", failedTools)}");
         sb.Append($"⏱ {result.Elapsed.TotalSeconds:F1}s");
 
-        if (result.Usage is not null)
+        if (commsConfig.Value.FooterTokenCountsEnabled && result.Usage is not null)
         {
             if (result.Usage.InputTokenCount is > 0)
                 sb.Append($" | ⬆ {result.Usage.InputTokenCount:N0}");
@@ -50,7 +50,7 @@ public sealed class CommsDebugNotifier(
         }
 
         // Session context size (best-effort).
-        if (result.Session is { Exists: true } session)
+        if (commsConfig.Value.FooterSessionSizeEnabled && result.Session is { Exists: true } session)
             sb.Append($" | 💾 {(commsConfig.Value.FooterSessionCountsEnabled ? DescribeSession(session) : DescribeSessionSize(session))}");
 
         // Host-specific lines, such as energy and GPU metrics.

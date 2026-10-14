@@ -59,7 +59,9 @@ groups exactly, including spaces and case.
 | `DirectDeliverySources` | empty | Event sources always sent directly to the chat group, never becoming responder turns |
 | `EchoTranscriptToDebugChat` | `false` | Echo voice transcripts to the monitor group; discloses content like `MonitorContentEnabled` |
 | `DelegationMessagesEnabled` | `true` | Let an agent responder announce sub-agent delegation |
-| `FooterSessionCountsEnabled` | `false` | Show session user/assistant message counts in the reply footer |
+| `FooterTokenCountsEnabled` | `false` | Show input, output and total token counts in the reply footer |
+| `FooterSessionSizeEnabled` | `false` | Show the session's stored size in the reply footer |
+| `FooterSessionCountsEnabled` | `false` | Add session user/assistant message counts to the footer's session size |
 | `StreamKey` | `"comms:stream:events"` | Redis Stream key |
 | `ConsumerGroup` | `"comms:agents"` | Redis consumer group |
 | `ConsumerName` | `{MachineName}-{AppName}` | Consumer within the group |

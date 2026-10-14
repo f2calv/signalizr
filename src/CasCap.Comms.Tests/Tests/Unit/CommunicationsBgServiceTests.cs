@@ -36,6 +36,63 @@ public class CommunicationsBgServiceTests
     }
 
     [Fact]
+    public async Task SpokenReply_IsAttachedWithoutAMonitorNotice()
+    {
+        await using var fixture = new CommunicationsBgServiceTestFixture(
+            voiceReplyMode: VoiceReplyMode.Always, agentRuntimeResponder: AnswerResponder);
+        await fixture.StartAsync();
+
+        fixture.Enqueue(CommunicationsBgServiceTestFixture.TextEnvelope("close the shutters", 9_101));
+
+        await CommunicationsBgServiceTestFixture.WaitForAsync(() => fixture.Signalizr.ReactionCount(GreenTick) == 1);
+        var reply = Assert.Single(fixture.Signalizr.SentTo(CommunicationsBgServiceTestFixture.ChatGroupName));
+        Assert.StartsWith("data:audio/ogg", Assert.Single(reply.Attachments!), StringComparison.Ordinal);
+        Assert.DoesNotContain(fixture.Signalizr.SentTo(CommunicationsBgServiceTestFixture.MonitorGroupName),
+            sent => sent.Message.Contains(SpokenReplyFailed, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SpokenReplyFailure_SendsTheTextAndNotifiesTheMonitorGroup()
+    {
+        await using var fixture = new CommunicationsBgServiceTestFixture(
+            voiceReplyMode: VoiceReplyMode.Always, agentRuntimeResponder: AnswerResponder);
+        fixture.TextToSpeech.Failure = new HttpRequestException("Name or service not known");
+        await fixture.StartAsync();
+
+        fixture.Enqueue(CommunicationsBgServiceTestFixture.TextEnvelope("close the shutters", 9_201));
+
+        await CommunicationsBgServiceTestFixture.WaitForAsync(() => fixture.Signalizr.ReactionCount(GreenTick) == 1);
+        var reply = Assert.Single(fixture.Signalizr.SentTo(CommunicationsBgServiceTestFixture.ChatGroupName));
+        Assert.Null(reply.Attachments);
+        var notice = Assert.Single(fixture.Signalizr.SentTo(CommunicationsBgServiceTestFixture.MonitorGroupName),
+            sent => sent.Message.Contains(SpokenReplyFailed, StringComparison.Ordinal));
+        Assert.Contains("outcome=BackendFailed", notice.Message, StringComparison.Ordinal);
+        Assert.Contains("Name or service not known", notice.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(SpokenAnswer, notice.Message, StringComparison.Ordinal);
+    }
+
+    private const string SpokenAnswer = "The shutters are closing.";
+    private const string SpokenReplyFailed = "Spoken reply failed";
+
+    private static Task<HttpResponseMessage> AnswerResponder(HttpRequestMessage request, CancellationToken cancellationToken) =>
+        Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = System.Net.Http.Json.JsonContent.Create(new[]
+            {
+                new RunAgentStreamItem
+                {
+                    Response = new RunAgentResponse
+                    {
+                        SessionId = "session",
+                        OutputText = SpokenAnswer,
+                        DefinitionVersion = "v1",
+                        ModelName = "test-model",
+                    },
+                },
+            }),
+        });
+
+    [Fact]
     public async Task EarIsSentBeforeTranscriptionCompletes()
     {
         await using var fixture = new CommunicationsBgServiceTestFixture(VoiceProcessingMode.Enabled);

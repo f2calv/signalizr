@@ -52,7 +52,7 @@ groups exactly, including spaces and case.
 | Setting | Default | Description |
 | --- | --- | --- |
 | `GroupName` | `"My Test Group Name"` | User-facing chat group |
-| `MonitorGroupName` | `null` | Operator-only diagnostics group; unset disables diagnostics |
+| `MonitorGroupName` | `null` | Operator-only diagnostics group, which also receives a notice when a spoken reply fails; unset disables diagnostics |
 | `MonitorContentEnabled` | `false` | Include prompts, tool arguments and stream-event text in monitor diagnostics; otherwise only timings, counts, tool names and sizes |
 | `MonitorSources` | empty | Event sources delivered directly to the monitor group |
 | `StreamEventTurnsEnabled` | `true` | Turn chat-bound stream events into responder turns; `false` sends them directly |

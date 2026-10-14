@@ -18,7 +18,7 @@ AI provider.
 
 | Class | Methods | Cases | Category | Description |
 | --- | ---: | ---: | --- | --- |
-| `CommunicationsBgServiceTests` | 14 | 19 | Messaging | Inbound admission, duplicate suppression, durable attachments, voice-processing modes, transcript echo, reply-queue backpressure and the runtime failure notice |
+| `CommunicationsBgServiceTests` | 16 | 21 | Messaging | Inbound admission, duplicate suppression, durable attachments, voice-processing modes, transcript echo, reply-queue backpressure, the runtime failure notice, spoken-reply attachment and the monitor notice for a failed spoken reply |
 | `CommunicationsBgServiceStreamTests` | 14 | 17 | Comms | Direct and responder stream delivery, disabled stream turns, direct-delivery sources, monitor routing, stale and throttled drops, cached media, startup retry, the missing-group fault, resubscription, the no-responder inbound behaviour and the inbound filter |
 | `SignalMessageDeduplicatorTests` | 9 | 11 | Comms | Redis-backed duplicate Signal message suppression |
 | `MonitorSourcesGroupRouterTests` | 2 | 3 | Comms | Routing of configured operational sources to the monitor group |

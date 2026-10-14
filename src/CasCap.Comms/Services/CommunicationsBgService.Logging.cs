@@ -138,6 +138,10 @@ public sealed partial class CommunicationsBgService
     private static partial void LogTranscriptEchoFailed(ILogger logger, Exception ex, string className);
 
     [LoggerMessage(Level = LogLevel.Warning,
+        Message = "{ClassName} failed to send the spoken-reply failure notice to the configured monitor group")]
+    private static partial void LogSynthesisNoticeFailed(ILogger logger, Exception ex, string className);
+
+    [LoggerMessage(Level = LogLevel.Warning,
         Message = "{ClassName} could not show {Interaction} feedback in the configured chat group")]
     private static partial void LogGroupInteractionFailed(ILogger logger, Exception ex, string className, string interaction);
 

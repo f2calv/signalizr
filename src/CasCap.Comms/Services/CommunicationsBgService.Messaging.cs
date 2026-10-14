@@ -278,6 +278,29 @@ public sealed partial class CommunicationsBgService
         }
     }
 
+    /// <summary>
+    /// Tells <see cref="CommsConfig.MonitorGroupName"/> that a spoken reply was attempted but not
+    /// produced, so a broken speech backend is noticed rather than silently dropping the audio.
+    /// </summary>
+    /// <remarks>Carries the provider, outcome and error only; never the reply text.</remarks>
+    private async Task SendVoiceSynthesisFailureNoticeAsync(VoiceSynthesisResult result, CancellationToken cancellationToken)
+    {
+        if (commsConfig.Value.MonitorGroupName is not { Length: > 0 } monitorGroupName)
+            return;
+
+        try
+        {
+            var message = $"\U0001F507 Spoken reply failed: provider={result.Provider}, outcome={result.Outcome}";
+            if (result.Error is { Length: > 0 } error)
+                message += $" ({error})";
+            await signalizrClient.SendAsync(monitorGroupName, message, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            LogSynthesisNoticeFailed(logger, ex, nameof(CommunicationsBgService));
+        }
+    }
+
     //Seconds of audio processed per second of wall clock; above one means faster than playback.
     private static string Realtime(TimeSpan? audioDuration, TimeSpan elapsed) =>
         audioDuration is { } audio && elapsed > TimeSpan.Zero
@@ -362,11 +385,13 @@ public sealed partial class CommunicationsBgService
 
                     // The answer is spoken, never the diagnostic footer appended below or a failure notice.
                     var spoken = reply.Failed
-                        ? null
+                        ? VoiceSynthesisResult.Skipped
                         : await voiceReplySvc.TrySynthesizeAsync(reply.Text, turn.InboundWasVoice, cancellationToken);
-                    if (spoken is not null)
+                    if (spoken.AudioAvailable)
                         attachments.Add($"data:{spoken.MediaType};filename={spoken.FileName};base64," +
                             Convert.ToBase64String(spoken.Audio.Span));
+                    else if (spoken.Failed)
+                        await SendVoiceSynthesisFailureNoticeAsync(spoken, cancellationToken);
 
                     var message = reply.Text + reply.Footer;
                     LogSendingReply(logger, nameof(CommunicationsBgService), message.Length, attachments.Count);

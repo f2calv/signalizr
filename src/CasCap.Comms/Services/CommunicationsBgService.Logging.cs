@@ -47,6 +47,10 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} consuming stream {StreamKey} as {ConsumerGroup}/{ConsumerName}")]
     private static partial void LogStreamConsuming(ILogger logger, string className, string streamKey, string consumerGroup, string consumerName);
 
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "{ClassName} stream consumption disabled; only inbound messages are answered")]
+    private static partial void LogStreamConsumptionDisabled(ILogger logger, string className);
+
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "{ClassName} consumer group disappeared, recreating")]
     private static partial void LogConsumerGroupDisappeared(ILogger logger, string className);

@@ -114,6 +114,14 @@ public sealed record CommsConfig : IAppConfig
     [Required, MinLength(1)]
     public string StreamKey { get; init; } = "comms:stream:events";
 
+    /// <summary>Whether this instance reads <see cref="StreamKey"/> through <see cref="ConsumerGroup"/>.</summary>
+    /// <remarks>
+    /// Defaults to <see langword="true"/>. Set it to <see langword="false"/> for a responder that only
+    /// answers inbound messages: it then never creates, reads or acknowledges the consumer group, so it
+    /// cannot steal events from the application that owns the stream. Inbound deduplication still uses Redis.
+    /// </remarks>
+    public bool StreamConsumptionEnabled { get; init; } = true;
+
     /// <summary>Redis consumer group name used to consume the communications stream.</summary>
     /// <remarks>Defaults to <c>"comms:agents"</c>.</remarks>
     [Required, MinLength(1)]

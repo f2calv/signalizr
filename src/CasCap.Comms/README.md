@@ -63,6 +63,7 @@ groups exactly, including spaces and case.
 | `FooterSessionSizeEnabled` | `false` | Show the session's stored size in the reply footer |
 | `FooterSessionCountsEnabled` | `false` | Add session user/assistant message counts to the footer's session size |
 | `StreamKey` | `"comms:stream:events"` | Redis Stream key |
+| `StreamConsumptionEnabled` | `true` | Consume `StreamKey`; set `false` for a responder that only answers inbound messages and must never touch the consumer group |
 | `ConsumerGroup` | `"comms:agents"` | Redis consumer group |
 | `ConsumerName` | `{MachineName}-{AppName}` | Consumer within the group |
 | `ConsumerGroupStartId` | `"0"` | Start position when creating the consumer group |

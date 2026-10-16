@@ -75,8 +75,18 @@ public sealed partial class CommunicationsBgService(
         {
             // Start consuming the comms stream immediately — this must not be gated behind the gateway
             // connection, otherwise stream events queue indefinitely until Signalizr becomes reachable.
-            await EnsureConsumerGroupAsync();
-            var streamTask = DrainStreamAsync(cancellationToken);
+            Task streamTask;
+            if (commsConfig.Value.StreamConsumptionEnabled)
+            {
+                await EnsureConsumerGroupAsync();
+                streamTask = DrainStreamAsync(cancellationToken);
+            }
+            else
+            {
+                LogStreamConsumptionDisabled(logger, nameof(CommunicationsBgService));
+                //Never completes, so WhenAny below waits on the reply queue and subscription alone.
+                streamTask = Task.Delay(Timeout.Infinite, cancellationToken);
+            }
 
             await WaitForGroupsAsync(cancellationToken);
             _groupReady.TrySetResult();

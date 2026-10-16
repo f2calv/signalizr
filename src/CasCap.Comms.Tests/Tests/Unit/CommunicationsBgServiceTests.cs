@@ -168,6 +168,21 @@ public class CommunicationsBgServiceTests
     }
 
     [Fact]
+    public async Task StreamConsumptionDisabled_AnswersWithoutTouchingRedis()
+    {
+        //The service gets a cache that throws on any use, so a stream read would fault the feature.
+        await using var fixture = new CommunicationsBgServiceTestFixture(
+            streamConsumptionEnabled: false, agentRuntimeResponder: AnswerResponder);
+        await fixture.StartAsync();
+
+        fixture.Enqueue(CommunicationsBgServiceTestFixture.TextEnvelope("hallo", 3_101));
+
+        await CommunicationsBgServiceTestFixture.WaitForAsync(() => fixture.Signalizr.ReactionCount(GreenTick) == 1);
+        Assert.Single(fixture.Signalizr.SentTo(CommunicationsBgServiceTestFixture.ChatGroupName));
+        Assert.False(fixture.Execution.IsCompleted);
+    }
+
+    [Fact]
     public async Task EnvelopesQueuedBeforeStartupAreProcessed()
     {
         await using var fixture = new CommunicationsBgServiceTestFixture();

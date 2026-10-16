@@ -24,6 +24,7 @@ namespace CasCap.Tests.Unit;
 /// <param name="streamEventTurnsEnabled">Whether chat-bound stream events become responder turns.</param>
 /// <param name="directDeliverySources">Stream event sources always sent directly, bypassing the responder.</param>
 /// <param name="agentRuntimeResponder">Replaces the fake Agent Runtime's default empty-answer response.</param>
+/// <param name="streamConsumptionEnabled">Whether the comms stream is consumed; when off the service gets a cache that throws on any use.</param>
 public sealed class CommunicationsBgServiceTestFixture(
     VoiceProcessingMode voiceMode = VoiceProcessingMode.Enabled,
     bool responderEnabled = true,
@@ -36,7 +37,8 @@ public sealed class CommunicationsBgServiceTestFixture(
     string[]? monitorSources = null,
     bool streamEventTurnsEnabled = true,
     string[]? directDeliverySources = null,
-    Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? agentRuntimeResponder = null) : IAsyncDisposable
+    Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? agentRuntimeResponder = null,
+    bool streamConsumptionEnabled = true) : IAsyncDisposable
 {
     /// <summary>The gateway's own account, whose messages the service must ignore.</summary>
     public const string Account = "+10000000000";
@@ -71,7 +73,8 @@ public sealed class CommunicationsBgServiceTestFixture(
         monitorSources,
         streamEventTurnsEnabled,
         directDeliverySources,
-        agentRuntimeResponder);
+        agentRuntimeResponder,
+        streamConsumptionEnabled);
 
     /// <summary>The duplicate-suppression fake.</summary>
     public FakeSignalMessageDeduplicator Deduplicator => _state.Deduplicator;
@@ -292,7 +295,8 @@ public sealed class CommunicationsBgServiceTestFixture(
             string[]? monitorSources,
             bool streamEventTurnsEnabled,
             string[]? directDeliverySources,
-            Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? agentRuntimeResponder)
+            Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? agentRuntimeResponder,
+            bool streamConsumptionEnabled)
         {
             var deduplicator = new FakeSignalMessageDeduplicator();
             var pollTracker = new FakePollTracker();
@@ -314,6 +318,7 @@ public sealed class CommunicationsBgServiceTestFixture(
                 StreamSendBurst = streamSendBurst,
                 StreamSendRatePerMinute = streamSendRatePerMinute,
                 EchoTranscriptToDebugChat = echoTranscriptToDebugChat,
+                StreamConsumptionEnabled = streamConsumptionEnabled,
             });
             var speechToTextConfig = Options.Create(new SpeechToTextConfig { Mode = voiceMode });
 
@@ -360,7 +365,7 @@ public sealed class CommunicationsBgServiceTestFixture(
                 voiceReplySvc,
                 formatter ?? new PlainCommsEventFormatter(),
                 new MonitorSourcesGroupRouter(commsConfig),
-                redis,
+                streamConsumptionEnabled ? redis : new ThrowingRemoteCache(),
                 responder);
             return new FixtureState
             {

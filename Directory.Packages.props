@@ -3,6 +3,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="CasCap.Api.Azure.Auth" Version="1.6.4" />
     <PackageVersion Include="CasCap.Api.SignalCli" Version="0.11.8" />
     <PackageVersion Include="CasCap.Api.Voice" Version="0.1.3" />
     <PackageVersion Include="CasCap.Api.Voice.Testing" Version="0.1.3" />

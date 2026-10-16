@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CasCap.Comms.AI\CasCap.Comms.AI.csproj" />
     <ProjectReference Include="..\CasCap.Signalizr\CasCap.Signalizr.csproj" />
     <ProjectReference Include="..\CasCap.Signalizr.Client\CasCap.Signalizr.Client.csproj" />
   </ItemGroup>
@@ -26,12 +27,14 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)'=='Release'">
+    <PackageReference Include="CasCap.Api.Azure.Auth" />
     <PackageReference Include="CasCap.Common.Hosting.AspNetCore" />
     <PackageReference Include="CasCap.Common.Configuration" />
     <PackageReference Include="CasCap.Common.Services" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)'!='Release'">
+    <ProjectReference Include="..\..\..\CasCap.Api.Azure\src\CasCap.Api.Azure.Auth\CasCap.Api.Azure.Auth.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Hosting.AspNetCore\CasCap.Common.Hosting.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Configuration\CasCap.Common.Configuration.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Services\CasCap.Common.Services.csproj" />

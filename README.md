@@ -128,6 +128,7 @@ A single container image, with the role selected by feature flag:
 | `Receiver` | on | Owns the receive stream, persists messages and serves gRPC subscriptions |
 | `Mcp` | off | HTTP MCP queries and separately enabled text sending; requires `Gateway,Receiver` in the same process |
 | `DemoClient` | off | Sample thin client, for evaluating the gateway without writing one |
+| `Comms` | off | Agent Runtime responder for one chat group, subscribing to a gateway as a client; runs alone, needs Redis, and leaves the comms stream alone unless `CommsConfig:StreamConsumptionEnabled` is set |
 | `DbMigrator` | off | Applies pending EF Core migrations, then exits |
 
 ## Transports

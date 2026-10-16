@@ -5,21 +5,22 @@ Credential-free unit and integration tests for the signalizr ASP.NET Core host a
 ## Purpose
 
 The unit tests validate feature parsing directly. The integration tests launch the real host through
-`WebApplicationFactory<AppEntryPoint>` with only `DemoClient` enabled and remove hosted services so no Signal,
-database, or gRPC dependency runs.
+`WebApplicationFactory<AppEntryPoint>` with only `DemoClient`, or only `Comms`, enabled and remove hosted
+services so no Signal, database, gRPC or Agent Runtime dependency runs.
 
 ## Tests
 
 | Class | Method count | Test-case count | Description |
 | --- | ---: | ---: | --- |
-| `FeatureConfigTests` | 7 | 17 | Validates missing, empty, unknown, case-insensitive, and MCP-dependent feature configuration |
+| `FeatureConfigTests` | 9 | 21 | Validates missing, empty, unknown, case-insensitive, MCP-dependent and Comms-exclusive feature configuration |
 | `HostStartupTests` | 2 | 2 | Verifies host options, infrastructure services, controller services, and the startup health endpoint |
+| `CommsHostStartupTests` | 2 | 2 | Verifies a `Comms`-only host registers the agent responder without gateway roles and with stream consumption off |
 
 ## Trait Categories
 
 | Category | Test-case count | Purpose |
 | --- | ---: | --- |
-| `Integration` | 2 | In-memory ASP.NET Core host and dependency-injection checks |
+| `Integration` | 4 | In-memory ASP.NET Core host and dependency-injection checks |
 
 ## Skipped Tests
 
@@ -30,6 +31,8 @@ There are no skipped tests.
 ```text
 Tests/
 ├── Integration/
+│   ├── CommsHostStartupTests.cs
+│   ├── CommsWebApplicationFactory.cs
 │   ├── HostStartupTests.cs
 │   └── SignalizrWebApplicationFactory.cs
 └── Unit/

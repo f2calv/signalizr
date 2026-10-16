@@ -75,6 +75,14 @@ public static partial class AppHost
             builder.Services.AddSingleton<IBgFeature, DemoClientBgService>();
         }
 
+        if (enabledFeatures.Contains(FeatureNames.Comms))
+        {
+            // A responder is a client of a gateway: Redis only deduplicates inbound deliveries.
+            builder.Services.AddCasCapCaching(builder.Configuration);
+            builder.Services.AddComms(builder.Configuration);
+            builder.Services.AddCommsAgent().AddAgentRuntimeAzureAuthentication(builder.Configuration);
+        }
+
         builder.Services.AddFeatureFlagService(enabledFeatures, addApplicationMetadataService: true);
     }
 

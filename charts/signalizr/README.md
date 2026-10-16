@@ -24,16 +24,19 @@ graph LR
     Gateway[signalizr]
     Migrator[migrate]
     Demo[demo]
+    Responders[signalizrResponder / agentizrResponder]
   end
 
-  SignalizrChart --> SignalCliChart & Gateway & Migrator & Demo
+  SignalizrChart --> SignalCliChart & Gateway & Migrator & Demo & Responders
   SignalCliChart --> SignalCli
-  SignalCli & Gateway & Migrator & Demo --> Workload
+  SignalCli & Gateway & Migrator & Demo & Responders --> Workload
 ```
 
 The `signalcli` dependency owns the registered Signal account and persistent state, including the
 stable `signalcli` Service name consumed by the gateway. The `signalizr` component runs the Gateway and
 Receiver roles, `migrate` applies EF Core migrations, and `demo` runs the optional DemoClient role.
+`signalizrResponder` and `agentizrResponder` run the Comms role, each answering one chat group through
+the Agent Runtime as an ordinary gateway subscriber.
 
 ## Install
 
@@ -126,6 +129,7 @@ spec:
 | `signalizr.envSecrets` | phone number from Secret `signalizr` | Personal data never goes in values |
 | `migrate.kind` | `Job` | Renders on every sync; see below |
 | `demo.replicaCount` | `0` | Set `1` to run the DemoClient role against the gateway |
+| `signalizrResponder.replicaCount`, `agentizrResponder.replicaCount` | `0` | Set `1` to run a Comms responder; at most one, with `Recreate` and no Service. Supply `CasCap__CommsConfig__GroupName`, Redis, the Agent Runtime address and `CasCap__AgentRuntimeAzureAuthConfig__*` from a Secret |
 | `signalcli` | see the signalcli chart | Configured through the `signalcli` chart's values |
 
 Set the same image tag on `migrate` and `demo` when you use them. The workload chart renders `Job`

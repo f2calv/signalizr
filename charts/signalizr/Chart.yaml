@@ -36,3 +36,13 @@ dependencies:
     version: 1.1.0
     repository: oci://ghcr.io/f2calv/charts
     alias: demo
+
+  # Comms responders: the same image running only the Comms role, one per chat group. Dormant by default.
+  - name: workload
+    version: 1.1.0
+    repository: oci://ghcr.io/f2calv/charts
+    alias: signalizrResponder
+  - name: workload
+    version: 1.1.0
+    repository: oci://ghcr.io/f2calv/charts
+    alias: agentizrResponder

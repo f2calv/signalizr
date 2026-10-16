@@ -186,3 +186,77 @@ demo:
     limits:
       cpu: 200m
       memory: 128Mi
+
+# Comms responders: the same image running only the Comms role, each answering one chat group through
+# the Agent Runtime. Dormant by default. A deployment adds the exact group names, the Redis and Agent
+# Runtime addresses and the execution identity (CasCap__AgentRuntimeAzureAuthConfig__*) from a Secret.
+# Each is the single gRPC subscriber for its name, so pods never overlap and there is no Service.
+signalizrResponder:
+  replicaCount: 0
+  strategy:
+    type: Recreate
+  fullnameOverride: signalizr-responder
+  image:
+    repository: ghcr.io/f2calv/signalizr
+    pullPolicy: IfNotPresent
+    tag: ""
+  service:
+    enabled: false
+  envVars:
+    CasCap__FeatureConfig__EnabledFeatures: Comms
+    CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:80
+    CasCap__SignalizrClientConfig__GrpcAddress: http://signalizr:5001
+    CasCap__SignalizrClientConfig__SubscriberName: signalizr-comms
+    CasCap__CommsConfig__AgentName: SignalizrAgent
+    CasCap__CommsConfig__StreamConsumptionEnabled: "false"
+  startupProbe: false
+  readinessProbe: false
+  livenessProbe:
+    httpGet:
+      path: /healthz/live
+      port: 8080
+    periodSeconds: 30
+    initialDelaySeconds: 30
+    failureThreshold: 6
+  resources:
+    requests:
+      cpu: 25m
+      memory: 96Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+agentizrResponder:
+  replicaCount: 0
+  strategy:
+    type: Recreate
+  fullnameOverride: agentizr-responder
+  image:
+    repository: ghcr.io/f2calv/signalizr
+    pullPolicy: IfNotPresent
+    tag: ""
+  service:
+    enabled: false
+  envVars:
+    CasCap__FeatureConfig__EnabledFeatures: Comms
+    CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:80
+    CasCap__SignalizrClientConfig__GrpcAddress: http://signalizr:5001
+    CasCap__SignalizrClientConfig__SubscriberName: agentizr-comms
+    CasCap__CommsConfig__AgentName: AgentizrAgent
+    CasCap__CommsConfig__StreamConsumptionEnabled: "false"
+  startupProbe: false
+  readinessProbe: false
+  livenessProbe:
+    httpGet:
+      path: /healthz/live
+      port: 8080
+    periodSeconds: 30
+    initialDelaySeconds: 30
+    failureThreshold: 6
+  resources:
+    requests:
+      cpu: 25m
+      memory: 96Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi

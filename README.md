@@ -134,7 +134,10 @@ A single container image, with the role selected by feature flag:
 The `Comms` responder authenticates to the Agent Runtime with `CasCap:AgentRuntimeAzureAuthConfig`.
 Supply it directly, or set `AppConfig:AgentRuntimeKeyVaultPrefix` to load only the secrets under
 that prefix from the Key Vault named by `AppConfig:KeyVaultName`, authenticating with the
-`AppConfig:AzureEntra*` credential. Startup fails when the prefix is set without a vault or
+`AppConfig:AzureEntra*` credential. `AppConfig:KeyVaultSecretPrefixes` loads further prefixes with the
+standard `--` to `:` mapping; for example `CasCap--DatabaseConfig` supplies
+`CasCap:DatabaseConfig:ConnectionString`, and `CasCap:DatabaseConfig:DatabaseName` then selects this
+application's database on a shared server. Startup fails when a prefix is set without a vault or
 credential.
 
 ## Transports

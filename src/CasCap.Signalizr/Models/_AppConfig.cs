@@ -24,4 +24,11 @@ public sealed record AppConfig : IAppConfig, IMetricsConfig
     /// Vault is not used.
     /// </summary>
     public string? AgentRuntimeKeyVaultPrefix { get; init; }
+
+    /// <summary>
+    /// Gets Key Vault secret-name prefixes loaded from <c>AppConfig:KeyVaultName</c> with the standard
+    /// <c>--</c> to <c>:</c> mapping, for example <c>CasCap--DatabaseConfig</c>. Only secrets under these
+    /// prefixes are loaded; defaults to none.
+    /// </summary>
+    public string[] KeyVaultSecretPrefixes { get; init; } = [];
 }

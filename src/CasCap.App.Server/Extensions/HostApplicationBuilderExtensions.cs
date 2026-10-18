@@ -25,8 +25,8 @@ public static class HostApplicationBuilderExtensions
             .BindConfiguration(AppConfig.ConfigurationSectionName)
             .ValidateDataAnnotations();
 
-        if (!string.IsNullOrWhiteSpace(appConfig.AgentRuntimeKeyVaultPrefix))
-            builder.AddAgentRuntimeKeyVaultSecrets(appConfig.AgentRuntimeKeyVaultPrefix);
+        if (!string.IsNullOrWhiteSpace(appConfig.AgentRuntimeKeyVaultPrefix) || appConfig.KeyVaultSecretPrefixes.Length > 0)
+            builder.AddKeyVaultSecrets(appConfig);
 
         var featureConfig = builder.Configuration
             .GetSection(FeatureConfig.ConfigurationSectionName)
@@ -43,22 +43,31 @@ public static class HostApplicationBuilderExtensions
         return (appConfig, featureConfig.GetEnabledFeatures(), applicationMetadata);
     }
 
-    private static void AddAgentRuntimeKeyVaultSecrets(this IHostApplicationBuilder builder, string prefix)
+    private static void AddKeyVaultSecrets(this IHostApplicationBuilder builder, AppConfig appConfig)
     {
         var azureAuthConfig = builder.Configuration
             .GetSection(AzureAuthConfig.ConfigurationSectionName)
             .Get<AzureAuthConfig>();
         if (string.IsNullOrWhiteSpace(azureAuthConfig?.KeyVaultName) || !azureAuthConfig.IsKeyVaultEnabled)
             throw new InvalidOperationException(
-                "AppConfig:AgentRuntimeKeyVaultPrefix requires AppConfig:KeyVaultName.");
+                "AppConfig Key Vault secret prefixes require AppConfig:KeyVaultName.");
         var credential = azureAuthConfig.TokenCredential
             ?? throw new InvalidOperationException(
-                "AppConfig:AgentRuntimeKeyVaultPrefix requires an Azure Entra credential in AppConfig.");
+                "AppConfig Key Vault secret prefixes require an Azure Entra credential in AppConfig.");
 
-        // No exclusive root: a shared vault's other secrets never enter this host's configuration.
-        builder.Configuration.AddKeyVaultConfiguration(
-            azureAuthConfig.KeyVaultUri,
-            credential,
-            new PrefixKeyVaultSecretManager(prefix, AgentRuntimeAzureAuthConfig.ConfigurationSectionName));
+        // Each source loads one prefix with no exclusive root, so a shared vault's other secrets never enter.
+        foreach (var prefix in appConfig.KeyVaultSecretPrefixes.Where(prefix => !string.IsNullOrWhiteSpace(prefix)))
+            builder.Configuration.AddKeyVaultConfiguration(
+                azureAuthConfig.KeyVaultUri,
+                credential,
+                new PrefixKeyVaultSecretManager(prefix, prefix.TrimEnd('-').Replace("--", ConfigurationPath.KeyDelimiter)));
+
+        if (!string.IsNullOrWhiteSpace(appConfig.AgentRuntimeKeyVaultPrefix))
+            builder.Configuration.AddKeyVaultConfiguration(
+                azureAuthConfig.KeyVaultUri,
+                credential,
+                new PrefixKeyVaultSecretManager(
+                    appConfig.AgentRuntimeKeyVaultPrefix,
+                    AgentRuntimeAzureAuthConfig.ConfigurationSectionName));
     }
 }

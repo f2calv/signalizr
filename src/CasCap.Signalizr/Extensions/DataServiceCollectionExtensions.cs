@@ -41,10 +41,13 @@ public static class DataServiceCollectionExtensions
                     break;
                 case DatabaseProvider.Postgres:
                     // No Kerberos in this deployment; GSS probing loads libgssapi, which the chiseled image lacks.
-                    options.UseNpgsql(new Npgsql.NpgsqlConnectionStringBuilder(databaseConfig.ConnectionString)
+                    var connectionStringBuilder = new Npgsql.NpgsqlConnectionStringBuilder(databaseConfig.ConnectionString)
                     {
                         GssEncryptionMode = Npgsql.GssEncryptionMode.Disable,
-                    }.ConnectionString);
+                    };
+                    if (!string.IsNullOrWhiteSpace(databaseConfig.DatabaseName))
+                        connectionStringBuilder.Database = databaseConfig.DatabaseName;
+                    options.UseNpgsql(connectionStringBuilder.ConnectionString);
                     break;
                 default:
                     throw new InvalidOperationException(

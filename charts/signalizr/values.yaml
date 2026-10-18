@@ -197,6 +197,8 @@ signalizrResponder:
   strategy:
     type: Recreate
   fullnameOverride: signalizr-responder
+  # The subchart defaults the container name to its camelCase alias, which Kubernetes rejects.
+  containerName: signalizr-responder
   image:
     repository: ghcr.io/f2calv/signalizr
     pullPolicy: IfNotPresent
@@ -232,6 +234,7 @@ agentizrResponder:
   strategy:
     type: Recreate
   fullnameOverride: agentizr-responder
+  containerName: agentizr-responder
   image:
     repository: ghcr.io/f2calv/signalizr
     pullPolicy: IfNotPresent

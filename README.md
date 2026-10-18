@@ -131,6 +131,12 @@ A single container image, with the role selected by feature flag:
 | `Comms` | off | Agent Runtime responder for one chat group, subscribing to a gateway as a client; runs alone, needs Redis, and leaves the comms stream alone unless `CommsConfig:StreamConsumptionEnabled` is set |
 | `DbMigrator` | off | Applies pending EF Core migrations, then exits |
 
+The `Comms` responder authenticates to the Agent Runtime with `CasCap:AgentRuntimeAzureAuthConfig`.
+Supply it directly, or set `AppConfig:AgentRuntimeKeyVaultPrefix` to load only the secrets under
+that prefix from the Key Vault named by `AppConfig:KeyVaultName`, authenticating with the
+`AppConfig:AzureEntra*` credential. Startup fails when the prefix is set without a vault or
+credential.
+
 ## Transports
 
 | Surface | Transport | Rationale |

@@ -189,7 +189,8 @@ demo:
 
 # Comms responders: the same image running only the Comms role, each answering one chat group through
 # the Agent Runtime. Dormant by default. A deployment adds the exact group names, the Redis and Agent
-# Runtime addresses and the execution identity (CasCap__AgentRuntimeAzureAuthConfig__*) from a Secret.
+# Runtime addresses and the execution identity, either as CasCap__AgentRuntimeAzureAuthConfig__* from a
+# Secret or from Key Vault through AppConfig__KeyVaultName and AppConfig__AgentRuntimeKeyVaultPrefix.
 # Each is the single gRPC subscriber for its name, so pods never overlap and there is no Service.
 signalizrResponder:
   replicaCount: 0

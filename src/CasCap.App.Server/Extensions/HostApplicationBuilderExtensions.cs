@@ -25,6 +25,9 @@ public static class HostApplicationBuilderExtensions
             .BindConfiguration(AppConfig.ConfigurationSectionName)
             .ValidateDataAnnotations();
 
+        if (!string.IsNullOrWhiteSpace(appConfig.AgentRuntimeKeyVaultPrefix))
+            builder.AddAgentRuntimeKeyVaultSecrets(appConfig.AgentRuntimeKeyVaultPrefix);
+
         var featureConfig = builder.Configuration
             .GetSection(FeatureConfig.ConfigurationSectionName)
             .Get<FeatureConfig>()
@@ -38,5 +41,24 @@ public static class HostApplicationBuilderExtensions
         builder.Services.AddSingleton(applicationMetadata);
 
         return (appConfig, featureConfig.GetEnabledFeatures(), applicationMetadata);
+    }
+
+    private static void AddAgentRuntimeKeyVaultSecrets(this IHostApplicationBuilder builder, string prefix)
+    {
+        var azureAuthConfig = builder.Configuration
+            .GetSection(AzureAuthConfig.ConfigurationSectionName)
+            .Get<AzureAuthConfig>();
+        if (string.IsNullOrWhiteSpace(azureAuthConfig?.KeyVaultName) || !azureAuthConfig.IsKeyVaultEnabled)
+            throw new InvalidOperationException(
+                "AppConfig:AgentRuntimeKeyVaultPrefix requires AppConfig:KeyVaultName.");
+        var credential = azureAuthConfig.TokenCredential
+            ?? throw new InvalidOperationException(
+                "AppConfig:AgentRuntimeKeyVaultPrefix requires an Azure Entra credential in AppConfig.");
+
+        // No exclusive root: a shared vault's other secrets never enter this host's configuration.
+        builder.Configuration.AddKeyVaultConfiguration(
+            azureAuthConfig.KeyVaultUri,
+            credential,
+            new PrefixKeyVaultSecretManager(prefix, AgentRuntimeAzureAuthConfig.ConfigurationSectionName));
     }
 }

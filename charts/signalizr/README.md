@@ -129,7 +129,7 @@ spec:
 | `signalizr.envSecrets` | phone number from Secret `signalizr` | Personal data never goes in values |
 | `migrate.kind` | `Job` | Renders on every sync; see below |
 | `demo.replicaCount` | `0` | Set `1` to run the DemoClient role against the gateway |
-| `signalizrResponder.replicaCount`, `agentizrResponder.replicaCount` | `0` | Set `1` to run a Comms responder; at most one, with `Recreate` and no Service. Supply `CasCap__CommsConfig__GroupName`, Redis, the Agent Runtime address and `CasCap__AgentRuntimeAzureAuthConfig__*` from a Secret |
+| `signalizrResponder.replicaCount`, `agentizrResponder.replicaCount` | `0` | Set `1` to run a Comms responder; at most one, with `Recreate` and no Service. Supply `CasCap__CommsConfig__GroupName`, Redis, the Agent Runtime address and the execution identity, either as `CasCap__AgentRuntimeAzureAuthConfig__*` from a Secret or from Key Vault via `AppConfig__KeyVaultName`, `AppConfig__AgentRuntimeKeyVaultPrefix` and an `AppConfig__AzureEntra*` credential |
 | `signalcli` | see the signalcli chart | Configured through the `signalcli` chart's values |
 
 Set the same image tag on `migrate` and `demo` when you use them. The workload chart renders `Job`

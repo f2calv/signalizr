@@ -27,6 +27,8 @@ public enum CommsAgentCommand
     Model,
     /// <summary>Gets or sets the runtime instruction override.</summary>
     Instructions,
+    /// <summary>Clears the runtime instruction override.</summary>
+    InstructionsReset,
 }
 
 /// <summary>Outcome of an Agent Runtime run requested by the communications responder.</summary>

@@ -19,6 +19,7 @@ public sealed partial class AgentCommsResponder
             CommsAgentCommand.SessionDelete => await DeleteSnapshotAsync(argument, cancellationToken),
             CommsAgentCommand.Model => await GetOrSetModelAsync(argument, cancellationToken),
             CommsAgentCommand.Instructions => await GetOrSetInstructionsAsync(argument, cancellationToken),
+            CommsAgentCommand.InstructionsReset => await ResetInstructionsAsync(cancellationToken),
             _ => CommsAgentCommandParser.BuildHelpText(),
         };
 
@@ -164,6 +165,27 @@ public sealed partial class AgentCommsResponder
         return updated is null
             ? "Agent is unavailable."
             : $"Instructions overridden ({updated.Instructions?.Length ?? 0} chars).";
+    }
+
+    private async Task<string> ResetInstructionsAsync(CancellationToken cancellationToken)
+    {
+        var current = await GetOverridesAsync(cancellationToken);
+        if (current is null)
+            return "Agent is unavailable.";
+        if (current.Instructions is null)
+            return "No instructions override is set.";
+
+        var updated = await SetOverridesAsync(
+            new UpdateAgentOverridesRequest
+            {
+                SessionEnabled = current.SessionEnabled,
+                ModelName = current.ModelName,
+                Instructions = null,
+            },
+            cancellationToken);
+        return updated is null
+            ? "Agent is unavailable."
+            : "Instructions override cleared. The definition instructions apply again.";
     }
 
     private async Task<string> GetInstructionsAsync(CancellationToken cancellationToken)

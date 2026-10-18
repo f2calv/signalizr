@@ -20,6 +20,7 @@ public static class CommsAgentCommandParser
             ["/session delete"] = CommsAgentCommand.SessionDelete,
             ["/model"] = CommsAgentCommand.Model,
             ["/instructions"] = CommsAgentCommand.Instructions,
+            ["/instructions reset"] = CommsAgentCommand.InstructionsReset,
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenDictionary<CommsAgentCommand, string> Descriptions =
@@ -37,6 +38,7 @@ public static class CommsAgentCommandParser
             [CommsAgentCommand.SessionDelete] = "Delete a snapshot. Usage: /session delete <name>",
             [CommsAgentCommand.Model] = "Get or set the model override. Usage: /model <modelName>",
             [CommsAgentCommand.Instructions] = "Show the effective instructions, or override them. Usage: /instructions [text]",
+            [CommsAgentCommand.InstructionsReset] = "Clear the instructions override and return to the definition.",
         }.ToFrozenDictionary();
 
     /// <summary>The longest single chat message a command reply is sent as, including its part header.</summary>

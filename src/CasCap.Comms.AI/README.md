@@ -15,7 +15,7 @@ pipeline.
   chat message are split into numbered parts such as `(1/3)`;
 - shows the effective instructions for `/instructions` (the session override, else the active
   definition) when the runtime tenant enables `InstructionsDisclosureEnabled`, and otherwise only
-  the session's own override;
+  the session's own override; `/instructions reset` clears the override;
 - reports sub-agent delegation with a reaction swap and, optionally, a status message;
 - appends a stats footer to each reply and posts a pipeline timeline, stream-event notices and
   compaction notices to the monitor group through `CommsDebugNotifier`;

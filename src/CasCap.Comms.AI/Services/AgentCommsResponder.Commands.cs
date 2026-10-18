@@ -2,7 +2,7 @@ namespace CasCap.Services;
 
 public sealed partial class AgentCommsResponder
 {
-    private async Task<string?> HandleCommandAsync(
+    private async Task<string> HandleCommandAsync(
         CommsAgentCommand command,
         string argument,
         CancellationToken cancellationToken) => command switch
@@ -19,7 +19,7 @@ public sealed partial class AgentCommsResponder
             CommsAgentCommand.SessionDelete => await DeleteSnapshotAsync(argument, cancellationToken),
             CommsAgentCommand.Model => await GetOrSetModelAsync(argument, cancellationToken),
             CommsAgentCommand.Instructions => await GetOrSetInstructionsAsync(argument, cancellationToken),
-            _ => null,
+            _ => CommsAgentCommandParser.BuildHelpText(),
         };
 
     private async Task<string> GetSessionInfoAsync(CancellationToken cancellationToken)
@@ -146,18 +146,12 @@ public sealed partial class AgentCommsResponder
 
     private async Task<string> GetOrSetInstructionsAsync(string instructions, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(instructions))
+            return await GetInstructionsAsync(cancellationToken);
+
         var current = await GetOverridesAsync(cancellationToken);
         if (current is null)
             return "Agent is unavailable.";
-        if (string.IsNullOrWhiteSpace(instructions))
-        {
-            if (current.Instructions is null)
-                return "Current instructions override: (none — using configured default)";
-            var preview = current.Instructions.Length > 200
-                ? current.Instructions[..200] + "..."
-                : current.Instructions;
-            return $"Current instructions override ({current.Instructions.Length} chars): {preview}";
-        }
 
         var updated = await SetOverridesAsync(
             new UpdateAgentOverridesRequest
@@ -170,6 +164,29 @@ public sealed partial class AgentCommsResponder
         return updated is null
             ? "Agent is unavailable."
             : $"Instructions overridden ({updated.Instructions?.Length ?? 0} chars).";
+    }
+
+    private async Task<string> GetInstructionsAsync(CancellationToken cancellationToken)
+    {
+        var effective = await AgentRuntimeClient.GetInstructionsAsync(
+            Profile.AgentName,
+            Profile.SessionId,
+            cancellationToken);
+        if (effective is not null)
+        {
+            var source = effective.Overridden
+                ? "session override"
+                : $"definition {effective.DefinitionVersion}";
+            return $"Instructions ({source}, {effective.Instructions.Length:N0} chars):{Environment.NewLine}{effective.Instructions}";
+        }
+
+        // The runtime withholds the definition unless the tenant enables disclosure; an override is still the caller's own.
+        var current = await GetOverridesAsync(cancellationToken);
+        if (current is null)
+            return "Agent is unavailable.";
+        return current.Instructions is null
+            ? "No instructions override is set. The agent runtime does not disclose the definition instructions for this tenant."
+            : $"Instructions (session override, {current.Instructions.Length:N0} chars):{Environment.NewLine}{current.Instructions}";
     }
 
     private async Task<AgentOverridesResponse?> UpdateOverridesAsync(

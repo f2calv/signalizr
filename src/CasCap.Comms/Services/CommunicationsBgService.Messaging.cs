@@ -171,8 +171,11 @@ public sealed partial class CommunicationsBgService
             return true;
         }
 
-        if (!string.IsNullOrWhiteSpace(command.ReplyText))
-            await SendMessageAsync(command.ReplyText, cancellationToken);
+        foreach (var reply in command.Replies)
+        {
+            if (!string.IsNullOrWhiteSpace(reply))
+                await SendMessageAsync(reply, cancellationToken);
+        }
 
         // Green tick reaction to indicate the command has been seen and processed.
         if (notification.Timestamp is { } timestamp)

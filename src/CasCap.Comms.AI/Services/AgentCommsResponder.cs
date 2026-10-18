@@ -88,14 +88,23 @@ public sealed partial class AgentCommsResponder(
     public async Task<CommsCommandOutcome?> TryHandleCommandAsync(string text, CancellationToken cancellationToken)
     {
         if (!CommsAgentCommandParser.TryParse(text, out var command, out var argument))
-            return null;
+        {
+            if (!CommsAgentCommandParser.IsCommandLike(text))
+                return null;
+
+            // Slash text never reaches the model; an unrecognised command answers with help instead.
+            LogUnknownSlashCommand(logger, nameof(AgentCommsResponder));
+            return new CommsCommandOutcome(CommsAgentCommandParser.SplitReply(
+                "Unknown command. Available commands:" + Environment.NewLine + CommsAgentCommandParser.BuildHelpText()));
+        }
 
         LogSlashCommand(logger, nameof(AgentCommsResponder), command);
 
         if (command is CommsAgentCommand.SessionBypass && !string.IsNullOrWhiteSpace(argument))
-            return new CommsCommandOutcome(null, new CommsTurn(argument, BypassSession: true));
+            return new CommsCommandOutcome([], new CommsTurn(argument, BypassSession: true));
 
-        return new CommsCommandOutcome(await HandleCommandAsync(command, argument, cancellationToken));
+        var reply = await HandleCommandAsync(command, argument, cancellationToken);
+        return new CommsCommandOutcome(CommsAgentCommandParser.SplitReply(reply));
     }
 
     /// <inheritdoc/>

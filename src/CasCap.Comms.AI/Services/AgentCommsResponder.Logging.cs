@@ -17,6 +17,10 @@ public sealed partial class AgentCommsResponder
     private static partial void LogSlashCommand(ILogger logger, string className, CommsAgentCommand command);
 
     [LoggerMessage(Level = LogLevel.Information,
+        Message = "{ClassName} received an unknown slash command, replying with help")]
+    private static partial void LogUnknownSlashCommand(ILogger logger, string className);
+
+    [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} running agent inference, promptLength={PromptLength}, hasAttachment={HasAttachment}, model={Model}")]
     private static partial void LogAgentInferenceStarting(ILogger logger, string className, int promptLength, bool hasAttachment, string model);
 

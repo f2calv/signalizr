@@ -10,6 +10,12 @@ pipeline.
 - turns chat-bound stream events and inbound messages into agent turns, with conversation sessions,
   model and instruction overrides and optional session bypass;
 - owns slash-command syntax while the runtime owns session/override mutations, and handles poll votes through `IPollTracker`;
+- never forwards text starting with `/` to the model: an unrecognised command, including an unknown
+  subcommand such as `/session help`, answers with the `/help` list. Command replies longer than one
+  chat message are split into numbered parts such as `(1/3)`;
+- shows the effective instructions for `/instructions` (the session override, else the active
+  definition) when the runtime tenant enables `InstructionsDisclosureEnabled`, and otherwise only
+  the session's own override;
 - reports sub-agent delegation with a reaction swap and, optionally, a status message;
 - appends a stats footer to each reply and posts a pipeline timeline, stream-event notices and
   compaction notices to the monitor group through `CommsDebugNotifier`;

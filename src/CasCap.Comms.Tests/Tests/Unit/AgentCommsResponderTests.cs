@@ -1,3 +1,4 @@
+using CasCap.Extensions;
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Http.Json;
@@ -257,7 +258,7 @@ public sealed class AgentCommsResponderTests
             "/model qwen3:32b",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal("Model overridden to: qwen3:32b", outcome?.ReplyText);
+        Assert.Equal(["Model overridden to: qwen3:32b"], outcome?.Replies);
         Assert.Equal("qwen3:32b", update?.ModelName);
         Assert.Equal(2, handler.Calls.Count);
     }
@@ -273,10 +274,87 @@ public sealed class AgentCommsResponderTests
             "/session bypass inspect this",
             TestContext.Current.CancellationToken);
 
-        Assert.Null(outcome?.ReplyText);
+        Assert.Empty(outcome?.Replies ?? ["missing outcome"]);
         Assert.Equal("inspect this", outcome?.DeferredTurn?.Prompt);
         Assert.True(outcome?.DeferredTurn?.BypassSession);
         Assert.Empty(handler.Calls);
+    }
+
+    [Theory]
+    [InlineData("/session help")]
+    [InlineData("/session")]
+    [InlineData("  /unknown with words")]
+    public async Task TryHandleCommandAsync_UnknownSlashCommandRepliesWithHelp(string text)
+    {
+        var handler = new FakeAgentRuntimeHttpMessageHandler();
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        var responder = CreateResponder(httpClient, new FakeSignalizrClient());
+
+        var outcome = await responder.TryHandleCommandAsync(text, TestContext.Current.CancellationToken);
+
+        var reply = Assert.Single(outcome?.Replies ?? []);
+        Assert.StartsWith("Unknown command.", reply);
+        Assert.Contains("/session info", reply);
+        Assert.Null(outcome?.DeferredTurn);
+        Assert.Empty(handler.Calls);
+    }
+
+    [Fact]
+    public async Task TryHandleCommandAsync_PlainTextIsNotACommand()
+    {
+        var handler = new FakeAgentRuntimeHttpMessageHandler();
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        var responder = CreateResponder(httpClient, new FakeSignalizrClient());
+
+        var outcome = await responder.TryHandleCommandAsync("hello / goodbye", TestContext.Current.CancellationToken);
+
+        Assert.Null(outcome);
+    }
+
+    [Fact]
+    public async Task TryHandleCommandAsync_InstructionsShowsEffectiveTextInNumberedParts()
+    {
+        var instructions = string.Join('\n', Enumerable.Repeat(new string('x', 99), 40));
+        var handler = new FakeAgentRuntimeHttpMessageHandler((request, _) => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new AgentInstructionsResponse
+                {
+                    DefinitionVersion = "v1",
+                    Instructions = instructions,
+                }),
+            }));
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        var responder = CreateResponder(httpClient, new FakeSignalizrClient());
+
+        var outcome = await responder.TryHandleCommandAsync("/instructions", TestContext.Current.CancellationToken);
+
+        var replies = outcome?.Replies ?? [];
+        Assert.Equal(3, replies.Count);
+        Assert.StartsWith("(1/3) Instructions (definition v1, ", replies[0]);
+        Assert.All(replies, reply => Assert.True(reply.Length <= CommsAgentCommandParser.MaxReplyLength));
+        Assert.Equal(40 * 99, replies.Sum(reply => reply.Count(character => character == 'x')));
+        Assert.EndsWith("/instructions", Assert.Single(handler.Calls).Path);
+    }
+
+    [Fact]
+    public async Task TryHandleCommandAsync_InstructionsFallsBackToOverrideWhenNotDisclosed()
+    {
+        var handler = new FakeAgentRuntimeHttpMessageHandler((request, _) => Task.FromResult(
+            request.RequestUri!.AbsolutePath.EndsWith("/instructions", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new AgentOverridesResponse { SessionEnabled = true }),
+                }));
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        var responder = CreateResponder(httpClient, new FakeSignalizrClient());
+
+        var outcome = await responder.TryHandleCommandAsync("/instructions", TestContext.Current.CancellationToken);
+
+        var reply = Assert.Single(outcome?.Replies ?? []);
+        Assert.StartsWith("No instructions override is set.", reply);
+        Assert.Equal(2, handler.Calls.Count);
     }
 
     private static AgentCommsResponder CreateResponder(

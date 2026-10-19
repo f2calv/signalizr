@@ -1,6 +1,7 @@
 {
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=827846
   "recommendations": [
+    "esbenp.prettier-vscode",
     // Without this extension nothing reads .editorconfig while editing, so format-on-save
     // silently reindents files and drops trailing newlines.
     "editorconfig.editorconfig",

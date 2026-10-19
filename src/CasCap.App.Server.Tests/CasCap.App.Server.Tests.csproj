@@ -22,4 +22,12 @@
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- The server's gitignored Local tier holds private deployment settings; host tests stay credential-free. -->
+  <Target Name="RemoveLocalAppSettings" AfterTargets="CopyFilesToOutputDirectory">
+    <ItemGroup>
+      <LocalAppSettings Include="$(OutDir)appsettings.Local*.json" />
+    </ItemGroup>
+    <Delete Files="@(LocalAppSettings)" />
+  </Target>
+
 </Project>

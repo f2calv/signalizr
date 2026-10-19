@@ -18,17 +18,13 @@ public sealed record AppConfig : IAppConfig, IMetricsConfig
     public Uri? OtlpExporterEndpoint { get; init; }
 
     /// <summary>
-    /// Gets the Key Vault secret-name prefix holding the Agent Runtime execution identity, for example
-    /// <c>AgentRuntime--MyApp--Exec</c>. When set, only secrets under it are loaded from
-    /// <c>AppConfig:KeyVaultName</c> into <c>CasCap:AgentRuntimeAzureAuthConfig</c>; when unset, Key
-    /// Vault is not used.
+    /// Gets the Key Vault secret-name prefix holding this host's Agent Runtime execution identity, for
+    /// example <c>AgentRuntime--MyApp--Exec</c>, mapped into <c>CasCap:AgentRuntimeAzureAuthConfig</c>.
     /// </summary>
+    /// <remarks>
+    /// Setting <c>AppConfig:KeyVaultName</c> loads the shared vault with the standard <c>--</c> to
+    /// <c>:</c> mapping. Every other <c>AgentRuntime--*</c> identity is excluded, so a host never sees
+    /// another application's credential. Requires <c>AppConfig:KeyVaultName</c> when set.
+    /// </remarks>
     public string? AgentRuntimeKeyVaultPrefix { get; init; }
-
-    /// <summary>
-    /// Gets Key Vault secret-name prefixes loaded from <c>AppConfig:KeyVaultName</c> with the standard
-    /// <c>--</c> to <c>:</c> mapping, for example <c>CasCap--DatabaseConfig</c>. Only secrets under these
-    /// prefixes are loaded; defaults to none.
-    /// </summary>
-    public string[] KeyVaultSecretPrefixes { get; init; } = [];
 }

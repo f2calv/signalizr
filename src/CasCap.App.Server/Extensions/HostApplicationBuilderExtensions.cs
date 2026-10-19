@@ -1,3 +1,5 @@
+using Azure.Extensions.AspNetCore.Configuration.Secrets;
+using Azure.Security.KeyVault.Secrets;
 using CasCap.Common.Extensions;
 using CasCap.Common.Models;
 using CasCap.Models;
@@ -25,7 +27,7 @@ public static class HostApplicationBuilderExtensions
             .BindConfiguration(AppConfig.ConfigurationSectionName)
             .ValidateDataAnnotations();
 
-        if (!string.IsNullOrWhiteSpace(appConfig.AgentRuntimeKeyVaultPrefix) || appConfig.KeyVaultSecretPrefixes.Length > 0)
+        if (!string.IsNullOrWhiteSpace(appConfig.AgentRuntimeKeyVaultPrefix) || HasKeyVaultName(builder.Configuration))
             builder.AddKeyVaultSecrets(appConfig);
 
         var featureConfig = builder.Configuration
@@ -43,31 +45,40 @@ public static class HostApplicationBuilderExtensions
         return (appConfig, featureConfig.GetEnabledFeatures(), applicationMetadata);
     }
 
+    private static bool HasKeyVaultName(IConfiguration configuration) =>
+        !string.IsNullOrWhiteSpace(configuration[$"{AzureAuthConfig.ConfigurationSectionName}:{nameof(AzureAuthConfig.KeyVaultName)}"]);
+
     private static void AddKeyVaultSecrets(this IHostApplicationBuilder builder, AppConfig appConfig)
     {
         var azureAuthConfig = builder.Configuration
             .GetSection(AzureAuthConfig.ConfigurationSectionName)
             .Get<AzureAuthConfig>();
-        if (string.IsNullOrWhiteSpace(azureAuthConfig?.KeyVaultName) || !azureAuthConfig.IsKeyVaultEnabled)
+        if (string.IsNullOrWhiteSpace(azureAuthConfig?.KeyVaultName))
             throw new InvalidOperationException(
-                "AppConfig Key Vault secret prefixes require AppConfig:KeyVaultName.");
+                "AppConfig:AgentRuntimeKeyVaultPrefix requires AppConfig:KeyVaultName.");
+        if (!azureAuthConfig.IsKeyVaultEnabled)
+            return;
         var credential = azureAuthConfig.TokenCredential
             ?? throw new InvalidOperationException(
-                "AppConfig Key Vault secret prefixes require an Azure Entra credential in AppConfig.");
+                "AppConfig:KeyVaultName requires an Azure Entra credential in AppConfig.");
 
-        // Each source loads one prefix with no exclusive root, so a shared vault's other secrets never enter.
-        foreach (var prefix in appConfig.KeyVaultSecretPrefixes.Where(prefix => !string.IsNullOrWhiteSpace(prefix)))
-            builder.Configuration.AddKeyVaultConfiguration(
-                azureAuthConfig.KeyVaultUri,
-                credential,
-                new PrefixKeyVaultSecretManager(prefix, prefix.TrimEnd('-').Replace("--", ConfigurationPath.KeyDelimiter)));
+        // Every Agent Runtime identity sits under one reserved root; only this host's own prefix is loaded.
+        KeyVaultSecretManager secretManager = string.IsNullOrWhiteSpace(appConfig.AgentRuntimeKeyVaultPrefix)
+            ? new ExcludedRootKeyVaultSecretManager(AgentRuntimeRootPrefix)
+            : new PrefixKeyVaultSecretManager(
+                appConfig.AgentRuntimeKeyVaultPrefix,
+                AgentRuntimeAzureAuthConfig.ConfigurationSectionName,
+                AgentRuntimeRootPrefix);
+        builder.Configuration.AddKeyVaultConfiguration(azureAuthConfig.KeyVaultUri, credential, secretManager);
+    }
 
-        if (!string.IsNullOrWhiteSpace(appConfig.AgentRuntimeKeyVaultPrefix))
-            builder.Configuration.AddKeyVaultConfiguration(
-                azureAuthConfig.KeyVaultUri,
-                credential,
-                new PrefixKeyVaultSecretManager(
-                    appConfig.AgentRuntimeKeyVaultPrefix,
-                    AgentRuntimeAzureAuthConfig.ConfigurationSectionName));
+    private const string AgentRuntimeRootPrefix = "AgentRuntime";
+
+    private sealed class ExcludedRootKeyVaultSecretManager(string rootPrefix) : KeyVaultSecretManager
+    {
+        private readonly string _rootPrefix = rootPrefix + "--";
+
+        public override bool Load(SecretProperties secret) =>
+            base.Load(secret) && !secret.Name.StartsWith(_rootPrefix, StringComparison.OrdinalIgnoreCase);
     }
 }

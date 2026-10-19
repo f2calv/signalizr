@@ -132,13 +132,13 @@ A single container image, with the role selected by feature flag:
 | `DbMigrator` | off | Applies pending EF Core migrations, then exits |
 
 The `Comms` responder authenticates to the Agent Runtime with `CasCap:AgentRuntimeAzureAuthConfig`.
-Supply it directly, or set `AppConfig:AgentRuntimeKeyVaultPrefix` to load only the secrets under
-that prefix from the Key Vault named by `AppConfig:KeyVaultName`, authenticating with the
-`AppConfig:AzureEntra*` credential. `AppConfig:KeyVaultSecretPrefixes` loads further prefixes with the
-standard `--` to `:` mapping; for example `CasCap--DatabaseConfig` supplies
-`CasCap:DatabaseConfig:ConnectionString`, and `CasCap:DatabaseConfig:DatabaseName` then selects this
-application's database on a shared server. Startup fails when a prefix is set without a vault or
-credential.
+Supply it directly, or load configuration from Azure Key Vault: `AppConfig:KeyVaultName` loads the
+vault with the standard `--` to `:` mapping, authenticating with the `AppConfig:AzureEntra*`
+credential, and `AppConfig:AgentRuntimeKeyVaultPrefix` maps only this host's own `AgentRuntime--*`
+identity; every other application's identity in a shared vault is excluded. A vault can therefore
+supply the phone number and the database connection string, with
+`CasCap:DatabaseConfig:DatabaseName` selecting this application's database on a shared server.
+Startup fails when the prefix is set without a vault or credential.
 
 ## Transports
 

@@ -86,12 +86,10 @@ signalizr:
   volumeMounts:
     - name: data
       mountPath: /var/lib/signalizr
-  # The phone number is personal data and must arrive from a Secret, never from values.
-  # Create the Secret out of band with a key matching the environment variable name:
-  #   kubectl create secret generic signalizr \
-  #     --from-literal=CasCap__SignalCliConfig__PhoneNumber='+...'
-  envSecrets:
-    CasCap__SignalCliConfig__PhoneNumber: signalizr
+  # The phone number is personal data and must never appear in values. Supply
+  # CasCap__SignalCliConfig__PhoneNumber from a Secret through envSecrets, or load it from Azure Key
+  # Vault with AppConfig__KeyVaultName (secret CasCap--SignalCliConfig--PhoneNumber).
+  envSecrets: {}
   # Readiness includes the upstream signal-cli check, so a pod leaves the Service rotation when
   # the wrapper is unreachable rather than accepting sends it cannot fulfil. Liveness deliberately
   # excludes it: restarting the gateway cannot fix a wrapper outage, and would turn a recoverable

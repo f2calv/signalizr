@@ -102,13 +102,23 @@ spec:
    [signalcli chart setup](https://github.com/f2calv/helm-charts/tree/main/charts/signalcli#setup).
    The account state lands on the wrapper's own volume.
 
-2. Create the Secret holding the account's phone number. The key must match the environment
-   variable name:
+2. Supply the account's phone number. Either create a Secret whose key matches the environment
+   variable name and reference it through `signalizr.envSecrets`:
 
    ```bash
    kubectl create secret generic signalizr --namespace my-namespace \
      --from-literal=CasCap__SignalCliConfig__PhoneNumber='+10000000000'
    ```
+
+   ```yaml
+   signalizr:
+     envSecrets:
+       CasCap__SignalCliConfig__PhoneNumber: signalizr
+   ```
+
+   Or load it from Azure Key Vault by setting `signalizr.envVars.AppConfig__KeyVaultName` and an
+   `AppConfig__AzureEntra*` credential, with the secret named
+   `CasCap--SignalCliConfig--PhoneNumber`.
 
 3. Declare each group by its Signal group name in
    `signalizr.envVars.CasCap__GroupConfig__GroupNames__0` (then `__1`, `__2`, etc.).
@@ -126,7 +136,7 @@ spec:
 | `signalizr.service` | port 80 to 8080 | REST send surface, health endpoints and metrics |
 | `signalizr.extraPorts` | `grpc` on 5001 | The gRPC subscription surface |
 | `signalizr.envVars.CasCap__GroupConfig__GroupNames__*` | none | Indexed exact Signal group names; no default groups |
-| `signalizr.envSecrets` | phone number from Secret `signalizr` | Personal data never goes in values |
+| `signalizr.envSecrets` | `{}` | Secret references, for example the phone number; personal data never goes in values |
 | `migrate.kind` | `Job` | Renders on every sync; see below |
 | `demo.replicaCount` | `0` | Set `1` to run the DemoClient role against the gateway |
 | `signalizrResponder.replicaCount`, `agentizrResponder.replicaCount` | `0` | Set `1` to run a Comms responder; at most one, with `Recreate` and no Service. Supply `CasCap__CommsConfig__GroupName`, Redis, the Agent Runtime address and the execution identity, either as `CasCap__AgentRuntimeAzureAuthConfig__*` from a Secret or from Key Vault via `AppConfig__KeyVaultName`, `AppConfig__AgentRuntimeKeyVaultPrefix` and an `AppConfig__AzureEntra*` credential |
@@ -223,8 +233,7 @@ signalizr:
   volumeMounts:
     - name: data
       mountPath: /var/lib/signalizr
-  envSecrets:
-    CasCap__SignalCliConfig__PhoneNumber: signalizr
+  envSecrets: {}
   startupProbe:
     httpGet:
       path: /healthz/startup
@@ -324,6 +333,7 @@ helm upgrade --install signalizr oci://ghcr.io/f2calv/charts/signalizr \
   --namespace my-namespace --create-namespace \
   --set-string signalizr.image.tag=<version> \
   --set-string signalizr.envVars.CasCap__DatabaseConfig__Provider=Postgres \
+  --set-string signalizr.envSecrets.CasCap__SignalCliConfig__PhoneNumber=signalizr \
   --set-string signalizr.envSecrets.CasCap__DatabaseConfig__ConnectionString=signalizr-postgres \
   --set-json 'signalizr.persistentVolumeClaims=[]' \
   --set-json 'signalizr.volumes=[]' \

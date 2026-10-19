@@ -6,6 +6,8 @@ Use the VS Code REST Client extension to inspect the optional MCP surface withou
 
 Copy [.env.example](.env.example) to `.env` in this directory and set `SIGNALIZR_BASE_URL` to the
 HTTP origin reachable through your [localhost port-forward](../docs/mcp.md#connect-vs-code).
+Set `SIGNALIZR_MCP_USERNAME` and `SIGNALIZR_MCP_PASSWORD` to the gateway's `CasCap:ApiAuthConfig`
+credentials; every request sends them as HTTP Basic authentication.
 The file is gitignored. Do not add `/mcp` to the base URL.
 
 Open [signalizr-mcp.http](signalizr-mcp.http) and send the initialize request, then the initialized

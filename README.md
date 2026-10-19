@@ -146,7 +146,7 @@ Startup fails when the prefix is set without a vault or credential.
 | --- | --- | --- |
 | Send and group interactions | REST | `curl`-able, webhook-able, and usable without generating a client |
 | Inbound subscription | gRPC bidirectional streaming | Long-lived and typed, with an ack channel so delivery is not fire-and-forget |
-| Operator tools | MCP Streamable HTTP at `/mcp` | Query status, groups and optional history; send text only when separately enabled |
+| Operator tools | MCP Streamable HTTP at `/mcp`, HTTP Basic authentication | Query status, groups and optional history; send text only when separately enabled |
 
 ## NuGet Packages
 
@@ -163,7 +163,8 @@ references in Debug and exact published package versions in Release.
 ## Querying from VS Code
 
 Enable `Gateway,Receiver,Mcp` to ask how many application clients are connected and which groups
-are served. The optional `CasCap:McpConfig:MessageHistoryEnabled` setting also exposes bounded,
+are served. The endpoint requires HTTP Basic credentials from `CasCap:ApiAuthConfig`, and startup
+fails without them. The optional `CasCap:McpConfig:MessageHistoryEnabled` setting also exposes bounded,
 group-scoped inbound message previews from the existing database. Both MCP and message history
 are disabled by default.
 

@@ -1,3 +1,7 @@
+using CasCap.Common.Abstractions;
+using CasCap.Common.Authentication;
+using CasCap.Common.Extensions;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.Net.Http.Headers;
 using ModelContextProtocol.AspNetCore;
 
@@ -7,11 +11,19 @@ namespace CasCap.Extensions;
 public static class McpServiceExtensions
 {
     /// <summary>Adds the opt-in MCP services alongside the gateway and receiver.</summary>
+    /// <remarks>
+    /// Enabling MCP requires <see cref="ApiAuthConfig"/>; startup fails when its credentials are missing.
+    /// </remarks>
     public static IServiceCollection AddSignalizrMcp(
         this IServiceCollection services, IConfiguration configuration, IReadOnlySet<string> enabledFeatures)
     {
         if (!enabledFeatures.Contains(FeatureNames.Mcp))
             return services;
+
+        services.AddCasCapConfiguration<ApiAuthConfig>();
+        services.AddAuthentication(BasicAuthenticationHandler.SchemeName)
+            .AddScheme<AuthenticationSchemeOptions, BasicAuthenticationHandler>(BasicAuthenticationHandler.SchemeName, null);
+        services.AddAuthorization();
 
         var mcpConfig = configuration.GetSection(McpConfig.ConfigurationSectionName)
             .Get<McpConfig>() ?? new McpConfig();
@@ -40,6 +52,7 @@ public static class McpServiceExtensions
                     context.HttpContext.Request.Headers.ContainsKey(HeaderNames.Origin)
                         ? ValueTask.FromResult<object?>(TypedResults.StatusCode(StatusCodes.Status403Forbidden))
                         : next(context))
+                .RequireAuthorization()
                 .MapMcp();
 
         return endpoints;

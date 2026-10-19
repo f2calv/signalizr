@@ -23,7 +23,7 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.12" />

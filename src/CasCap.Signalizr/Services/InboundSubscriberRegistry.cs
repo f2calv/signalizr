@@ -30,6 +30,10 @@ public sealed class InboundSubscriberRegistry(
         await _registrationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            var options = config.Value;
+            if (!options.SubscriberGroups.TryGetValue(subscriberName, out var groups) || groups.Length == 0)
+                throw new SubscriberNotPermittedException(subscriberName);
+
             if (_subscriptions.ContainsKey(subscriberName))
                 throw new SubscriberAlreadyConnectedException(subscriberName);
 
@@ -61,9 +65,9 @@ public sealed class InboundSubscriberRegistry(
 
             await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-            var options = config.Value;
             var subscription = new InboundSubscription(
                 subscriberName,
+                groups,
                 options.ReplayBatchSize,
                 options.MaxOutstanding,
                 cursor.LastAcknowledgedMessageId,

@@ -3,6 +3,7 @@ using CasCap.Common.Extensions;
 using CasCap.Extensions;
 using CasCap.Signalizr.Client;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.Options;
 
 namespace CasCap;
 
@@ -31,8 +32,10 @@ public static partial class AppHost
             builder.Services.AddSignalizrDataLayer(builder.Configuration);
             builder.Services.Configure<ReceiverConfig>(
                 builder.Configuration.GetSection(ReceiverConfig.ConfigurationSectionName));
-            builder.Services.Configure<SubscriberConfig>(
-                builder.Configuration.GetSection(SubscriberConfig.ConfigurationSectionName));
+            builder.Services.AddOptionsWithValidateOnStart<SubscriberConfig>()
+                .BindConfiguration(SubscriberConfig.ConfigurationSectionName)
+                .ValidateDataAnnotations();
+            builder.Services.AddSingleton<IValidateOptions<SubscriberConfig>, SubscriberConfigValidator>();
             builder.Services.AddSingleton<IInboundMessageQueue, InboundMessageQueue>();
             builder.Services.AddSingleton<IInboundSubscriberRegistry, InboundSubscriberRegistry>();
             builder.Services.AddSingleton<InboundAttachmentService>();

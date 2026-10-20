@@ -20,6 +20,9 @@ namespace CasCap.Tests;
 public class InboundGrpcServiceTests
 {
     private const string SecondMessage = "second";
+    private const string ExampleGroup = "Example Group";
+
+    private static readonly string[] SubscriberNames = ["non-acknowledging", "acknowledging", "stalled", "duplicate"];
 
     [Fact]
     public async Task Acknowledgement_timeout_returns_deadline_exceeded()
@@ -87,6 +90,19 @@ public class InboundGrpcServiceTests
         Assert.Equal(1, fixture.Registry.Count);
     }
 
+    [Fact]
+    public async Task Subscriber_without_configured_groups_returns_permission_denied()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 2_000);
+        await using var session = StartSession(service, "unconfigured");
+
+        var exception = await Assert.ThrowsAsync<RpcException>(
+            () => session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+        Assert.Equal(StatusCode.PermissionDenied, exception.StatusCode);
+        Assert.Equal(0, fixture.Registry.Count);
+    }
+
     private static InboundGrpcService CreateService(
         RegistryFixture fixture, int ackTimeoutMs) =>
         new(NullLogger<InboundGrpcService>.Instance, fixture.Registry, fixture.Metrics,
@@ -141,6 +157,7 @@ public class InboundGrpcServiceTests
             await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
             dbContext.InboundMessages.Add(new InboundMessageEntity
             {
+                GroupName = ExampleGroup,
                 Message = message,
                 PersistedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             });
@@ -161,7 +178,8 @@ public class InboundGrpcServiceTests
                 Options.Create(new SubscriberConfig
                 {
                     ReplayBatchSize = 10,
-                    MaxOutstanding = maxOutstanding
+                    MaxOutstanding = maxOutstanding,
+                    SubscriberGroups = SubscriberNames.ToDictionary(name => name, _ => new[] { ExampleGroup })
                 }),
                 TimeProvider.System,
                 metrics,

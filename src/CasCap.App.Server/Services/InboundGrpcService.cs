@@ -48,6 +48,11 @@ public sealed class InboundGrpcService(
         {
             throw new RpcException(new Status(StatusCode.AlreadyExists, ex.Message));
         }
+        catch (SubscriberNotPermittedException ex)
+        {
+            operatorNotifier.Notify($"{name} refused: no configured groups");
+            throw new RpcException(new Status(StatusCode.PermissionDenied, ex.Message));
+        }
 
         using var ownedSubscription = subscription;
         var ackTimeout = TimeSpan.FromMilliseconds(config.Value.AckTimeoutMs);

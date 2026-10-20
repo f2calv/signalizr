@@ -24,4 +24,12 @@ public sealed record SubscriberConfig
     /// <summary>How long to wait for acknowledgements before disconnecting a subscriber.</summary>
     [Range(1_000, 600_000)]
     public int AckTimeoutMs { get; init; } = 30_000;
+
+    /// <summary>Gets the exact Signal group names each subscriber receives, keyed by subscriber name.</summary>
+    /// <remarks>
+    /// A subscriber without an entry is refused. Every name must also appear in
+    /// <see cref="GroupConfig.GroupNames"/>; messages from other groups and direct messages are never
+    /// delivered to it.
+    /// </remarks>
+    public Dictionary<string, string[]> SubscriberGroups { get; init; } = new(StringComparer.Ordinal);
 }

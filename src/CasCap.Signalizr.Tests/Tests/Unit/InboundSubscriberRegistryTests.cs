@@ -18,6 +18,15 @@ namespace CasCap.Tests;
 public sealed class InboundSubscriberRegistryTests
 {
     private const string DurableSubscriberName = "durable";
+    private const string FilteredSubscriberName = "filtered";
+    private const string ExampleGroup = "Example Group";
+    private const string OtherGroup = "Other Group";
+
+    private static readonly string[] SubscriberNames =
+    [
+        "a", "b", "new-subscriber", DurableSubscriberName, "first", "second", "duplicate", "concurrent",
+        "budget", "ordered", FilteredSubscriberName,
+    ];
 
     [Fact]
     public async Task Subscribing_and_unsubscribing_tracks_the_count()
@@ -179,6 +188,78 @@ public sealed class InboundSubscriberRegistryTests
         Assert.False(await subscription.AcknowledgeAsync("2", TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task Subscriber_without_configured_groups_is_refused()
+    {
+        using var fixture = new RegistryFixture();
+
+        await Assert.ThrowsAsync<SubscriberNotPermittedException>(() =>
+            fixture.Registry.SubscribeAsync("unconfigured", TestContext.Current.CancellationToken));
+        Assert.Equal(0, fixture.Registry.Count);
+        Assert.Equal(0, await fixture.CountCursorsAsync());
+    }
+
+    [Fact]
+    public async Task Only_messages_from_configured_groups_are_delivered()
+    {
+        using var fixture = new RegistryFixture();
+        var subscription = await fixture.Registry.SubscribeAsync(
+            FilteredSubscriberName, TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("other", OtherGroup);
+        await fixture.AddMessageAsync("direct", groupName: null);
+        await fixture.AddMessageAsync("mine");
+        fixture.Registry.NotifyMessageAvailable();
+
+        var delivery = await ReadOneAsync(subscription);
+
+        Assert.Equal("mine", delivery.Message);
+        Assert.Equal(ExampleGroup, delivery.GroupName);
+    }
+
+    /// <summary>
+    /// A subscriber whose groups are quiet must still advance past other groups' messages, otherwise
+    /// its cursor holds back acknowledged-message pruning for every subscriber.
+    /// </summary>
+    [Fact]
+    public async Task Idle_subscriber_cursor_advances_past_other_groups()
+    {
+        using var fixture = new RegistryFixture();
+        var subscription = await fixture.Registry.SubscribeAsync(
+            FilteredSubscriberName, TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("other-1", OtherGroup);
+        var tail = await fixture.AddMessageAsync("other-2", OtherGroup);
+        fixture.Registry.NotifyMessageAvailable();
+
+        using var reading = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        await using var enumerator = subscription.ReadAllAsync(reading.Token).GetAsyncEnumerator(reading.Token);
+        var pending = enumerator.MoveNextAsync().AsTask();
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        while (await fixture.GetCursorAsync(FilteredSubscriberName) != tail)
+            await Task.Delay(10, timeout.Token);
+
+        await reading.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+    }
+
+    [Fact]
+    public async Task Acknowledging_a_later_message_moves_the_cursor_past_other_groups()
+    {
+        using var fixture = new RegistryFixture();
+        var first = await fixture.Registry.SubscribeAsync(FilteredSubscriberName, TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("other", OtherGroup);
+        await fixture.AddMessageAsync("mine");
+        fixture.Registry.NotifyMessageAvailable();
+        var delivery = await ReadOneAsync(first);
+        Assert.True(await first.TryReserveAsync(
+            delivery.DeliveryId, TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
+        Assert.True(await first.AcknowledgeAsync(delivery.DeliveryId, TestContext.Current.CancellationToken));
+        fixture.Registry.Unsubscribe(first);
+
+        Assert.Equal(long.Parse(delivery.DeliveryId, System.Globalization.CultureInfo.InvariantCulture),
+            await fixture.GetCursorAsync(FilteredSubscriberName));
+    }
+
     private static async Task<InboundDelivery> ReadOneAsync(InboundSubscription subscription)
     {
         await using var enumerator = subscription
@@ -197,15 +278,33 @@ public sealed class InboundSubscriberRegistryTests
 
         public FakeOperatorNotifier Notifier => _state.Notifier;
 
-        public async Task AddMessageAsync(string message)
+        public async Task<long> AddMessageAsync(string message, string? groupName = ExampleGroup)
         {
             await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
-            dbContext.InboundMessages.Add(new InboundMessageEntity
+            var entity = new InboundMessageEntity
             {
+                GroupName = groupName,
                 Message = message,
                 PersistedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-            });
+            };
+            dbContext.InboundMessages.Add(entity);
             await dbContext.SaveChangesAsync();
+            return entity.Id;
+        }
+
+        public async Task<long?> GetCursorAsync(string subscriberName)
+        {
+            await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
+            return await dbContext.SubscriberCursors
+                .Where(cursor => cursor.SubscriberName == subscriberName)
+                .Select(cursor => (long?)cursor.LastAcknowledgedMessageId)
+                .SingleOrDefaultAsync();
+        }
+
+        public async Task<int> CountCursorsAsync()
+        {
+            await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
+            return await dbContext.SubscriberCursors.CountAsync();
         }
 
         public void Dispose() => _state.Metrics.Dispose();
@@ -221,7 +320,8 @@ public sealed class InboundSubscriberRegistryTests
                 Options.Create(new SubscriberConfig
                 {
                     ReplayBatchSize = 10,
-                    MaxOutstanding = maxOutstanding
+                    MaxOutstanding = maxOutstanding,
+                    SubscriberGroups = SubscriberNames.ToDictionary(name => name, _ => new[] { ExampleGroup })
                 }),
                 TimeProvider.System,
                 metrics,

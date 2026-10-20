@@ -69,6 +69,8 @@ signalizr:
     # lacks that group, and Helm cannot remove a subchart map key once it is set. Add your own as
     # CasCap__GroupConfig__GroupNames__0: <exact Signal group name>.
     # Continue with __1, __2, etc. These exact names are the API group names.
+    # Each subscriber receives only its listed groups, and an unlisted subscriber is refused:
+    # CasCap__SubscriberConfig__SubscriberGroups__<subscriber name>__0: <exact Signal group name>.
   # The chiseled .NET image runs as APP_UID 1654. fsGroup makes a fresh PVC writable without
   # granting root privileges or adding an init container.
   podSecurityContext:

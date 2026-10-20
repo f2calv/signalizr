@@ -599,7 +599,11 @@ public sealed class SignalizrMcpTests
             builder.Services.AddSingleton<IMessageGateway>(sp => sp.GetRequiredService<FakeMcpMessageGateway>());
             builder.Services.AddSingleton(TimeProvider.System);
             builder.Services.AddSingleton<SignalizrMetrics>();
-            builder.Services.Configure<SubscriberConfig>(_ => { });
+            builder.Services.Configure<SubscriberConfig>(config =>
+            {
+                config.SubscriberGroups["example-client-one"] = ["system"];
+                config.SubscriberGroups["example-client-two"] = ["system"];
+            });
             builder.Services.AddSingleton<IOperatorNotifier, FakeOperatorNotifier>();
             builder.Services.AddDbContextFactory<SignalizrDbContext>(options => options.UseSqlite(connection));
             builder.Services.AddSingleton<IInboundSubscriberRegistry, InboundSubscriberRegistry>();

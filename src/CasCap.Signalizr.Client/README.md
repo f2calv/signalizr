@@ -43,7 +43,7 @@ For a gateway reachable at a service address, set both endpoints explicitly:
 }
 ```
 
-Register with the application's existing configuration and resolve `ISignalizrClient` where needed:
+Register with the application's existing configuration and resolve [`ISignalizrClient`](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Signalizr.Client/Abstractions/ISignalizrClient.cs) where needed:
 
 ```csharp
 using CasCap.Signalizr.Client;

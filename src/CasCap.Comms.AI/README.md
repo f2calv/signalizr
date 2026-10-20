@@ -22,7 +22,7 @@ var runtimeHttpClient = services.AddCommsAgent();
 ```
 
 The returned `IHttpClientBuilder` is the seam for your authentication and resilience handlers.
-Registration does not supply runtime credentials or start the Comms `IBgFeature`; your host owns
+Registration does not supply runtime credentials or start the Comms [`IBgFeature`](https://github.com/f2calv/CasCap.Common/blob/main/src/CasCap.Common.Abstractions/Abstractions/IBgFeature.cs); your host owns
 both. The bundled application wires workload authentication in its
 [Comms role](https://github.com/f2calv/signalizr/blob/main/src/CasCap.App.Server/README.md#comms-responder).
 
@@ -59,14 +59,14 @@ session state. Comms retains Signal delivery, typing, reactions, polls, attachme
 
 | Type | Purpose |
 | --- | --- |
-| `AgentCommsResponder` | `ICommsResponder` backed by the streamed Agent Runtime client |
+| `AgentCommsResponder` | [`ICommsResponder`](https://github.com/f2calv/signalizr/blob/b5ae4f04ff8a6f9f9f611da60a08872a41e34176/src/CasCap.Comms/Abstractions/ICommsResponder.cs) backed by the streamed Agent Runtime client |
 | `CommsDebugNotifier` | Stats footer and monitor-group diagnostics |
 | `CommsAgentMetrics` | Run counter by `CommsAgentRunOutcome` |
-| `IAgentRunEnricher` | Host seam for measurements around each run, such as GPU energy use; `RequiresDiagnosticDetails` opts in to tool arguments and runtime property bags |
+| [`IAgentRunEnricher`](https://github.com/f2calv/signalizr/blob/b5ae4f04ff8a6f9f9f611da60a08872a41e34176/src/CasCap.Comms.AI/Abstractions/IAgentRunEnricher.cs) | Host seam for measurements around each run, such as GPU energy use; `RequiresDiagnosticDetails` opts in to tool arguments and runtime property bags |
 | `CommsAgentProfile` | Runtime agent name, opaque session identifier and attachment fallback prompt |
 | `CommsDebugStep` | One step of the monitor-group pipeline timeline |
 | `MessagingMcpQueryService` | MCP poll tools (`create_poll`, `close_poll`, `get_poll_status`) on the chat group |
-| `IPollTracker`, `InMemoryPollTracker` | Comms-owned poll lifecycle, votes, result summaries, and TTL expiry; process-local, so a restart forgets open polls |
+| [`IPollTracker`](https://github.com/f2calv/signalizr/blob/b5ae4f04ff8a6f9f9f611da60a08872a41e34176/src/CasCap.Comms.AI/Abstractions/IPollTracker.cs), `InMemoryPollTracker` | Comms-owned poll lifecycle, votes, result summaries, and TTL expiry; process-local, so a restart forgets open polls |
 | `CommsAgentServiceCollectionExtensions` | `AddCommsAgent()` and `AddMessagingMcp()` |
 
 ## Configuration

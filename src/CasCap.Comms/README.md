@@ -20,7 +20,7 @@ services.AddCasCapCaching(configuration);
 services.AddComms(configuration);
 ```
 
-`AddComms` registers an `IBgFeature`, not an independently started hosted service. Your host must
+`AddComms` registers an [`IBgFeature`](https://github.com/f2calv/CasCap.Common/blob/main/src/CasCap.Common.Abstractions/Abstractions/IBgFeature.cs), not an independently started hosted service. Your host must
 run that feature through its feature dispatcher. The
 [signalizr host](https://github.com/f2calv/signalizr/blob/main/src/CasCap.App.Server/README.md#comms-responder)
 is a concrete integration, with an additional AI responder; it is not the library's default behavior.
@@ -30,7 +30,7 @@ Redis is required for stream/media storage and inbound duplicate suppression. An
 must serve your configured groups. Voice modes remain disabled until you configure their providers.
 
 For producer-only processes, register `AddCommsStreamSink()` instead of starting a consumer. Resolve
-`IEventSink<CommsEvent>` and write a notification:
+[`IEventSink<CommsEvent>`](https://github.com/f2calv/CasCap.Common/blob/main/src/CasCap.Common.Abstractions/Abstractions/IEventSink%7BT%7D.cs) and write a notification:
 
 ```csharp
 using CasCap.Common.Abstractions;
@@ -90,13 +90,13 @@ flowchart LR
 | `CommunicationsBgService` | The `Comms` background feature |
 | `CommsStreamSinkService` | `IEventSink<CommsEvent>` that writes to the comms stream (`[SinkType("CommsStream")]`) |
 | `CommsMediaStore` | Caches attachment bytes in Redis and returns the `MediaReference` a producer puts in `JsonPayload` |
-| `ITrackedOperationService`, `TrackedOperationService` | Stream-based progress, completion and timeout notifications |
-| `ICommsResponder` | Seam that produces replies: stream-event turns, poll votes, commands and queued turns |
+| [`ITrackedOperationService`](https://github.com/f2calv/signalizr/blob/b5ae4f04ff8a6f9f9f611da60a08872a41e34176/src/CasCap.Comms/Abstractions/ITrackedOperationService.cs), `TrackedOperationService` | Stream-based progress, completion and timeout notifications |
+| [`ICommsResponder`](https://github.com/f2calv/signalizr/blob/b5ae4f04ff8a6f9f9f611da60a08872a41e34176/src/CasCap.Comms/Abstractions/ICommsResponder.cs) | Seam that produces replies: stream-event turns, poll votes, commands and queued turns |
 | `CommsTurn`, `CommsReply`, `CommsCommandOutcome` | The units of work and results exchanged with a responder |
-| `PlainCommsEventFormatter` | Default `ICommsEventFormatter`: the event message unchanged |
+| `PlainCommsEventFormatter` | Default [`ICommsEventFormatter`](https://github.com/f2calv/CasCap.Common/blob/main/src/CasCap.Common.Abstractions/Abstractions/ICommsEventFormatter.cs): the event message unchanged |
 | `TimestampedCommsEventFormatter` | `ICommsEventFormatter` producing `HH:mm:ss.fff UTC [environment] [source] message` |
-| `MonitorSourcesGroupRouter` | Default `ICommsGroupRouter`: `CommsConfig.MonitorSources` go to the monitor group |
-| `ISignalMessageDeduplicator`, `RedisSignalMessageDeduplicator` | Duplicate suppression by hashed message identity |
+| `MonitorSourcesGroupRouter` | Default [`ICommsGroupRouter`](https://github.com/f2calv/CasCap.Common/blob/main/src/CasCap.Common.Abstractions/Abstractions/ICommsGroupRouter.cs): `CommsConfig.MonitorSources` go to the monitor group |
+| [`ISignalMessageDeduplicator`](https://github.com/f2calv/signalizr/blob/b5ae4f04ff8a6f9f9f611da60a08872a41e34176/src/CasCap.Comms/Abstractions/ISignalMessageDeduplicator.cs), `RedisSignalMessageDeduplicator` | Duplicate suppression by hashed message identity |
 | `CommsServiceCollectionExtensions` | `AddCommsStreamSink()` for producers and `AddComms(configuration)` for the `Comms` feature |
 
 `ICommsEventFormatter`, `ICommsGroupRouter`, `CommsEvent` and `MediaReference` live in
@@ -199,7 +199,7 @@ acknowledgements and Redis duplicate suppression are separate mechanisms.
 | `CasCap.Signalizr.Client` | Gateway client and its best-effort and startup helpers |
 | `CasCap.Api.Voice` | Speech-to-text and text-to-speech |
 | `CasCap.Common.Abstractions` | `CommsEvent`, `ICommsEventFormatter`, `ICommsGroupRouter`, `MediaReference`, `IBgFeature` |
-| `CasCap.Common.Caching` | `IRemoteCache` for the Redis Stream and cached media |
+| `CasCap.Common.Caching` | [`IRemoteCache`](https://github.com/f2calv/CasCap.Common/blob/main/src/CasCap.Common.Caching/Abstractions/IRemoteCache.cs) for the Redis Stream and cached media |
 | `CasCap.Common.Configuration`, `CasCap.Common.Extensions` | Options binding and host helpers |
 
 For deterministic consumer fixtures, see the

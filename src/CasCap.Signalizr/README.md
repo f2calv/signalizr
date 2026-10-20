@@ -10,8 +10,8 @@ Operators run [CasCap.App.Server](../CasCap.App.Server/README.md), which registe
 features and transports. Consumer applications should use
 [CasCap.Signalizr.Client](../CasCap.Signalizr.Client/README.md), not host implementation types.
 
-`IMessageGateway` exposes sends, reactions, typing and polls against exact configured group names.
-`IGroupResolver` hides account-linked identifiers and rejects unresolved, duplicate and ambiguous
+[`IMessageGateway`](Abstractions/IMessageGateway.cs) exposes sends, reactions, typing and polls against exact configured group names.
+[`IGroupResolver`](Abstractions/IGroupResolver.cs) hides account-linked identifiers and rejects unresolved, duplicate and ambiguous
 names. The gateway owns account profile policy; consumers cannot change the shared profile.
 
 ## Data Flow

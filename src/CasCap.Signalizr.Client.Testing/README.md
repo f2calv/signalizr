@@ -1,6 +1,6 @@
 # CasCap.Signalizr.Client.Testing
 
-An in-memory `ISignalizrClient` for .NET 10 tests of [signalizr](https://github.com/f2calv/signalizr)
+An in-memory [`ISignalizrClient`](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Signalizr.Client/Abstractions/ISignalizrClient.cs) for .NET 10 tests of [signalizr](https://github.com/f2calv/signalizr)
 consumers, without a gateway, Signal account or network connection.
 
 ## Installation

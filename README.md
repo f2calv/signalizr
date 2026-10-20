@@ -483,4 +483,4 @@ placeholders.
 
 ## License
 
-Released into the public domain under [The Unlicense](LICENSE).
+Released under the [MIT License](LICENSE).

@@ -111,7 +111,7 @@ EXPOSE 8080 5001
 LABEL org.opencontainers.image.title="$WORKLOAD" \
     org.opencontainers.image.description="Signal Messenger gateway - one owned account, named channels, REST send and gRPC inbound fan-out" \
     org.opencontainers.image.source="https://github.com/f2calv/signalizr" \
-    org.opencontainers.image.licenses="Unlicense" \
+    org.opencontainers.image.licenses="MIT" \
     org.opencontainers.image.version="$GIT_TAG" \
     org.opencontainers.image.revision="$GIT_COMMIT"
 

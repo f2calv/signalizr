@@ -1,15 +1,17 @@
 # CasCap.Signalizr.Client.Testing
 
-An in-memory `ISignalizrClient` for testing [signalizr](https://github.com/f2calv/signalizr)
-consumers without a gateway.
+An in-memory `ISignalizrClient` for .NET 10 tests of [signalizr](https://github.com/f2calv/signalizr)
+consumers, without a gateway, Signal account or network connection.
 
-## Install
+## Installation
 
 ```bash
 dotnet add package CasCap.Signalizr.Client.Testing
 ```
 
 Reference it from test projects only.
+Match its version to `CasCap.Signalizr.Client`; the public feed currently includes `0.1.2`.
+This guide follows current source.
 
 ## Purpose
 
@@ -45,8 +47,10 @@ argument, so a fake clock gives deterministic values. Reacting to a delivery tha
 ## Usage
 
 ```csharp
+using CasCap.Signalizr.Client;
+using CasCap.Signalizr.Client.Testing;
+
 var signalizr = new FakeSignalizrClient { Groups = ["My Test Group Name"] };
-services.AddSingleton<ISignalizrClient>(signalizr);
 
 signalizr.Enqueue(new SignalizrMessage
 {
@@ -57,6 +61,23 @@ signalizr.Enqueue(new SignalizrMessage
     Timestamp = 1,
 });
 
-// ...run the consumer, then assert on what it did.
-var reply = Assert.Single(signalizr.SentTo("My Test Group Name"));
+signalizr.Complete();
+
+await foreach (var message in signalizr.SubscribeAsync(cancellationToken))
+    await signalizr.SendAsync(message.GroupName!, "Test reply", cancellationToken);
+
+var reply = Xunit.Assert.Single(signalizr.SentTo("My Test Group Name"));
+Xunit.Assert.Equal("Test reply", reply.Message);
 ```
+
+In a consumer test, register the fake as `ISignalizrClient` before starting your application fixture,
+then assert on its recorded operations. The example above demonstrates the fake's queue and recording
+without starting an application.
+
+## Limits
+
+The fake does not model durable cursors, acknowledgement timeouts, retention, automatic reconnects
+or Signal send validation. `Complete()` permanently closes its queue after queued deliveries drain;
+later subscriptions end immediately. Use the gateway's
+[source test guide](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Signalizr.Tests/README.md)
+for coverage of the real delivery contract.

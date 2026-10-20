@@ -1,7 +1,51 @@
 # CasCap.Comms
 
 The Signalizr communications pipeline shared by applications that talk to Signal Messenger through
-a [signalizr](https://github.com/f2calv/signalizr) gateway.
+a [signalizr](https://github.com/f2calv/signalizr) gateway. It combines Redis event delivery,
+inbound messages, optional voice processing and a bounded reply queue for .NET 10 hosts.
+
+## Installation and Host Setup
+
+This project is packable, but no public `CasCap.Comms` version is currently verified on NuGet.org.
+Consume the source project until an immutable package is available. A source build also needs its
+declared shared-library dependencies; Debug resolves adjacent source projects and Release resolves
+published package references.
+
+Register the pipeline in a host that already supplies configuration, logging and `TimeProvider`:
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+
+services.AddCasCapCaching(configuration);
+services.AddComms(configuration);
+```
+
+`AddComms` registers an `IBgFeature`, not an independently started hosted service. Your host must
+run that feature through its feature dispatcher. The
+[signalizr host](https://github.com/f2calv/signalizr/blob/main/src/CasCap.App.Server/README.md#comms-responder)
+is a concrete integration, with an additional AI responder; it is not the library's default behavior.
+`AddComms(configuration, lite: true)` registers dependencies without the background feature.
+
+Redis is required for stream/media storage and inbound duplicate suppression. An existing gateway
+must serve your configured groups. Voice modes remain disabled until you configure their providers.
+
+For producer-only processes, register `AddCommsStreamSink()` instead of starting a consumer. Resolve
+`IEventSink<CommsEvent>` and write a notification:
+
+```csharp
+using CasCap.Common.Abstractions;
+
+await sink.WriteEvent(new CommsEvent
+{
+    Source = "ExampleJob",
+    Message = "Scheduled task completed",
+    Environment = "Development",
+    TimestampUtc = DateTime.UtcNow
+}, cancellationToken);
+```
+
+The producer must also register caching, a clock and its host environment. `AddTrackedOperations()`
+adds the stream sink and a hosted progress/timeout reporter for `ITrackedOperationService`.
 
 ## Purpose
 
@@ -19,11 +63,25 @@ a [signalizr](https://github.com/f2calv/signalizr) gateway.
 Without an available responder, chat-bound events are formatted and sent directly and inbound
 messages are only logged. With `StreamEventTurnsEnabled` set to `false`, chat-bound events are sent
 directly even when a responder answers inbound messages; `DirectDeliverySources` does the same for
-selected event sources only. [CasCap.Comms.AI](../CasCap.Comms.AI/README.md)
+selected event sources only. [CasCap.Comms.AI](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Comms.AI/README.md)
 provides the AI agent responder.
 
-This project is owned and published by the signalizr repository alongside `CasCap.Signalizr.Client`.
-Applications use an adjacent signalizr project reference in Debug and the published package in Release.
+## Event Flow
+
+```mermaid
+flowchart LR
+    PRODUCER(["Event producers"]) --> REDIS[("Redis stream and media")]
+    REDIS --> ROUTE["Filter, throttle and route"]
+    ROUTE --> DIRECT["Direct chat or monitor send"]
+    ROUTE --> TURN["Optional responder turn"]
+    INBOUND(["Gateway subscription"]) --> DEDUP["Group filter and duplicate suppression"]
+    DEDUP --> TURN
+    TURN --> REPLY["Bounded reply queue"]
+    REPLY --> GATEWAY(["Signalizr REST"])
+    DIRECT --> GATEWAY
+    classDef storage fill:#fef3c7,stroke:#d97706,color:#78350f
+    class REDIS storage
+```
 
 ## Public Surface
 
@@ -32,6 +90,7 @@ Applications use an adjacent signalizr project reference in Debug and the publis
 | `CommunicationsBgService` | The `Comms` background feature |
 | `CommsStreamSinkService` | `IEventSink<CommsEvent>` that writes to the comms stream (`[SinkType("CommsStream")]`) |
 | `CommsMediaStore` | Caches attachment bytes in Redis and returns the `MediaReference` a producer puts in `JsonPayload` |
+| `ITrackedOperationService`, `TrackedOperationService` | Stream-based progress, completion and timeout notifications |
 | `ICommsResponder` | Seam that produces replies: stream-event turns, poll votes, commands and queued turns |
 | `CommsTurn`, `CommsReply`, `CommsCommandOutcome` | The units of work and results exchanged with a responder |
 | `PlainCommsEventFormatter` | Default `ICommsEventFormatter`: the event message unchanged |
@@ -82,16 +141,24 @@ groups exactly, including spaces and case.
 | `MediaCacheKeyPrefix` | `"comms:cache:media"` | Redis key prefix for cached attachments |
 | `MediaCacheTtlMs` | `300000` | Lifetime of an unsent cached attachment |
 | `MessageDeduplicationTtlHours` | `168` | Duplicate-suppression window |
+| `PollTtlMs` | `3600000` | Process-local poll tracker expiry when the AI responder is installed |
 
 ## Configuration Examples
 
-Minimal:
+Minimal pipeline settings for a local gateway, with stream consumption disabled. Supply a Redis
+connection through `CasCap:CachingConfig:RemoteCacheConnectionString`:
 
 ```json
 {
   "CasCap": {
     "CommsConfig": {
-      "GroupName": "My Test Group Name"
+      "GroupName": "My Test Group Name",
+      "StreamConsumptionEnabled": false
+    },
+    "SignalizrClientConfig": {
+      "BaseAddress": "http://localhost:8080",
+      "GrpcAddress": "http://localhost:5001",
+      "SubscriberName": "example-comms"
     }
   }
 }
@@ -105,7 +172,11 @@ With an operator monitor group and operational sources:
     "CommsConfig": {
       "GroupName": "My Test Group Name",
       "MonitorGroupName": "My Test Monitor Group Name",
-      "MonitorSources": [ "SchedulerBgService" ]
+      "StreamConsumptionEnabled": true,
+      "MonitorSources": ["ExampleJob"],
+      "DirectDeliverySources": ["ExampleNotification"],
+      "StreamSendRatePerMinute": 20,
+      "ReplyQueueCapacity": 100
     }
   }
 }
@@ -113,6 +184,9 @@ With an operator monitor group and operational sources:
 
 Monitor messages persist in Signal history on every member device. Enable `MonitorContentEnabled`
 or `EchoTranscriptToDebugChat` only while diagnosing a problem.
+The monitor group should contain only the operator. Stream throttling drops excess events and stale
+events; it is not durable guaranteed delivery of every producer notification. Inbound cursor
+acknowledgements and Redis duplicate suppression are separate mechanisms.
 
 `AddComms` also registers `CasCap:CommsMetricsConfig`, `CasCap:SignalizrClientConfig`,
 `CasCap:SpeechToTextConfig` and `CasCap:TextToSpeechConfig`; voice processing does no work until its
@@ -128,4 +202,5 @@ or `EchoTranscriptToDebugChat` only while diagnosing a problem.
 | `CasCap.Common.Caching` | `IRemoteCache` for the Redis Stream and cached media |
 | `CasCap.Common.Configuration`, `CasCap.Common.Extensions` | Options binding and host helpers |
 
-Debug builds reference adjacent source checkouts; Release builds use the published packages.
+For deterministic consumer fixtures, see the
+[Comms test guide](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Comms.Tests/README.md).

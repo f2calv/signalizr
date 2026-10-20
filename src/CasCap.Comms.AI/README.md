@@ -1,7 +1,30 @@
 # CasCap.Comms.AI
 
-The AI agent responder for the [CasCap.Comms](../CasCap.Comms/README.md) Signalizr communications
-pipeline.
+The .NET 10 AI responder for the
+[CasCap.Comms pipeline](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Comms/README.md).
+It connects Signal messages to a separately operated Agent Runtime; it does not host models or own
+runtime definitions, credentials or session storage.
+
+## Installation and Usage
+
+This is a packable source project; no public `CasCap.Comms.AI` NuGet version is currently verified.
+Debug builds require the adjacent Agent Runtime client and contracts source projects declared in the
+project. The current project has no Release references for those dependencies, so a standalone
+Release build is not yet a supported installation path.
+
+After configuring the base Comms host and its Redis/gateway dependencies:
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+
+services.AddComms(configuration);
+var runtimeHttpClient = services.AddCommsAgent();
+```
+
+The returned `IHttpClientBuilder` is the seam for your authentication and resilience handlers.
+Registration does not supply runtime credentials or start the Comms `IBgFeature`; your host owns
+both. The bundled application wires workload authentication in its
+[Comms role](https://github.com/f2calv/signalizr/blob/main/src/CasCap.App.Server/README.md#comms-responder).
 
 ## Purpose
 
@@ -32,10 +55,6 @@ pipeline.
 The runtime owns tenant definitions, credentials, agent construction, tools and version-qualified
 session state. Comms retains Signal delivery, typing, reactions, polls, attachments and diagnostics.
 
-This project is owned and published by the signalizr repository alongside `CasCap.Comms` and
-`CasCap.Signalizr.Client`. Applications use an adjacent signalizr project reference in Debug and the
-published package in Release.
-
 ## Public Surface
 
 | Type | Purpose |
@@ -52,19 +71,71 @@ published package in Release.
 
 ## Configuration
 
-The responder reads `CommsConfig` from [CasCap.Comms](../CasCap.Comms/README.md). Configure the
+The responder reads `CommsConfig` from the
+[Comms configuration guide](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Comms/README.md#configuration).
+Configure the
 runtime address and timeout under `CasCap:AgentRuntimeClientOptions`; the host attaches workload
 authentication and resilience to the `IHttpClientBuilder` returned by `AddCommsAgent`.
 
-`CommsConfig.PollTtlMs` controls how long an agent-created poll remains available for votes.
+`CommsConfig.PollTtlMs` controls how long an agent-created poll remains available for votes
+(default one hour). Poll state is process-local and lost on restart.
 
 The run counter uses `CasCap:CommsMetricsConfig:MetricNamePrefix` (default `comms`). Set it to the
 host's exported meter prefix so its OpenTelemetry pipeline collects the counter.
 
-```csharp
-services.AddComms(configuration);
-services.AddCommsAgent();
-services.AddSingleton<IAgentRunEnricher, MyHardwareEnricher>();
+## Configuration Examples
+
+Minimal responder-specific settings; merge with the gateway, Redis and subscriber configuration in
+the Comms guide:
+
+```json
+{
+  "CasCap": {
+    "CommsConfig": {
+      "AgentName": "CommsAgent",
+      "AgentSessionId": "example-session"
+    },
+    "AgentRuntimeClientOptions": {
+      "BaseAddress": "http://localhost:5090",
+      "TimeoutMinutes": 10
+    }
+  }
+}
+```
+
+Optional reply/diagnostic behavior:
+
+```json
+{
+  "CasCap": {
+    "CommsConfig": {
+      "AgentDefaultPrompt": "Describe this attachment.",
+      "PollTtlMs": 3600000,
+      "DelegationMessagesEnabled": false,
+      "FooterTokenCountsEnabled": true,
+      "MonitorContentEnabled": false
+    }
+  }
+}
+```
+
+Use an opaque stable `AgentSessionId`, not a Signal group name or personal identifier.
+Runtime name, session and fallback prompt default to `CommsAgent`, `primary-group` and
+`Describe this attachment.`. Register `IAgentRunEnricher` implementations only when needed;
+`RequiresDiagnosticDetails` opts into potentially sensitive tool arguments and property bags.
+
+## Service Architecture
+
+```mermaid
+sequenceDiagram
+    participant Pipeline as Comms pipeline
+    participant Responder as AgentCommsResponder
+    participant Runtime as Remote Agent Runtime
+    Pipeline->>Responder: Inbound or stream-event turn
+    Responder->>Runtime: Authenticated streamed run
+    Runtime-->>Responder: Progress, diagnostics and response
+    Responder-->>Pipeline: Reply or unavailable notice
+    Note over Pipeline: Signal delivery, typing and reactions stay in Comms
 ```
 
 ## Dependencies
@@ -76,6 +147,5 @@ services.AddSingleton<IAgentRunEnricher, MyHardwareEnricher>();
 | `CasCap.AgentRuntime.Contracts` | Stable run, diagnostic and control DTOs |
 | `ModelContextProtocol` | Poll tool attributes |
 
-Debug builds reference the adjacent Agent Runtime source checkout. Add exact Release package
-references only after `CasCap.AgentRuntime.Client` and `CasCap.AgentRuntime.Contracts` have immutable
-published versions.
+The poll MCP service registration supplies tools, not a listening MCP server. A host must expose
+them deliberately; it is separate from the gateway's optional operator `/mcp` surface.

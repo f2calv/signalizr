@@ -1,152 +1,124 @@
 # signalizr
 
-Deploys the signalizr gateway, the signal-cli REST wrapper it owns, and an optional demo client. The
-wrapper uses the application-specific
-[`signalcli`](https://github.com/f2calv/helm-charts/tree/main/charts/signalcli) chart, while the
-gateway, the migration Job and the demo client use the
-[`workload`](https://github.com/f2calv/helm-charts/tree/main/charts/workload) chart directly.
+The signalizr Helm application chart deploys a Signal Messenger gateway with its owned
+signal-cli REST wrapper. Optional workloads provide a demo subscriber and remote Agent Runtime
+responders; a bundled subchart provisions Grafana dashboards.
 
-The chart's publication location is `oci://ghcr.io/f2calv/charts/signalizr`. Packaging uses the
-application release version, matching the image; `Chart.yaml` contains a packaging placeholder.
-[CI](../../.github/workflows/ci.yml) validates and packages the chart but does not publish it
-automatically. Use an explicitly published version when installing.
+## Installation
+
+Use Helm 3 with OCI support, a Kubernetes cluster with persistent-volume provisioning, and a
+registered or linked Signal account. Account state belongs to the wrapper, while gateway messages
+and cursors use separate storage.
+
+The OCI location is `oci://ghcr.io/f2calv/charts/signalizr`. Choose an explicitly published
+immutable version from the [chart package](https://github.com/f2calv/signalizr/pkgs/container/charts%2Fsignalizr);
+do not install the source `Chart.yaml` placeholder `0.1.0` as though it identifies a published release.
+The registry currently contains development-version tags, not a verified stable chart release.
+Set the same application image tag on each enabled workload, including the migration Job.
+
+Prepare your account and values first:
+
+1. Register or link the account using the
+   [signalcli chart setup](https://github.com/f2calv/helm-charts/tree/main/charts/signalcli#setup).
+2. Supply the account number through a Secret or Key Vault; never put it in tracked values.
+3. Declare the exact Signal group names. Spaces and case matter; unresolved or ambiguous names fail.
+4. Choose SQLite or PostgreSQL and the migration lifecycle below.
+5. Keep one Receiver, including during rollout. Do not increase `signalizr.replicaCount`.
+
+For a fresh SQLite installation using receiver startup migrations, save these non-secret overrides
+as your values file:
+
+```yaml
+signalizr:
+  envVars:
+    CasCap__GroupConfig__GroupNames__0: Example Chat
+  envSecrets:
+    CasCap__SignalCliConfig__PhoneNumber: signalizr-account
+migrate:
+  kind: Deployment
+  replicaCount: 0
+```
+
+The `signalizr-account` Secret must contain key `CasCap__SignalCliConfig__PhoneNumber`.
+Create it through your secret-management process. The example disables the standalone migrator
+because the default Job is not a configured SQLite migration barrier.
+
+```bash
+helm upgrade --install signalizr oci://ghcr.io/f2calv/charts/signalizr \
+  --version <version> --namespace example --create-namespace \
+  --values values.local.yaml \
+  --set-string signalizr.image.tag=<version> \
+  --set-string migrate.image.tag=<version>
+```
+
+Use a version whose image provides the selected roles. The current source host has an unresolved
+Release dependency gap; see the [source-build limitation](../../README.md#quick-start).
+Do not assume an older published image implements unreleased source features.
 
 ## Dependency Graph
 
 ```mermaid
-graph LR
-  SignalizrChart([signalizr])
-  SignalCliChart[signalcli 1.0.2]
-  Workload[workload 1.1.0]
-
-  subgraph Components[Components]
-    SignalCli[signalcli wrapper]
-    Gateway[signalizr]
-    Migrator[migrate]
-    Demo[demo]
-    Responders[signalizrResponder / agentizrResponder]
-  end
-
-  SignalizrChart --> SignalCliChart & Gateway & Migrator & Demo & Responders
-  SignalCliChart --> SignalCli
-  SignalCli & Gateway & Migrator & Demo & Responders --> Workload
+graph TD
+    ROOT([signalizr application chart])
+    WRAPPER["signalcli 1.0.2"]
+    WORKLOAD["workload 1.5.0"]
+    DASH["signalizr-dashboards 0.1.0"]
+    GATEWAY["signalizr: Gateway + Receiver"]
+    MIGRATOR["migrate: DbMigrator"]
+    DEMO["demo: DemoClient"]
+    RESPONDER["Optional Comms responders"]
+    ROOT --> WRAPPER
+    ROOT --> DASH
+    ROOT --> GATEWAY & MIGRATOR & DEMO & RESPONDER
+    GATEWAY & MIGRATOR & DEMO & RESPONDER --> WORKLOAD
+    classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827
+    class WRAPPER,WORKLOAD external
 ```
 
-The `signalcli` dependency owns the registered Signal account and persistent state, including the
-stable `signalcli` Service name consumed by the gateway. The `signalizr` component runs the Gateway and
-Receiver roles, `migrate` applies EF Core migrations, and `demo` runs the optional DemoClient role.
-`signalizrResponder` and `agentizrResponder` run the Comms role, each answering one chat group through
-the Agent Runtime as an ordinary gateway subscriber.
-
-## Install
-
-### Helm
-
-Complete [Setup](#setup) first: the gateway will not start without the phone-number Secret. Replace
-`<version>` with the application release to deploy; the chart and the image share it:
-
-```bash
-helm install signalizr oci://ghcr.io/f2calv/charts/signalizr --version <version> \
-  --namespace my-namespace --create-namespace \
-  --set-string signalizr.image.tag=<version> \
-  --set-string migrate.image.tag=<version>
-```
-
-Upgrade to the latest release published in GHCR:
-
-```bash
-helm upgrade --install signalizr oci://ghcr.io/f2calv/charts/signalizr \
-  --namespace my-namespace --create-namespace \
-  --set-string signalizr.image.tag=<version> \
-  --set-string migrate.image.tag=<version>
-```
-
-### Argo CD Application
-
-[Argo CD](https://argo-cd.readthedocs.io/) can consume the same OCI package directly:
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: signalizr
-  namespace: argocd
-spec:
-  project: default
-  destination:
-    namespace: my-namespace
-    server: https://kubernetes.default.svc
-  source:
-    repoURL: ghcr.io/f2calv
-    chart: charts/signalizr
-    targetRevision: <version>
-    helm:
-      valuesObject:
-        signalizr:
-          image:
-            tag: <version>
-          envVars:
-            CasCap__GroupConfig__GroupNames__0: My Test Group Name
-        migrate:
-          image:
-            tag: <version>
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-```
-
-## Setup
-
-1. Register or link a Signal account in the wrapper, following the
-   [signalcli chart setup](https://github.com/f2calv/helm-charts/tree/main/charts/signalcli#setup).
-   The account state lands on the wrapper's own volume.
-
-2. Supply the account's phone number. Either create a Secret whose key matches the environment
-   variable name and reference it through `signalizr.envSecrets`:
-
-   ```bash
-   kubectl create secret generic signalizr --namespace my-namespace \
-     --from-literal=CasCap__SignalCliConfig__PhoneNumber='+10000000000'
-   ```
-
-   ```yaml
-   signalizr:
-     envSecrets:
-       CasCap__SignalCliConfig__PhoneNumber: signalizr
-   ```
-
-   Or load it from Azure Key Vault by setting `signalizr.envVars.AppConfig__KeyVaultName` and an
-   `AppConfig__AzureEntra*` credential, with the secret named
-   `CasCap--SignalCliConfig--PhoneNumber`.
-
-3. Declare each group by its Signal group name in
-   `signalizr.envVars.CasCap__GroupConfig__GroupNames__0` (then `__1`, `__2`, etc.).
-   API group names are these exact case-sensitive Signal group names. Names are resolved to group ids
-   at startup, and a name that matches no group fails startup rather than routing messages
-   somewhere unintended.
+The wrapper chart owns the account-state volume and stable `signalcli` Service.
+Gateway, migration, demo and responder workloads use the same application image with different
+feature flags. The [dashboard guide](../signalizr-dashboards/README.md) explains Grafana discovery.
 
 ## Configuration
 
-| Value | Default | Notes |
-| --- | --- | --- |
-| `signalizr.replicaCount` | `1` | The Receiver role is single-owner; scale the Gateway role separately |
-| `signalizr.strategy` | `RollingUpdate`, `maxSurge: 0` | Old and new pods never overlap, so messages are not delivered twice |
-| `signalizr.image.tag` | `""` | Always set it; an empty tag falls back to the workload chart's `appVersion` |
-| `signalizr.service` | port 80 to 8080 | REST send surface, health endpoints and metrics |
-| `signalizr.extraPorts` | `grpc` on 5001 | The gRPC subscription surface |
-| `signalizr.envVars.CasCap__GroupConfig__GroupNames__*` | none | Indexed exact Signal group names; no default groups |
-| `signalizr.envSecrets` | `{}` | Secret references, for example the phone number; personal data never goes in values |
-| `migrate.kind` | `Job` | Renders on every sync; see below |
-| `demo.replicaCount` | `0` | Set `1` to run the DemoClient role against the gateway |
-| `signalizrResponder.replicaCount`, `agentizrResponder.replicaCount` | `0` | Set `1` to run a Comms responder; at most one, with `Recreate` and no Service. Supply `CasCap__CommsConfig__GroupName`, Redis, the Agent Runtime address and the execution identity, either as `CasCap__AgentRuntimeAzureAuthConfig__*` from a Secret or from Key Vault via `AppConfig__KeyVaultName`, `AppConfig__AgentRuntimeKeyVaultPrefix` and an `AppConfig__AzureEntra*` credential |
-| `signalcli` | see the signalcli chart | Configured through the `signalcli` chart's values |
+The authoritative [values file](values.yaml) contains workload settings; use the upstream
+[workload reference](https://github.com/f2calv/helm-charts/tree/main/charts/workload) for shared fields.
 
-Set the same image tag on `migrate` and `demo` when you use them. The workload chart renders `Job`
-kinds whatever `replicaCount` says, so the `migrate` Job runs on every sync. Migrations are
-idempotent, and with SQLite the gateway also migrates on startup. For PostgreSQL, add Argo CD
-[sync hook](https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/) annotations so
-the Job runs before the gateway, and turn startup migration off:
+| Value | Default and purpose |
+| --- | --- |
+| `signalizr.replicaCount` | `1`; single receive owner |
+| `signalizr.strategy` | RollingUpdate with `maxSurge: 0`, `maxUnavailable: 1`; avoids overlap but permits downtime |
+| `signalizr.image.tag` | Empty; set an explicit compatible immutable version |
+| `signalizr.service` | ClusterIP HTTP port 80 to container 8080 |
+| `signalizr.extraPorts` | gRPC port 5001 to container 5001 |
+| `signalizr.envVars.CasCap__GroupConfig__GroupNames__*` | None; indexed exact configured names |
+| `signalizr.envVars.CasCap__SubscriberConfig__SubscriberGroups__<subscriber>__*` | None; groups each subscriber name receives. Configure an entry for every enabled responder and the demo client |
+| `signalizr.envSecrets` | Empty map of environment key to Secret name |
+| `signalizr.persistentVolumeClaims` | 1 GiB SQLite claim, mounted at `/var/lib/signalizr`; group ownership 1654 |
+| `migrate.kind`, `migrate.replicaCount` | `Job`, `0`; **a Job still renders with zero replicas** |
+| `demo.replicaCount` | `0`; set `1` for the length-only inbound demo subscriber |
+| `signalizrResponder.replicaCount`, `agentizrResponder.replicaCount` | `0`; enable each only after configuring its Comms dependencies |
+| `dashboards.enabled` | `true`; renders dashboard ConfigMaps, not Grafana |
+| `signalcli` | Wrapper chart settings; default account-state claim requests 512 MiB |
+
+REST, gRPC and attachment downloads have no built-in authentication. Restrict cluster and ingress
+access. MCP is separately opt-in and Basic-authenticated; see the [MCP guide](../../docs/mcp.md).
+Plaintext gRPC must use the dedicated HTTP/2 listener, not the HTTP/1.1 Service port.
+
+## Persistence and Migration
+
+The default application uses SQLite on its own PVC and migrates on startup. The checked-in
+`migrate` Job has neither a shared SQLite volume nor sequencing annotations; it must be disabled
+as in the fresh-install example, or configured explicitly. Setting `replicaCount: 0` alone does not
+disable a workload whose `kind` is `Job`.
+
+For an independently managed SQLite migrator, mount the same claim into the Job, give it writable
+permissions, stop the receiver while migrating, and start the receiver only after successful
+completion with `MigrateOnStartup=false`. Preserve existing claims when changing lifecycle settings.
+
+For PostgreSQL, provision the database separately. Merge the following with your account/group and
+image settings. It uses Argo CD PreSync ordering; plain Helm does not interpret Argo CD hooks.
+Outside Argo CD, run and verify the migration before starting the receiver.
 
 ```yaml
 signalizr:
@@ -154,9 +126,13 @@ signalizr:
     CasCap__DatabaseConfig__Provider: Postgres
     CasCap__DatabaseConfig__MigrateOnStartup: "false"
   envSecrets:
-    CasCap__SignalCliConfig__PhoneNumber: signalizr
+    CasCap__SignalCliConfig__PhoneNumber: signalizr-account
     CasCap__DatabaseConfig__ConnectionString: signalizr-postgres
+  persistentVolumeClaims: []
+  volumes: []
+  volumeMounts: []
 migrate:
+  kind: Job
   envVars:
     CasCap__DatabaseConfig__Provider: Postgres
   envSecrets:
@@ -167,204 +143,23 @@ migrate:
       argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 ```
 
-### gRPC
+The `signalizr-postgres` Secret must contain `CasCap__DatabaseConfig__ConnectionString`.
+Optional `CasCap__DatabaseConfig__DatabaseName` must match between migrator and receiver.
+Removing SQLite mounts is appropriate for a fresh PostgreSQL deployment; it does not migrate
+existing data. Back up and preserve existing PVCs before changing a deployed storage configuration.
 
-Subscribers connect to `http://signalizr:5001`. gRPC needs its own port because plaintext HTTP
-cannot negotiate protocols: one port answers HTTP/1.1 or HTTP/2, never both, and sharing fails with
-`HTTP_1_1_REQUIRED`. Set `CasCap__SignalizrClientConfig__GrpcAddress` explicitly on every client;
-it is not derived from the REST base address.
+Gateway retention defaults to 24 hours after all subscribers acknowledge and a hard 30-day cap for
+all content. Account state on the wrapper's volume has a separate lifecycle.
 
-### Default Values
+## Optional Responders
 
-```yaml
-# signal-cli REST wrapper, configured through the signalcli chart.
-signalcli:
-  signalcli:
-    persistentVolumeClaims:
-      - name: signalcli-pvc
-        accessModes:
-          - ReadWriteOnce
-        storage: 512Mi
+Each responder runs `Comms` alone, uses `Recreate`, has no Service and must remain single-instance
+for its configured durable subscriber name. Configure its exact `CommsConfig:GroupName`, Redis,
+Agent Runtime address and execution identity. Default stream consumption is off, but inbound
+deduplication still needs Redis. Set an explicit image tag on every enabled responder.
 
-# The gateway: Gateway and Receiver roles.
-signalizr:
-  replicaCount: 1
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 1
-  fullnameOverride: signalizr
-  image:
-    repository: ghcr.io/f2calv/signalizr
-    pullPolicy: IfNotPresent
-    tag: ""
-  service:
-    enabled: true
-    name: http
-    type: ClusterIP
-    port: 80
-    containerPort: 8080
-    protocol: TCP
-  extraPorts:
-    - name: grpc
-      port: 5001
-      containerPort: 5001
-  envFieldRef:
-    AppConfig__NodeName: spec.nodeName
-    AppConfig__PodName: metadata.name
-    AppConfig__Namespace: metadata.namespace
-    AppConfig__PodIp: status.podIP
-  envVars:
-    CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
-    CasCap__SignalCliConfig__BaseAddress: http://signalcli:80
-  podSecurityContext:
-    fsGroup: 1654
-    fsGroupChangePolicy: OnRootMismatch
-  persistentVolumeClaims:
-    - name: signalizr-data
-      accessModes:
-        - ReadWriteOnce
-      storage: 1Gi
-  volumes:
-    - name: data
-      persistentVolumeClaim:
-        claimName: signalizr-data
-  volumeMounts:
-    - name: data
-      mountPath: /var/lib/signalizr
-  envSecrets: {}
-  startupProbe:
-    httpGet:
-      path: /healthz/startup
-      port: 8080
-    periodSeconds: 10
-    initialDelaySeconds: 10
-    failureThreshold: 6
-  readinessProbe:
-    httpGet:
-      path: /healthz/ready
-      port: 8080
-    periodSeconds: 10
-    initialDelaySeconds: 15
-    failureThreshold: 6
-  livenessProbe:
-    httpGet:
-      path: /healthz/live
-      port: 8080
-    periodSeconds: 20
-    initialDelaySeconds: 30
-    failureThreshold: 6
-  resources:
-    requests:
-      cpu: 50m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 256Mi
-
-# EF Core migration Job.
-migrate:
-  replicaCount: 0
-  kind: Job
-  fullnameOverride: signalizr-migrate
-  image:
-    repository: ghcr.io/f2calv/signalizr
-    pullPolicy: IfNotPresent
-    tag: ""
-  service:
-    enabled: false
-  envVars:
-    CasCap__FeatureConfig__EnabledFeatures: DbMigrator
-  startupProbe: false
-  readinessProbe: false
-  livenessProbe: false
-  resources:
-    requests:
-      cpu: 50m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 384Mi
-
-# Optional DemoClient role.
-demo:
-  replicaCount: 0
-  fullnameOverride: signalizr-demo
-  image:
-    repository: ghcr.io/f2calv/signalizr
-    pullPolicy: IfNotPresent
-    tag: ""
-  service:
-    enabled: false
-  envVars:
-    CasCap__FeatureConfig__EnabledFeatures: DemoClient
-    CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:80
-    CasCap__SignalizrClientConfig__GrpcAddress: http://signalizr:5001
-    CasCap__SignalizrClientConfig__SubscriberName: signalizr-demo
-  startupProbe: false
-  readinessProbe: false
-  livenessProbe:
-    httpGet:
-      path: /healthz/live
-      port: 8080
-    periodSeconds: 30
-    initialDelaySeconds: 30
-    failureThreshold: 6
-  resources:
-    requests:
-      cpu: 25m
-      memory: 64Mi
-    limits:
-      cpu: 200m
-      memory: 128Mi
-```
-
-## Persistence
-
-The public default uses SQLite at `/var/lib/signalizr/signalizr.db` on a 1Gi `ReadWriteOnce` PVC.
-The image runs as uid 1654, and the pod security context sets `fsGroup: 1654` so a fresh PVC is
-writable without a privileged init container.
-
-To use PostgreSQL instead, drop the SQLite volume as well as switching the provider:
-
-```bash
-helm upgrade --install signalizr oci://ghcr.io/f2calv/charts/signalizr \
-  --namespace my-namespace --create-namespace \
-  --set-string signalizr.image.tag=<version> \
-  --set-string signalizr.envVars.CasCap__DatabaseConfig__Provider=Postgres \
-  --set-string signalizr.envSecrets.CasCap__SignalCliConfig__PhoneNumber=signalizr \
-  --set-string signalizr.envSecrets.CasCap__DatabaseConfig__ConnectionString=signalizr-postgres \
-  --set-json 'signalizr.persistentVolumeClaims=[]' \
-  --set-json 'signalizr.volumes=[]' \
-  --set-json 'signalizr.volumeMounts=[]'
-```
-
-Or set the same values via an Argo CD `valuesObject`:
-
-```yaml
-signalizr:
-  envVars:
-    CasCap__DatabaseConfig__Provider: Postgres
-  envSecrets:
-    CasCap__SignalCliConfig__PhoneNumber: signalizr
-    CasCap__DatabaseConfig__ConnectionString: signalizr-postgres
-  persistentVolumeClaims: []
-  volumes: []
-  volumeMounts: []
-```
-
-The Signal account itself lives on the wrapper's volume; see the
-[signalcli chart persistence](https://github.com/f2calv/helm-charts/tree/main/charts/signalcli#persistence)
-notes before moving or resizing it.
-
-## Related Projects
-
-- [signalcli](https://github.com/f2calv/helm-charts/tree/main/charts/signalcli) deploys the
-  signal-cli REST wrapper.
-- [workload](https://github.com/f2calv/helm-charts/tree/main/charts/workload) renders the gateway,
-  migration and demo workloads.
-- [bbernhard/signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api) is the upstream
-  wrapper image.
-- [Signalizr Grafana dashboards](../signalizr-dashboards/README.md) is the bundled dashboard
-  subchart, enabled by `dashboards.enabled`.
+Supply credentials as `CasCap__AgentRuntimeAzureAuthConfig__*` Secret values, or use
+`AppConfig__KeyVaultName`, `AppConfig__AgentRuntimeKeyVaultPrefix` and an
+`AppConfig__AzureEntra*` credential. See the
+[host responder guide](../../src/CasCap.App.Server/README.md#comms-responder) for the boundary between
+gateway credentials, runtime authentication and application session configuration.

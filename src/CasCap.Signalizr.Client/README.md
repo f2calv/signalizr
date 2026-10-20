@@ -1,32 +1,55 @@
 # CasCap.Signalizr.Client
 
 Client for the [signalizr](https://github.com/f2calv/signalizr) gateway: send, react, show typing
-and run polls on a named group over REST, and subscribe to inbound messages over gRPC.
+and run polls on a named group over REST, and subscribe to inbound messages over gRPC from .NET 10.
 
-## Install
+## Installation
 
 ```bash
 dotnet add package CasCap.Signalizr.Client
 ```
 
-## Register
+Use a package version compatible with your gateway. The public feed currently has releases through
+`0.1.2`; this README follows current source, which may expose APIs not present in that release.
 
-```csharp
-builder.Services.AddSignalizrClient(builder.Configuration);
-```
+## Configuration Examples
 
-Binding `CasCap:SignalizrClientConfig`:
+Minimal local gateway configuration; the addresses default to these loopback endpoints, but the
+subscriber name must be set explicitly:
 
 ```json
 {
   "CasCap": {
     "SignalizrClientConfig": {
-      "BaseAddress": "http://signalizr:80",
-      "GrpcAddress": "http://signalizr:5001",
-      "SubscriberName": "my-app"
+      "BaseAddress": "http://localhost:8080",
+      "GrpcAddress": "http://localhost:5001",
+      "SubscriberName": "example-consumer"
     }
   }
 }
+```
+
+For a gateway reachable at a service address, set both endpoints explicitly:
+
+```json
+{
+  "CasCap": {
+    "SignalizrClientConfig": {
+      "BaseAddress": "http://gateway.example.com",
+      "GrpcAddress": "http://gateway.example.com:5001",
+      "SubscriberName": "example-consumer"
+    }
+  }
+}
+```
+
+Register with the application's existing configuration and resolve `ISignalizrClient` where needed:
+
+```csharp
+using CasCap.Signalizr.Client;
+using Microsoft.Extensions.DependencyInjection;
+
+builder.Services.AddSignalizrClient(builder.Configuration);
 ```
 
 Two addresses because the gateway serves REST and gRPC on separate ports: a plaintext endpoint
@@ -59,9 +82,11 @@ var timestamp = await client.SendAsync(
 ```
 
 Groups are addressed by exact Signal group display name, preserving case and spaces.
-The client URL-encodes names in the `groupName` query parameter. The gateway owns the Signal account, so a caller never supplies
-a group id or sender number. A `404` means the group name is not configured on that gateway;
-`GetGroupsAsync` lists the ones that are.
+The client URL-encodes names in the `groupName` query parameter. The gateway owns the Signal account,
+so a caller never supplies a group id or sender number. A `404` on sending means the group is not
+configured or the Gateway role is absent; `GetGroupsAsync` lists configured names and throws
+`SignalizrRoleNotEnabledException` when the send surface is absent.
+An uncertain send must not be retried automatically: it may already have reached Signal.
 
 ## Interact
 
@@ -77,7 +102,8 @@ await client.StopTypingAsync("My Test Group Name", cancellationToken);
 
 // React to a message this gateway sent by omitting the author.
 var sent = await client.SendAsync("My Test Group Name", "done", cancellationToken);
-await client.SetReactionAsync("My Test Group Name", "✅", long.Parse(sent, CultureInfo.InvariantCulture),
+await client.SetReactionAsync("My Test Group Name", "✅",
+  long.Parse(sent, System.Globalization.CultureInfo.InvariantCulture),
   cancellationToken: cancellationToken);
 
 var pollId = await client.CreatePollAsync("My Test Group Name", "Deploy now?", ["Yes", "No"],
@@ -125,19 +151,25 @@ its configured profile name instead.
 ```csharp
 await foreach (var message in client.SubscribeAsync(cancellationToken))
 {
-  foreach (var attachment in message.Attachments)
-  {
-    var content = await client.GetAttachmentAsync(attachment.Id, cancellationToken);
-    await ProcessAsync(attachment.ContentType, content, cancellationToken);
-  }
+    foreach (var attachment in message.Attachments)
+    {
+        var content = await client.GetAttachmentAsync(attachment.Id, cancellationToken);
+        await ProcessAsync(attachment.ContentType, content, cancellationToken);
+    }
 
-    // Process it. Asking for the next message acknowledges this one.
+    await HandleAsync(message, cancellationToken);
 }
 ```
+
+`ProcessAsync` and `HandleAsync` represent your application's processing; finish it before advancing
+the iterator.
 
 Each message is acknowledged when the consumer asks for the next one, so an acknowledgement means
 "the previous message was processed" rather than "it arrived". A consumer that stops enumerating
 leaves the last message unacknowledged, which is correct: it may not have been processed.
+
+Subscriptions do not select or authorize a group on the server. Inspect `GroupName` before handling
+a delivery; it can be null for direct messages or messages outside the configured groups.
 
 The stream carries attachment descriptors rather than binary content. `GetAttachmentAsync` downloads
 the raw bytes over REST. Content remains available until gateway retention removes the parent
@@ -155,12 +187,12 @@ while (!cancellationToken.IsCancellationRequested)
     try
     {
         await foreach (var message in client.SubscribeAsync(cancellationToken))
-            Handle(message);
+            await HandleAsync(message, cancellationToken);
     }
-    catch (RpcException ex)
+    catch (Grpc.Core.RpcException ex) when (!cancellationToken.IsCancellationRequested)
     {
         logger.LogWarning(ex, "subscription ended, reconnecting");
-        await Task.Delay(delay, cancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
     }
 }
 ```
@@ -169,9 +201,12 @@ while (!cancellationToken.IsCancellationRequested)
 
 `SignalizrMessage.Sender` is a Signal identifier and `Message` is someone's content. Neither belongs
 in a log, a metric label or a trace attribute.
+REST and gRPC are not authenticated by this client or by the gateway. A subscription receives all
+configured groups; filtering locally is not an authorization boundary. Use a trusted network or
+secure transport boundary. MCP Basic credentials are unrelated to these client endpoints.
 
 ## Testing
 
-The companion [`CasCap.Signalizr.Client.Testing`](../CasCap.Signalizr.Client.Testing/README.md)
+The companion [CasCap.Signalizr.Client.Testing guide](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Signalizr.Client.Testing/README.md)
 package provides `FakeSignalizrClient`. It is an in-memory implementation that feeds deliveries to
 a consumer and records every group operation, for test projects that need no gateway.

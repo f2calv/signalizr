@@ -1,7 +1,14 @@
 # CasCap.Comms.Tests
 
-Credential-free unit tests for [CasCap.Comms](../CasCap.Comms/README.md) and
+Source-declared, credential-free tests for [CasCap.Comms](../CasCap.Comms/README.md) and
 [CasCap.Comms.AI](../CasCap.Comms.AI/README.md).
+
+## Prerequisites
+
+Use .NET 10, xUnit v3 and Microsoft.Testing.Platform. Debug builds require the declared adjacent
+shared, voice and Agent Runtime source dependencies. `CasCap.Comms.AI` currently lacks Release
+references for its runtime client/contracts, so Release validation is blocked until those are
+provided. No Redis server, gateway, model or runtime credential is needed by these fixtures.
 
 ## Purpose
 
@@ -24,11 +31,14 @@ AI provider.
 | `MonitorSourcesGroupRouterTests` | 2 | 3 | Comms | Routing of configured operational sources to the monitor group |
 | `CommsEventFormatterTests` | 2 | 2 | Comms | The plain and timestamped direct-send formats |
 | `InMemoryPollTrackerTests` | 2 | 2 | Messaging | Poll vote summaries and TTL expiry |
-| `AgentCommsResponderTests` | 8 | 13 | Agent Runtime | Streamed live progress, attachments, diagnostics, run outcomes, failed-tool footer, failure notices for unreachable, HTTP-error, timed-out, response-less and malformed runs, empty answers, caller cancellation, diagnostic details requested only when an enricher needs them, remote overrides and local bypass |
+| `AgentCommsResponderTests` | 12 | 19 | Agent Runtime | Streamed progress, attachments, outcomes, tool failures, runtime failure notices, empty answers, cancellation, diagnostic opt-in, remote overrides, local bypass, unknown commands, plain-text admission and instruction disclosure/splitting |
 | `CommsDebugNotifierTests` | 3 | 9 | Comms | Monitor diagnostics disclose prompts, tool arguments and event text only when `MonitorContentEnabled` is set; the reply footer shows only duration and tools unless token counts, session size or session counts are enabled |
 | `MessagingMcpQueryServiceTests` | 1 | 1 | Comms | Poll tools activated per call by the MCP server use the configured group |
 | `TrackedOperationServiceTests` | 2 | 2 | Comms | Tracked-operation progress, completion and timeout messages |
-| **Total** | **60** | **82** | | |
+| **Total** | **64** | **88** | | |
+
+Counts expand the inline-data theories in current source. They are not a claim that the suite was
+executed during documentation maintenance.
 
 ## Trait Categories
 
@@ -40,7 +50,7 @@ AI provider.
 
 ## Skipped Tests
 
-None.
+No declared skips or credential-dependent skip conditions.
 
 ## Layout
 
@@ -74,3 +84,5 @@ Tests/
 ```powershell
 dotnet test --project src/CasCap.Comms.Tests/CasCap.Comms.Tests.csproj
 ```
+
+Run from the repository root when you intend to execute the suite.

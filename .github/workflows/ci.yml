@@ -130,9 +130,7 @@ jobs:
       #with has-image true helm lint receives '--set image.tag=x' as one argv, and with it false the
       #empty array expands to a stray argument that swallows the next flag. helm lint still runs.
       chart-testing-cli-command: skip
-      #Chart publication is intentionally separate from the application/NuGet release. The chart
-      #package currently has independent GHCR ownership; this job still validates and packages it.
-      push-chart: false
+      push-chart: true
 
   release:
     needs: [lint, versioning, build, helm, package, image, chart]

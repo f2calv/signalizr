@@ -30,6 +30,10 @@ public sealed class InboundSubscriberRegistry(
         await _registrationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            var options = config.Value;
+            if (!options.SubscriberGroups.TryGetValue(subscriberName, out var groups) || groups.Length == 0)
+                throw new SubscriberNotPermittedException(subscriberName);
+
             if (_subscriptions.ContainsKey(subscriberName))
                 throw new SubscriberAlreadyConnectedException(subscriberName);
 
@@ -61,9 +65,9 @@ public sealed class InboundSubscriberRegistry(
 
             await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-            var options = config.Value;
             var subscription = new InboundSubscription(
                 subscriberName,
+                groups,
                 options.ReplayBatchSize,
                 options.MaxOutstanding,
                 cursor.LastAcknowledgedMessageId,
@@ -79,8 +83,11 @@ public sealed class InboundSubscriberRegistry(
 
             subscription.NotifyMessageAvailable();
             metrics.RecordSubscriberConnected();
-            logger.LogInformation("{ClassName} subscriber connected, {Count} total",
-                nameof(InboundSubscriberRegistry), _subscriptions.Count);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("{ClassName} subscriber connected, {Count} total",
+                    nameof(InboundSubscriberRegistry), _subscriptions.Count);
+            }
             operatorNotifier.Notify($"{subscriberName} connected ({_subscriptions.Count} subscriber(s))");
 
             return subscription;
@@ -102,8 +109,11 @@ public sealed class InboundSubscriberRegistry(
         subscription.Complete(error);
         metrics.RecordSubscriberDisconnected();
 
-        logger.LogInformation("{ClassName} subscriber disconnected, {Count} remaining",
-            nameof(InboundSubscriberRegistry), _subscriptions.Count);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("{ClassName} subscriber disconnected, {Count} remaining",
+                nameof(InboundSubscriberRegistry), _subscriptions.Count);
+        }
         // The exception type only: its message can carry details from the transport.
         operatorNotifier.Notify($"{subscription.Name} disconnected ({_subscriptions.Count} remaining)"
             + (error is null ? string.Empty : $", {error.GetType().Name}"));

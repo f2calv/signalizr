@@ -26,6 +26,10 @@ public static class FeatureNames
     /// <summary>Model Context Protocol surface.</summary>
     public const string Mcp = nameof(Mcp);
 
+    /// <summary>Agent responder for one chat group, subscribing to a gateway like any other client.</summary>
+    /// <remarks>Matches <c>CommsFeatureNames.Comms</c> in <c>CasCap.Comms</c>.</remarks>
+    public const string Comms = nameof(Comms);
+
     /// <summary>
     /// Case-insensitive set of all valid feature names derived from the <c>const string</c> fields
     /// on this class, so a new feature needs no separate registration.

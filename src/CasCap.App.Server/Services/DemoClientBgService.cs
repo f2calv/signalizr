@@ -19,7 +19,8 @@ public sealed class DemoClientBgService(
     /// <inheritdoc/>
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("{ClassName} started", nameof(DemoClientBgService));
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{ClassName} started", nameof(DemoClientBgService));
 
         var delay = TimeSpan.FromSeconds(5);
         while (!cancellationToken.IsCancellationRequested)
@@ -40,14 +41,16 @@ public sealed class DemoClientBgService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "{ClassName} could not reach the gateway, retrying in {Delay}",
-                    nameof(DemoClientBgService), delay);
+                if (logger.IsEnabled(LogLevel.Warning))
+                    logger.LogWarning(ex, "{ClassName} could not reach the gateway, retrying in {Delay}",
+                        nameof(DemoClientBgService), delay);
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 60));
             }
         }
 
-        logger.LogInformation("{ClassName} stopped", nameof(DemoClientBgService));
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{ClassName} stopped", nameof(DemoClientBgService));
     }
 
     /// <summary>Reports the gateway's groups, which is diagnostic rather than required.</summary>
@@ -60,13 +63,15 @@ public sealed class DemoClientBgService(
         try
         {
             var groups = await client.GetGroupsAsync(cancellationToken).ConfigureAwait(false);
-            logger.LogInformation("{ClassName} gateway has {Count} configured Signal group(s)",
-                nameof(DemoClientBgService), groups.Count);
+            if (logger.IsEnabled(LogLevel.Information))
+                logger.LogInformation("{ClassName} gateway has {Count} configured Signal group(s)",
+                    nameof(DemoClientBgService), groups.Count);
         }
         catch (SignalizrRoleNotEnabledException)
         {
-            logger.LogInformation("{ClassName} this gateway serves no send surface, subscribing only",
-                nameof(DemoClientBgService));
+            if (logger.IsEnabled(LogLevel.Information))
+                logger.LogInformation("{ClassName} this gateway serves no send surface, subscribing only",
+                    nameof(DemoClientBgService));
         }
     }
 
@@ -74,10 +79,12 @@ public sealed class DemoClientBgService(
     {
         await foreach (var message in client.SubscribeAsync(cancellationToken).ConfigureAwait(false))
         {
-            logger.LogInformation("{ClassName} received {Length} character(s)",
-                nameof(DemoClientBgService), message.Message?.Length ?? 0);
+            if (logger.IsEnabled(LogLevel.Information))
+                logger.LogInformation("{ClassName} received {Length} character(s)",
+                    nameof(DemoClientBgService), message.Message?.Length ?? 0);
         }
 
-        logger.LogInformation("{ClassName} subscription ended, resubscribing", nameof(DemoClientBgService));
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{ClassName} subscription ended, resubscribing", nameof(DemoClientBgService));
     }
 }

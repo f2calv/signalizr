@@ -1,12 +1,20 @@
-using CasCap.Constants;
-using CasCap.Models;
-using Xunit;
-
 namespace CasCap.Tests;
 
 /// <summary>Covers the feature-name validation that gates which role a container instance runs.</summary>
-public class FeatureConfigTests
+public sealed class FeatureConfigTests
 {
+    [Fact]
+    public void Bind_MissingSection_ReturnsNull()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var config = configuration
+            .GetSection(FeatureConfig.ConfigurationSectionName)
+            .Get<FeatureConfig>();
+
+        Assert.Null(config);
+    }
+
     [Theory]
     [InlineData("Gateway", 1)]
     [InlineData("Gateway,Receiver", 2)]
@@ -50,6 +58,22 @@ public class FeatureConfigTests
         Assert.Throws<InvalidOperationException>(config.GetEnabledFeatures);
     }
 
+    [Fact]
+    public void GetEnabledFeatures_AcceptsCommsAlone() =>
+        Assert.Equal([FeatureNames.Comms], new FeatureConfig { EnabledFeatures = "comms" }.GetEnabledFeatures(), StringComparer.OrdinalIgnoreCase);
+
+    [Theory]
+    [InlineData("Comms,Gateway")]
+    [InlineData("Comms,Receiver")]
+    [InlineData("Comms,DemoClient")]
+    public void GetEnabledFeatures_RejectsCommsWithAnotherRole(string value)
+    {
+        var config = new FeatureConfig { EnabledFeatures = value };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.GetEnabledFeatures);
+        Assert.Contains("Comms", exception.Message);
+    }
+
     [Theory]
     [InlineData("Mcp")]
     [InlineData("Gateway,Mcp")]
@@ -68,7 +92,7 @@ public class FeatureConfigTests
     public void ValidNames_ContainsEveryDeclaredFeature()
     {
         Assert.Equal(
-            [FeatureNames.DbMigrator, FeatureNames.DemoClient, FeatureNames.Gateway, FeatureNames.Mcp, FeatureNames.Receiver],
+            [FeatureNames.Comms, FeatureNames.DbMigrator, FeatureNames.DemoClient, FeatureNames.Gateway, FeatureNames.Mcp, FeatureNames.Receiver],
             FeatureNames.ValidNames.OrderBy(n => n, StringComparer.Ordinal));
     }
 }

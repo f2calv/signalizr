@@ -23,7 +23,8 @@ public sealed class DispatcherBgService(
     /// <inheritdoc/>
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("{ClassName} dispatching inbound messages", nameof(DispatcherBgService));
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{ClassName} dispatching inbound messages", nameof(DispatcherBgService));
 
         await foreach (var message in queue.DequeueAllAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -42,7 +43,8 @@ public sealed class DispatcherBgService(
             subscribers.NotifyMessageAvailable();
         }
 
-        logger.LogInformation("{ClassName} stopped", nameof(DispatcherBgService));
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("{ClassName} stopped", nameof(DispatcherBgService));
     }
 
     /// <summary>Maps an upstream message onto a delivery, resolving the group to a group name.</summary>

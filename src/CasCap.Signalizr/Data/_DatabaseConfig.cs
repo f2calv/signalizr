@@ -18,6 +18,13 @@ public sealed record DatabaseConfig : IAppConfig, IValidatableObject
     /// </remarks>
     public string? ConnectionString { get; init; }
 
+    /// <summary>
+    /// PostgreSQL database that replaces the one named in <see cref="ConnectionString"/>, so applications
+    /// sharing one server connection string each use their own database.
+    /// </summary>
+    /// <remarks>Defaults to <see langword="null"/>, which keeps the connection string's database.</remarks>
+    public string? DatabaseName { get; init; }
+
     /// <summary>Whether pending EF Core migrations are applied during startup.</summary>
     /// <remarks>Defaults to <see langword="true"/> for direct, single-process development runs.</remarks>
     public bool MigrateOnStartup { get; init; } = true;

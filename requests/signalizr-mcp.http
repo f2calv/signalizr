@@ -2,11 +2,14 @@
 ### Discovery, query and prompt POSTs are read-only. The text-send example sends a real message.
 
 @baseUrl = {{$dotenv SIGNALIZR_BASE_URL}}
+@mcpUsername = {{$dotenv SIGNALIZR_MCP_USERNAME}}
+@mcpPassword = {{$dotenv SIGNALIZR_MCP_PASSWORD}}
 @protocolVersion = 2025-11-25
 
 ### Initialize
 # @name initialize
 POST {{baseUrl}}/mcp HTTP/1.1
+Authorization: Basic {{mcpUsername}}:{{mcpPassword}}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 
@@ -14,6 +17,7 @@ Accept: application/json, text/event-stream
 
 ### Initialized notification
 POST {{baseUrl}}/mcp HTTP/1.1
+Authorization: Basic {{mcpUsername}}:{{mcpPassword}}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: {{protocolVersion}}
@@ -23,6 +27,7 @@ MCP-Protocol-Version: {{protocolVersion}}
 ### Discover tools
 # @name listTools
 POST {{baseUrl}}/mcp HTTP/1.1
+Authorization: Basic {{mcpUsername}}:{{mcpPassword}}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: {{protocolVersion}}
@@ -31,6 +36,7 @@ MCP-Protocol-Version: {{protocolVersion}}
 
 ### Count live gRPC application clients
 POST {{baseUrl}}/mcp HTTP/1.1
+Authorization: Basic {{mcpUsername}}:{{mcpPassword}}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: {{protocolVersion}}
@@ -39,6 +45,7 @@ MCP-Protocol-Version: {{protocolVersion}}
 
 ### List resolved group names
 POST {{baseUrl}}/mcp HTTP/1.1
+Authorization: Basic {{mcpUsername}}:{{mcpPassword}}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: {{protocolVersion}}
@@ -47,6 +54,7 @@ MCP-Protocol-Version: {{protocolVersion}}
 
 ### Read message history (separate opt-in required; may expose private text)
 POST {{baseUrl}}/mcp HTTP/1.1
+Authorization: Basic {{mcpUsername}}:{{mcpPassword}}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: {{protocolVersion}}
@@ -55,6 +63,7 @@ MCP-Protocol-Version: {{protocolVersion}}
 
 ### Expected tool error: count outside the allowed range (history must be enabled)
 POST {{baseUrl}}/mcp HTTP/1.1
+Authorization: Basic {{mcpUsername}}:{{mcpPassword}}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: {{protocolVersion}}
@@ -63,6 +72,7 @@ MCP-Protocol-Version: {{protocolVersion}}
 
 ### Discover reusable operator prompts
 POST {{baseUrl}}/mcp HTTP/1.1
+Authorization: Basic {{mcpUsername}}:{{mcpPassword}}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: {{protocolVersion}}
@@ -71,6 +81,7 @@ MCP-Protocol-Version: {{protocolVersion}}
 
 ### Get status-summary guidance (returns text; does not execute tools)
 POST {{baseUrl}}/mcp HTTP/1.1
+Authorization: Basic {{mcpUsername}}:{{mcpPassword}}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: {{protocolVersion}}
@@ -80,6 +91,7 @@ MCP-Protocol-Version: {{protocolVersion}}
 ### Send text (separate sending opt-in required)
 # @note Sends a real Signal message to the named group. Confirm destination/content; do not retry automatically.
 POST {{baseUrl}}/mcp HTTP/1.1
+Authorization: Basic {{mcpUsername}}:{{mcpPassword}}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: {{protocolVersion}}

@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CasCap.Comms.AI\CasCap.Comms.AI.csproj" />
     <ProjectReference Include="..\CasCap.Signalizr\CasCap.Signalizr.csproj" />
     <ProjectReference Include="..\CasCap.Signalizr.Client\CasCap.Signalizr.Client.csproj" />
   </ItemGroup>
@@ -26,18 +27,16 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)'=='Release'">
-    <PackageReference Include="CasCap.Common.AspNetCore" />
+    <PackageReference Include="CasCap.Api.Azure.Auth" />
+    <PackageReference Include="CasCap.Common.Hosting.AspNetCore" />
     <PackageReference Include="CasCap.Common.Configuration" />
-    <PackageReference Include="CasCap.Common.Logging.Serilog" />
-    <PackageReference Include="CasCap.Common.OpenTelemetry" />
     <PackageReference Include="CasCap.Common.Services" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)'!='Release'">
-    <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.AspNetCore\CasCap.Common.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\CasCap.Api.Azure\src\CasCap.Api.Azure.Auth\CasCap.Api.Azure.Auth.csproj" />
+    <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Hosting.AspNetCore\CasCap.Common.Hosting.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Configuration\CasCap.Common.Configuration.csproj" />
-    <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Logging.Serilog\CasCap.Common.Logging.Serilog.csproj" />
-    <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.OpenTelemetry\CasCap.Common.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\..\CasCap.Common\src\CasCap.Common.Services\CasCap.Common.Services.csproj" />
   </ItemGroup>
 

@@ -1,5 +1,5 @@
-using CasCap.Models.Dtos;
 using CasCap.Models;
+using CasCap.Models.Dtos;
 using CasCap.Services;
 using Microsoft.Extensions.Configuration;
 using Xunit;

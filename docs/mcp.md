@@ -8,13 +8,18 @@ send text through its existing message gateway without opening a second Signal r
 MCP requires `Gateway` and `Receiver` in the same process. The gateway initializes the group
 resolver; the receiver owns the live subscriber registry and database. Invalid role combinations
 fail at startup rather than reporting a misleading zero. Enabling MCP does not create another
-Signal connection.
+Signal connection. It also requires `CasCap:ApiAuthConfig`: startup fails when the username or
+password is missing.
 
 ```json
 {
   "CasCap": {
     "FeatureConfig": {
       "EnabledFeatures": "Gateway,Receiver,Mcp"
+    },
+    "ApiAuthConfig": {
+      "Username": "example-user",
+      "Password": "example-password"
     },
     "McpConfig": {
       "MessageHistoryEnabled": false,
@@ -24,7 +29,8 @@ Signal connection.
 }
 ```
 
-Equivalent Helm overrides, merged into your existing values:
+Equivalent Helm overrides, merged into your existing values. Supply the credential from a secret
+store rather than a values file:
 
 ```yaml
 signalizr:
@@ -41,16 +47,15 @@ each optional tool is absent and uncallable unless its own switch is enabled.
 
 ## Access boundary
 
-The initial endpoint is unauthenticated and intended only for authorized operators on a trusted
-cluster network or a localhost-only port-forward. Kubernetes access controls authorize the
-port-forward, not requests reaching the service from other cluster workloads.
+`/mcp` requires HTTP Basic authentication against `CasCap:ApiAuthConfig`; requests without valid
+credentials receive 401 before any tool runs. The REST API, gRPC stream and health endpoints are not
+affected. Basic credentials travel in clear text over plain HTTP, so use the endpoint only on a
+trusted cluster network, through a localhost-only port-forward or behind an HTTPS ingress.
 
-Do not expose `/mcp` through a public ingress. If an existing ingress routes every path to
-Signalizr, restrict it before enabling MCP. Use network policy to restrict in-cluster callers.
-External access needs HTTPS, MCP-compatible authentication and authorization before deployment.
-Tool annotations and feature switches are not access control. When sending is enabled, every
-caller that can reach this unauthenticated endpoint can invoke it. Do not enable sending on a
-shared network unless that access is acceptable and appropriately restricted.
+Authentication identifies a trusted caller; it does not limit which tools that caller may invoke.
+Tool annotations and feature switches are not access control either. Restrict which in-cluster
+workloads can reach the gateway with network policy, and do not enable sending unless every
+credential holder may send text to the configured groups.
 
 Requests with an `Origin` header are rejected with 403: this surface supports native editor clients,
 not browsers. CORS is not enabled. This reduces browser-origin attacks but does not authenticate
@@ -69,19 +74,24 @@ The default container port is 8080, not the gRPC port 5001. If `GrpcHostConfig:H
 overridden, forward that port instead. Keep the forwarding terminal open; restart the forward after
 the target pod rolls.
 
-Add this definition to your VS Code user MCP configuration:
+Add this definition to your VS Code user MCP configuration, replacing the placeholder with the
+Base64 encoding of `username:password`:
 
 ```json
 {
   "servers": {
     "signalizr": {
       "type": "http",
-      "url": "http://127.0.0.1:18080/mcp"
+      "url": "http://127.0.0.1:18080/mcp",
+      "headers": {
+        "Authorization": "Basic <base64-credentials>"
+      }
     }
   }
 }
 ```
 
+Keep the credential in user configuration, never in a workspace `mcp.json` that could be committed.
 Use a literal loopback URL here: Agent Host does not forward definitions requiring interactive
 `${input:...}` variables. Keep one definition rather than duplicate workspace and user entries.
 In VS Code, run **MCP: List Servers**, select **signalizr**, start
@@ -201,8 +211,10 @@ handshake and the tools without requiring a model. Modern MCP clients can use th
 negotiation path; the SDK owns protocol negotiation, not handwritten JSON-RPC routing.
 
 The credential-free `SignalizrMcpTests` exercise the real HTTP transport, live registry and local
-SQLite query translation. They cover feature gates, tool metadata, output shape, connect/disconnect
-counts, group isolation, invalid bounds, truncation and cancellation. Prompt coverage checks
+SQLite query translation with synthetic Basic credentials. They cover authentication (401 for
+missing or wrong credentials, startup failure without `ApiAuthConfig`), feature gates, tool
+metadata, output shape, connect/disconnect counts, group isolation, invalid bounds, truncation and
+cancellation. Prompt coverage checks
 discovery and retrieval with history enabled and disabled. Send coverage uses a synthetic gateway
 to check independent feature gates, annotations, bounds, exact group names, error redaction,
 cancellation and a single gateway invocation without sending real messages.
@@ -225,5 +237,5 @@ services into the transport layer. [GroupsController](../src/CasCap.App.Server/C
 owns `/api/v1/groups`; [IGroupResolver](../src/CasCap.Signalizr/Abstractions/IGroupResolver.cs)
 and the subscriber registry remain shared application components.
 
-Reactions, poll actions, durable send deduplication and remote authentication remain outside this
+Reactions, poll actions and durable send deduplication remain outside this
 increment of [#26](https://github.com/f2calv/signalizr/issues/26). Consumer-owned poll prompts remain unchanged.

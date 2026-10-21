@@ -41,6 +41,10 @@ public sealed record FeatureConfig
             throw new InvalidOperationException(
                 "The Mcp role requires Gateway and Receiver in the same process for resolved groups and live subscriber counts.");
 
+        if (features.Contains(FeatureNames.Comms) && features.Count > 1)
+            throw new InvalidOperationException(
+                "The Comms role runs alone: it subscribes to a gateway as a client and must not share a process with another role.");
+
         return features;
     }
 }

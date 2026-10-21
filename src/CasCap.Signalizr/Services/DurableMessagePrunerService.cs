@@ -60,7 +60,7 @@ public sealed class DurableMessagePrunerService(
         }
 
         metrics.RecordPruned(deleted);
-        if (deleted > 0)
+        if (deleted > 0 && logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("{ClassName} pruned {MessageCount} acknowledged message(s)",
                 nameof(DurableMessagePrunerService), deleted);

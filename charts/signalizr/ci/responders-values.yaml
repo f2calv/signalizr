@@ -1,0 +1,12 @@
+# Both Comms responders enabled alongside the default install.
+signalizr:
+  envVars:
+    CasCap__GroupConfig__GroupNames__0: My Test Group Name
+signalizrResponder:
+  replicaCount: 1
+  envVars:
+    CasCap__CommsConfig__GroupName: My Test Group Name
+agentizrResponder:
+  replicaCount: 1
+  envVars:
+    CasCap__CommsConfig__GroupName: My Test Group Name

@@ -15,7 +15,8 @@ public sealed class GroupNameMigrationTests
     public async Task GroupNameMigration_PreservesRowsAndSynchronizesWriters()
     {
         const string PreviousMigration = "20260926033021_AddSelfFlagAndPollVotes";
-        const string CurrentMigration = "20260927020916_AddGroupNameToInboundMessages";
+        const string ExpandMigration = "20260927020916_AddGroupNameToInboundMessages";
+        const string ContractMigration = "20261010031316_CompleteInboundMessageGroupName";
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync(cancellationToken);
@@ -29,7 +30,7 @@ public sealed class GroupNameMigrationTests
             VALUES (1, 'My Test Group Name', 'retained text', 123, 456);
             """, cancellationToken);
 
-        await migrator.MigrateAsync(CurrentMigration, cancellationToken);
+        await migrator.MigrateAsync(ExpandMigration, cancellationToken);
         var retained = await db.InboundMessages.AsNoTracking().SingleAsync(cancellationToken);
         Assert.Equal("My Test Group Name", retained.GroupName);
         Assert.Equal("retained text", retained.Message);
@@ -52,13 +53,18 @@ public sealed class GroupNameMigrationTests
         await db.Database.ExecuteSqlRawAsync("UPDATE inbound_messages SET channel = NULL WHERE id = 2", cancellationToken);
         Assert.Equal(DBNull.Value, await ScalarAsync(connection, "SELECT group_name FROM inbound_messages WHERE id = 2"));
 
-        await migrator.MigrateAsync(CurrentMigration, cancellationToken);
+        await migrator.MigrateAsync(ContractMigration, cancellationToken);
         Assert.Equal(3, await db.InboundMessages.CountAsync(cancellationToken));
+        Assert.Equal(0L, await ScalarAsync(connection,
+            "SELECT COUNT(*) FROM pragma_table_info('inbound_messages') WHERE name = 'channel'"));
+
+        await migrator.MigrateAsync(ExpandMigration, cancellationToken);
+        Assert.Equal("My Test Group Name", await ScalarAsync(connection, "SELECT channel FROM inbound_messages WHERE id = 1"));
         await migrator.MigrateAsync(PreviousMigration, cancellationToken);
         Assert.Equal("My Test Group Name", await ScalarAsync(connection, "SELECT channel FROM inbound_messages WHERE id = 1"));
         Assert.Equal("retained text", await ScalarAsync(connection, "SELECT message FROM inbound_messages WHERE id = 1"));
         Assert.Equal(3L, await ScalarAsync(connection, "SELECT COUNT(*) FROM inbound_messages"));
-        await migrator.MigrateAsync(CurrentMigration, cancellationToken);
+        await migrator.MigrateAsync(ContractMigration, cancellationToken);
         Assert.Equal(3, await db.InboundMessages.CountAsync(cancellationToken));
     }
 

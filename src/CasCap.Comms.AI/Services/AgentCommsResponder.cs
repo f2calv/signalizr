@@ -1,0 +1,325 @@
+namespace CasCap.Services;
+
+/// <summary>
+/// <see cref="ICommsResponder"/> that answers Signalizr communications through the remote Agent Runtime.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The runtime owns tenant definitions, credentials, overrides, session state, agent construction and tools.
+/// Comms owns message parsing, progress interaction, delivery and operator diagnostics.
+/// </para>
+/// <para>
+/// Handles slash commands through typed runtime control operations, poll votes through <see cref="IPollTracker"/>,
+/// live delegation feedback and the stats footer and monitor-group timeline produced by
+/// <see cref="CommsDebugNotifier"/>.
+/// </para>
+/// </remarks>
+public sealed partial class AgentCommsResponder(
+    ILogger<AgentCommsResponder> logger,
+    IOptions<CommsConfig> commsConfig,
+    CommsAgentProfile profile,
+    IAgentRuntimeClient agentRuntimeClient,
+    ISignalizrClient signalizrClient,
+    IPollTracker pollTracker,
+    CommsDebugNotifier debugNotifier,
+    CommsAgentMetrics metrics,
+    IEnumerable<IAgentRunEnricher> enrichers) : ICommsResponder
+{
+    private const string Hourglass = "\u23F3";
+    private const string TwistedArrows = "\U0001F500";
+
+    private readonly IReadOnlyList<IAgentRunEnricher> _enrichers = [.. enrichers];
+    private IAgentRuntimeClient AgentRuntimeClient => agentRuntimeClient;
+    private CommsAgentProfile Profile => profile;
+
+    /// <inheritdoc/>
+    public bool IsAvailable => true;
+
+    /// <inheritdoc/>
+    public string DefaultPrompt => profile.DefaultPrompt;
+
+    /// <inheritdoc/>
+    public async Task<CommsTurn> CreateStreamTurnAsync(CommsEvent commsEvent, IReadOnlyList<string>? base64Attachments,
+        CancellationToken cancellationToken)
+    {
+        // Copy the raw event to the monitor group, so it can be read alongside the agent's reply.
+        await debugNotifier.SendStreamEventDebugAsync(commsEvent, cancellationToken);
+
+        var prompt = $"[{commsEvent.Source}] {commsEvent.Message}";
+        if (commsEvent.JsonPayload is not null)
+            prompt += $"\n\nJSON: {commsEvent.JsonPayload}";
+        return new CommsTurn(prompt, ExtraBase64Attachments: base64Attachments);
+    }
+
+    /// <inheritdoc/>
+    public Task<CommsTurn?> HandlePollVoteAsync(string voter, SignalizrPollVote pollVote, CancellationToken cancellationToken)
+    {
+        var pollId = pollVote.PollId;
+        var selectedIndices = pollVote.OptionIndexes.ToArray();
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            var selectedIndicesText = string.Join(", ", selectedIndices);
+            LogPollVoteReceived(logger, nameof(AgentCommsResponder), pollId, selectedIndicesText);
+        }
+
+        // Fetch the poll first so we have its metadata even if it expires between RecordVote and
+        // building the prompt.
+        var poll = pollTracker.GetPoll(pollId);
+        if (!pollTracker.RecordVote(pollId, voter, selectedIndices) || poll is null)
+        {
+            LogPollNotTracked(logger, nameof(AgentCommsResponder), pollId);
+            return Task.FromResult<CommsTurn?>(null);
+        }
+
+        // Build a descriptive prompt so the agent knows the poll result. The voter's Signal
+        // identifier is personal data and stays out of the prompt.
+        const string voterName = "A group member";
+        var selectedLabels = selectedIndices
+            .Where(i => i >= 0 && i < poll.Answers.Length)
+            .Select(i => poll.Answers[i]);
+
+        var prompt = $"[POLL VOTE] {voterName} chose \"{string.Join(", ", selectedLabels)}\" "
+            + $"on poll \"{poll.Question}\" (ID: {poll.PollId}). "
+            + "INSTRUCTIONS: 1) Call close_poll with the ID above. 2) Act on the chosen option. 3) Do NOT present more choices unless they are in a new poll.";
+        return Task.FromResult<CommsTurn?>(new CommsTurn(prompt));
+    }
+
+    /// <inheritdoc/>
+    public async Task<CommsCommandOutcome?> TryHandleCommandAsync(string text, CancellationToken cancellationToken)
+    {
+        if (!CommsAgentCommandParser.TryParse(text, out var command, out var argument))
+        {
+            if (!CommsAgentCommandParser.IsCommandLike(text))
+                return null;
+
+            // Slash text never reaches the model; an unrecognised command answers with help instead.
+            LogUnknownSlashCommand(logger, nameof(AgentCommsResponder));
+            return new CommsCommandOutcome(CommsAgentCommandParser.SplitReply(
+                "Unknown command. Available commands:" + Environment.NewLine + CommsAgentCommandParser.BuildHelpText()));
+        }
+
+        LogSlashCommand(logger, nameof(AgentCommsResponder), command);
+
+        if (command is CommsAgentCommand.SessionBypass && !string.IsNullOrWhiteSpace(argument))
+            return new CommsCommandOutcome([], new CommsTurn(argument, BypassSession: true));
+
+        var reply = await HandleCommandAsync(command, argument, cancellationToken);
+        return new CommsCommandOutcome(CommsAgentCommandParser.SplitReply(reply));
+    }
+
+    /// <inheritdoc/>
+    public async Task<CommsReply?> RespondAsync(CommsTurn turn, CancellationToken cancellationToken)
+    {
+        var (result, debugSteps, failure) = await RunAgentAsync(turn, cancellationToken);
+        if (failure is { } failed)
+        {
+            metrics.Record(failed.Outcome);
+            return new CommsReply(failed.Notice, Failed: true);
+        }
+
+        if (result is null || string.IsNullOrWhiteSpace(result.OutputText))
+        {
+            // An empty answer is the agent's choice, for example to stay quiet about a stream event.
+            metrics.Record(CommsAgentRunOutcome.EmptyOutput);
+            return null;
+        }
+
+        var failedTools = result.ToolCalls
+            .Concat(debugSteps.SelectMany(step => step.Result?.ToolCalls ?? []))
+            .Where(toolCall => toolCall.Failed)
+            .Select(toolCall => toolCall.Name)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        metrics.Record(failedTools.Length > 0 ? CommsAgentRunOutcome.CompletedWithToolErrors : CommsAgentRunOutcome.Succeeded);
+
+        var footer = await debugNotifier.FormatStatsFooterAsync(result, failedTools, cancellationToken);
+
+        // Convert any image attachments from tool results into Signal base64 attachments.
+        var attachments = result.Attachments.Count > 0
+            ? result.Attachments
+                .Select(a => $"data:{a.MimeType};filename={a.FileName ?? "photo"};base64,{a.Base64Content}")
+                .ToArray()
+            : null;
+
+        return new CommsReply(result.OutputText, footer, attachments, async ct =>
+        {
+            // Send the detailed pipeline timeline to the monitor group.
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                var stepsWithResult = debugSteps.Count(s => s.Result is not null);
+                var stepsWithUsage = debugSteps.Count(s => s.Result?.Usage is not null);
+                LogDebugStats(logger, nameof(AgentCommsResponder),
+                    result.Usage is not null,
+                    result.Usage?.InputTokenCount,
+                    result.Usage?.OutputTokenCount,
+                    debugSteps.Count,
+                    stepsWithResult,
+                    stepsWithUsage);
+            }
+            await debugNotifier.SendDebugStatsAsync(turn.Prompt, result, debugSteps, turn.Timestamp, ct);
+        });
+    }
+
+    private async Task<(CommsAgentRunResult? Result, List<CommsDebugStep> DebugSteps, (CommsAgentRunOutcome Outcome, string Notice)? Failure)> RunAgentAsync(
+        CommsTurn turn, CancellationToken cancellationToken)
+    {
+        try
+        {
+            LogAgentInferenceStarting(logger, nameof(AgentCommsResponder), turn.Prompt.Length,
+                turn.BinaryContent is not null, profile.AgentName);
+
+            var debugSteps = new List<CommsDebugStep>();
+            var pipelineSw = Stopwatch.StartNew();
+            debugSteps.Add(new CommsDebugStep(
+                $"\U0001F680 {profile.AgentName}",
+                null,
+                TimeSpan.Zero));
+
+            var enrichmentState = new object?[_enrichers.Count];
+            for (var i = 0; i < _enrichers.Count; i++)
+                enrichmentState[i] = await _enrichers[i].BeforeRunAsync(cancellationToken);
+
+            RunAgentResponse? response = null;
+            await foreach (var item in agentRuntimeClient.StreamAgentAsync(
+                profile.AgentName,
+                new RunAgentRequest
+                {
+                    SessionId = profile.SessionId,
+                    Input = turn.Prompt,
+                    BinaryContent = turn.BinaryContent,
+                    MimeType = turn.MimeType,
+                    BypassSession = turn.BypassSession,
+                    IncludeDiagnosticDetails = commsConfig.Value is { MonitorGroupName.Length: > 0, MonitorContentEnabled: true }
+                        || _enrichers.Any(enricher => enricher.RequiresDiagnosticDetails),
+                },
+                cancellationToken))
+            {
+                if (item.Event is { } executionEvent)
+                    await HandleExecutionEventAsync(executionEvent, turn, debugSteps, pipelineSw, cancellationToken);
+                if (item.Response is not null)
+                    response = item.Response;
+            }
+
+            if (response is null)
+            {
+                LogAgentInferenceFailed(logger, null, nameof(AgentCommsResponder), CommsAgentRunOutcome.NoResponse);
+                return (null, debugSteps, (CommsAgentRunOutcome.NoResponse, FailureNotice("the run ended without a response")));
+            }
+
+            var result = CommsAgentRunResult.FromResponse(response);
+            for (var i = 0; i < _enrichers.Count; i++)
+                await _enrichers[i].AfterRunAsync(result, enrichmentState[i], cancellationToken);
+
+            LogAgentCompleted(logger, nameof(AgentCommsResponder), result.Elapsed,
+                result.Session is { Exists: true } ? "present" : "missing");
+            await SetReactionAsync(Hourglass, turn, cancellationToken);
+
+            pipelineSw.Stop();
+            debugSteps.Add(new CommsDebugStep(
+                $"\U0001F3C1 {profile.AgentName}",
+                result.ModelName,
+                pipelineSw.Elapsed,
+                result));
+            return (result, debugSteps, null);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            var failure = ClassifyFailure(ex);
+            LogAgentInferenceFailed(logger, ex, nameof(AgentCommsResponder), failure.Outcome);
+            return (null, [], failure);
+        }
+    }
+
+    private static (CommsAgentRunOutcome Outcome, string Notice) ClassifyFailure(Exception ex) => ex switch
+    {
+        HttpRequestException { StatusCode: { } status } =>
+            (CommsAgentRunOutcome.HttpError, FailureNotice($"the agent runtime returned HTTP {(int)status}")),
+        HttpRequestException => (CommsAgentRunOutcome.Unreachable, FailureNotice("the agent runtime could not be reached")),
+        // The caller's token is not cancelled here, so this is the HTTP client's own timeout.
+        OperationCanceledException => (CommsAgentRunOutcome.Timeout, FailureNotice("the agent runtime timed out")),
+        _ => (CommsAgentRunOutcome.Error, FailureNotice("an unexpected error occurred")),
+    };
+
+    private static string FailureNotice(string reason) => $"\u26A0\uFE0F Assistant unavailable: {reason}.";
+
+    private async Task HandleExecutionEventAsync(
+        RunAgentEvent executionEvent,
+        CommsTurn turn,
+        List<CommsDebugStep> debugSteps,
+        Stopwatch pipelineStopwatch,
+        CancellationToken cancellationToken)
+    {
+        if (executionEvent.Type == RunAgentEventTypes.DelegationStarted)
+        {
+            var depth = executionEvent.Depth ?? 1;
+            var depthLabel = depth switch { 1 => "sub-agent", 2 => "sub-sub-agent", _ => $"depth-{depth} agent" };
+            var agentName = executionEvent.AgentName ?? "agent";
+            var modelName = executionEvent.ModelName ?? "unknown model";
+            LogAgentDelegating(logger, nameof(AgentCommsResponder), agentName, depthLabel, modelName);
+            debugSteps.Add(new CommsDebugStep(
+                $"{TwistedArrows} {agentName} ({depthLabel})",
+                modelName,
+                pipelineStopwatch.Elapsed));
+            if (commsConfig.Value.DelegationMessagesEnabled)
+            {
+                await signalizrClient.SendAsync(
+                    commsConfig.Value.GroupName,
+                    $"{TwistedArrows} Consulting {agentName} ({depthLabel}) \u2022 {modelName}",
+                    cancellationToken);
+            }
+            await SetReactionAsync(TwistedArrows, turn, cancellationToken);
+            return;
+        }
+
+        if (executionEvent.Type == RunAgentEventTypes.DelegationCompleted)
+        {
+            debugSteps.Add(new CommsDebugStep(
+                $"\u2705 {executionEvent.AgentName ?? "agent"}",
+                executionEvent.ModelName,
+                pipelineStopwatch.Elapsed,
+                executionEvent.Result is { } result ? MapStepResult(result, executionEvent.ModelName) : null));
+            return;
+        }
+
+        if (executionEvent.Type == RunAgentEventTypes.SessionCompacted)
+        {
+            var input = executionEvent.InputMessageCount ?? 0;
+            var output = executionEvent.OutputMessageCount ?? 0;
+            var toolDropped = executionEvent.ToolMessagesDropped ?? 0;
+            var windowTrimmed = executionEvent.WindowMessagesTrimmed ?? 0;
+            var target = executionEvent.TargetMessageCount ?? 0;
+            LogSessionCompaction(logger, nameof(AgentCommsResponder), input, output, toolDropped, windowTrimmed, target);
+            await debugNotifier.SendCompactionDebugAsync(
+                input,
+                output,
+                toolDropped,
+                windowTrimmed,
+                target,
+                cancellationToken);
+        }
+    }
+
+    private static CommsAgentRunResult MapStepResult(RunAgentStepResult result, string? modelName)
+    {
+        var mapped = new CommsAgentRunResult
+        {
+            OutputText = string.Empty,
+            ModelName = modelName ?? string.Empty,
+            Elapsed = TimeSpan.FromMilliseconds(result.ElapsedMilliseconds),
+            Usage = result.Usage,
+            ToolCalls = result.ToolCalls,
+        };
+        foreach (var (key, value) in result.AdditionalProperties)
+            mapped.AdditionalProperties[key] = value.ValueKind is JsonValueKind.Number && value.TryGetDouble(out var number)
+                ? number
+                : value.ToString();
+        return mapped;
+    }
+
+    /// <summary>Sets a progress reaction on the turn's inbound message, best effort.</summary>
+    private Task SetReactionAsync(string reaction, CommsTurn turn, CancellationToken cancellationToken) =>
+        turn is { Sender: { } sender, Timestamp: { } timestamp }
+            ? signalizrClient.TrySetReactionAsync(commsConfig.Value.GroupName, reaction, timestamp, sender,
+                ex => LogGroupInteractionFailed(logger, ex, nameof(AgentCommsResponder)), cancellationToken)
+            : Task.CompletedTask;
+}

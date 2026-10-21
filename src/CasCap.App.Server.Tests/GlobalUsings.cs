@@ -1,0 +1,15 @@
+global using CasCap.Common.Models;
+global using CasCap.Constants;
+global using CasCap.Diagnostics;
+global using CasCap.Models;
+global using Microsoft.AspNetCore.Hosting;
+global using Microsoft.AspNetCore.Mvc.Controllers;
+global using Microsoft.AspNetCore.Mvc.Testing;
+global using Microsoft.AspNetCore.TestHost;
+global using Microsoft.Extensions.Configuration;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.DependencyInjection.Extensions;
+global using Microsoft.Extensions.Hosting;
+global using Microsoft.Extensions.Options;
+global using System.Net;
+global using Xunit;

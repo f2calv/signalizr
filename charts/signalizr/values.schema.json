@@ -34,6 +34,28 @@
           "minimum": 0
         }
       }
+    },
+    "signalizrResponder": {
+      "description": "Comms responder answering the Signalizr chat group. Single subscriber, so at most one replica.",
+      "type": "object",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "agentizrResponder": {
+      "description": "Comms responder answering the Agentizr chat group. Single subscriber, so at most one replica.",
+      "type": "object",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
     }
   }
 }

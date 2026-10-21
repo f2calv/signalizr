@@ -1,4 +1,5 @@
 using CasCap.Abstractions;
+using CasCap.Common.Abstractions;
 using CasCap.Constants;
 using CasCap.Data;
 using CasCap.Data.Entities;
@@ -15,11 +16,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Xunit;
 
@@ -44,7 +48,7 @@ public sealed class SignalizrMcpTests
     public async Task BrowserOrigin_IsRejected()
     {
         await using var fixture = await Fixture.CreateAsync();
-        using var httpClient = new HttpClient();
+        using var httpClient = fixture.CreateHttpClient();
         httpClient.DefaultRequestHeaders.Add("Origin", "https://example.com");
         httpClient.DefaultRequestHeaders.Add("Accept", "application/json, text/event-stream");
 
@@ -52,6 +56,30 @@ public sealed class SignalizrMcpTests
             new { jsonrpc = "2.0", id = 1, method = "tools/list" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("example-user:wrong-password")]
+    public async Task MissingOrInvalidCredentials_AreUnauthorized(string? credentials)
+    {
+        await using var fixture = await Fixture.CreateAsync(sendingEnabled: true);
+        using var httpClient = new HttpClient();
+        if (credentials is not null)
+            httpClient.DefaultRequestHeaders.Authorization = Fixture.BasicHeader(credentials);
+        httpClient.DefaultRequestHeaders.Add("Accept", "application/json, text/event-stream");
+
+        using var response = await httpClient.PostAsJsonAsync(fixture.Endpoint,
+            new { jsonrpc = "2.0", id = 1, method = "tools/list" }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(0, fixture.Gateway.SendCalls);
+    }
+
+    [Fact]
+    public async Task MissingApiAuthConfig_FailsStartup()
+    {
+        await Assert.ThrowsAsync<OptionsValidationException>(() => Fixture.CreateAsync(credentialsConfigured: false));
     }
 
     [Fact]
@@ -257,7 +285,7 @@ public sealed class SignalizrMcpTests
     public async Task InitializeHandshake_RemainsCompatibleWithEditorClients()
     {
         await using var fixture = await Fixture.CreateAsync();
-        using var httpClient = new HttpClient();
+        using var httpClient = fixture.CreateHttpClient();
         httpClient.DefaultRequestHeaders.Add("Accept", "application/json, text/event-stream");
         using var initialize = await httpClient.PostAsJsonAsync(fixture.Endpoint, new
         {
@@ -293,7 +321,7 @@ public sealed class SignalizrMcpTests
     public async Task Prompt_DiscoveryAndRetrievalProvideMetadataOnlyGuidance(bool historyEnabled)
     {
         await using var fixture = await Fixture.CreateAsync(historyEnabled: historyEnabled);
-        using var httpClient = new HttpClient();
+        using var httpClient = fixture.CreateHttpClient();
         httpClient.DefaultRequestHeaders.Add("Accept", "application/json, text/event-stream");
         httpClient.DefaultRequestHeaders.Add("MCP-Protocol-Version", "2025-11-25");
 
@@ -519,14 +547,16 @@ public sealed class SignalizrMcpTests
         var result = await client.CallToolAsync(name, arguments, cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotEqual(true, result.IsError);
         Assert.NotNull(result.StructuredContent);
-        Assert.Single(result.Content);
-        var text = Assert.IsType<TextContentBlock>(result.Content[0]);
+        var content = Assert.Single(result.Content);
+        var text = Assert.IsType<TextContentBlock>(content);
         Assert.True(JsonElement.DeepEquals(result.StructuredContent.Value, JsonSerializer.Deserialize<JsonElement>(text.Text)));
         return result.StructuredContent.Value;
     }
 
     private sealed class Fixture(WebApplication app, SqliteConnection connection, Dictionary<string, string> groups) : IAsyncDisposable
     {
+        private const string Credentials = "example-user:example-password";
+
         public WebApplication App => app;
 
         public Dictionary<string, string> Groups => groups;
@@ -538,17 +568,25 @@ public sealed class SignalizrMcpTests
         public FakeMcpMessageGateway Gateway => app.Services.GetRequiredService<FakeMcpMessageGateway>();
 
         public static async Task<Fixture> CreateAsync(
-            bool mcpEnabled = true, bool historyEnabled = false, bool sendingEnabled = false)
+            bool mcpEnabled = true, bool historyEnabled = false, bool sendingEnabled = false,
+            bool credentialsConfigured = true)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync(TestContext.Current.CancellationToken);
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Test" });
             builder.Configuration.Sources.Clear();
-            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            var settings = new Dictionary<string, string?>
             {
                 [$"{McpConfig.ConfigurationSectionName}:{nameof(McpConfig.MessageHistoryEnabled)}"] = historyEnabled.ToString(),
                 [$"{McpConfig.ConfigurationSectionName}:{nameof(McpConfig.MessageSendingEnabled)}"] = sendingEnabled.ToString()
-            });
+            };
+            if (credentialsConfigured)
+            {
+                var separator = Credentials.IndexOf(':');
+                settings[$"{ApiAuthConfig.ConfigurationSectionName}:{nameof(ApiAuthConfig.Username)}"] = Credentials[..separator];
+                settings[$"{ApiAuthConfig.ConfigurationSectionName}:{nameof(ApiAuthConfig.Password)}"] = Credentials[(separator + 1)..];
+            }
+            builder.Configuration.AddInMemoryCollection(settings);
             builder.Logging.ClearProviders();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             var groups = new Dictionary<string, string>
@@ -561,7 +599,11 @@ public sealed class SignalizrMcpTests
             builder.Services.AddSingleton<IMessageGateway>(sp => sp.GetRequiredService<FakeMcpMessageGateway>());
             builder.Services.AddSingleton(TimeProvider.System);
             builder.Services.AddSingleton<SignalizrMetrics>();
-            builder.Services.Configure<SubscriberConfig>(_ => { });
+            builder.Services.Configure<SubscriberConfig>(config =>
+            {
+                config.SubscriberGroups["example-client-one"] = ["system"];
+                config.SubscriberGroups["example-client-two"] = ["system"];
+            });
             builder.Services.AddSingleton<IOperatorNotifier, FakeOperatorNotifier>();
             builder.Services.AddDbContextFactory<SignalizrDbContext>(options => options.UseSqlite(connection));
             builder.Services.AddSingleton<IInboundSubscriberRegistry, InboundSubscriberRegistry>();
@@ -573,17 +615,39 @@ public sealed class SignalizrMcpTests
             var app = builder.Build();
             app.MapSignalizrMcp(features);
             var fixture = new Fixture(app, connection, groups);
-            await using (var db = await fixture.Database.CreateDbContextAsync(TestContext.Current.CancellationToken))
-                await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
-            await app.StartAsync(TestContext.Current.CancellationToken);
+            try
+            {
+                await using (var db = await fixture.Database.CreateDbContextAsync(TestContext.Current.CancellationToken))
+                    await db.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
+                await app.StartAsync(TestContext.Current.CancellationToken);
+            }
+            catch
+            {
+                await fixture.DisposeAsync();
+                throw;
+            }
             return fixture;
+        }
+
+        public static AuthenticationHeaderValue BasicHeader(string credentials) =>
+            new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(credentials)));
+
+        public HttpClient CreateHttpClient()
+        {
+            var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization = BasicHeader(Credentials);
+            return httpClient;
         }
 
         public Task<McpClient> ConnectAsync() => McpClient.CreateAsync(
             new HttpClientTransport(new HttpClientTransportOptions
             {
                 Endpoint = Endpoint,
-                TransportMode = HttpTransportMode.StreamableHttp
+                TransportMode = HttpTransportMode.StreamableHttp,
+                AdditionalHeaders = new Dictionary<string, string>
+                {
+                    ["Authorization"] = BasicHeader(Credentials).ToString()
+                }
             }),
             cancellationToken: TestContext.Current.CancellationToken);
 

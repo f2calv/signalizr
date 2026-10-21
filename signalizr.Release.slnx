@@ -9,9 +9,15 @@
   </Folder>
   <Folder Name="/signalizr/">
     <Project Path="src/CasCap.App.Server/CasCap.App.Server.csproj" />
+    <Project Path="src/CasCap.App.Server.Tests/CasCap.App.Server.Tests.csproj" />
     <Project Path="src/CasCap.Signalizr.Client/CasCap.Signalizr.Client.csproj" />
     <Project Path="src/CasCap.Signalizr.Client.Testing/CasCap.Signalizr.Client.Testing.csproj" />
     <Project Path="src/CasCap.Signalizr.Tests/CasCap.Signalizr.Tests.csproj" />
     <Project Path="src/CasCap.Signalizr/CasCap.Signalizr.csproj" />
+  </Folder>
+  <Folder Name="/signalizr/comms/">
+    <Project Path="src/CasCap.Comms.AI/CasCap.Comms.AI.csproj" />
+    <Project Path="src/CasCap.Comms.Tests/CasCap.Comms.Tests.csproj" />
+    <Project Path="src/CasCap.Comms/CasCap.Comms.csproj" />
   </Folder>
 </Solution>

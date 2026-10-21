@@ -15,16 +15,19 @@ public sealed class DatabaseInitializationService(
     /// <inheritdoc/>
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        var config = databaseConfig.Value;
+        var provider = config.Provider;
+
         await using var dbContext = await dbContextFactory
             .CreateDbContextAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (databaseConfig.Value.Provider is DatabaseProvider.InMemory)
+        if (provider is DatabaseProvider.InMemory)
         {
             await dbContext.Database.EnsureCreatedAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        else if (databaseConfig.Value.MigrateOnStartup)
+        else if (config.MigrateOnStartup)
         {
             await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -33,10 +36,13 @@ public sealed class DatabaseInitializationService(
             .LongCountAsync(cancellationToken)
             .ConfigureAwait(false));
 
-        logger.LogInformation(
-            "{ClassName} initialized {Provider} durable-delivery storage",
-            nameof(DatabaseInitializationService),
-            databaseConfig.Value.Provider);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "{ClassName} initialized {Provider} durable-delivery storage",
+                nameof(DatabaseInitializationService),
+                provider);
+        }
     }
 
     /// <inheritdoc/>

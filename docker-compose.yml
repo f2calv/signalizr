@@ -20,7 +20,7 @@ x-signalizr-image: &signalizr-image
 
 services:
   signal-cli-rest-api:
-    image: bbernhard/signal-cli-rest-api:0.100
+    image: bbernhard/signal-cli-rest-api:0.101
     environment:
       MODE: json-rpc
     ports:
@@ -57,6 +57,8 @@ services:
       # Example groups: create Signal groups with these names on the account, or rename them.
       CasCap__GroupConfig__GroupNames__0: CasCap.Signalizr System
       CasCap__GroupConfig__GroupNames__1: CasCap.Signalizr Demo
+      # The demo client receives only the demo group.
+      CasCap__SubscriberConfig__SubscriberGroups__signalizr-demo__0: CasCap.Signalizr Demo
       CasCap__DatabaseConfig__Provider: Sqlite
       CasCap__DatabaseConfig__ConnectionString: Data Source=/var/lib/signalizr/signalizr.db
       CasCap__DatabaseConfig__MigrateOnStartup: "false"

@@ -1,15 +1,24 @@
 dependencies:
+- name: signalizr-dashboards
+  repository: file://../signalizr-dashboards
+  version: 0.1.0
 - name: signalcli
   repository: oci://ghcr.io/f2calv/charts
-  version: 1.0.2
-- name: workload
-  repository: oci://ghcr.io/f2calv/charts
   version: 1.1.0
 - name: workload
   repository: oci://ghcr.io/f2calv/charts
-  version: 1.1.0
+  version: 1.6.0
 - name: workload
   repository: oci://ghcr.io/f2calv/charts
-  version: 1.1.0
-digest: sha256:3bdbb9637ca1bf82347b99ce0bc5904a9878b8b1013b455e2f30f60dd1a5e51e
-generated: "2026-09-27T04:22:36.217068+02:00"
+  version: 1.6.0
+- name: workload
+  repository: oci://ghcr.io/f2calv/charts
+  version: 1.6.0
+- name: workload
+  repository: oci://ghcr.io/f2calv/charts
+  version: 1.6.0
+- name: workload
+  repository: oci://ghcr.io/f2calv/charts
+  version: 1.6.0
+digest: sha256:c1e9abd90ddcd712e7b032120a8e591578f5af66f65273618f3734154f0ef1b1
+generated: "2026-10-21T06:29:57.3617617+02:00"

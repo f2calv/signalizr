@@ -1,5 +1,5 @@
-using CasCap.Exceptions;
 using CasCap.Diagnostics;
+using CasCap.Exceptions;
 using CasCap.Grpc;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
@@ -47,6 +47,11 @@ public sealed class InboundGrpcService(
         catch (SubscriberAlreadyConnectedException ex)
         {
             throw new RpcException(new Status(StatusCode.AlreadyExists, ex.Message));
+        }
+        catch (SubscriberNotPermittedException ex)
+        {
+            operatorNotifier.Notify($"{name} refused: no configured groups");
+            throw new RpcException(new Status(StatusCode.PermissionDenied, ex.Message));
         }
 
         using var ownedSubscription = subscription;
@@ -111,8 +116,9 @@ public sealed class InboundGrpcService(
         {
             // The subscriber's half of the stream ended abnormally. The delivery loop already
             // stops when its budget runs out, so this only needs recording.
-            logger.LogDebug(ex, "{ClassName} acknowledgement stream for {Subscriber} ended",
-                nameof(InboundGrpcService), subscription.Name);
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug(ex, "{ClassName} acknowledgement stream for {Subscriber} ended",
+                    nameof(InboundGrpcService), subscription.Name);
         }
     }
 

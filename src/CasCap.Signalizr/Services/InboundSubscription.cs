@@ -1,4 +1,5 @@
 using CasCap.Data;
+using CasCap.Data.Entities;
 using CasCap.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
@@ -15,13 +16,19 @@ public sealed class InboundSubscription : IDisposable
     private readonly Queue<long> _outstanding = new();
     private readonly Lock _outstandingLock = new();
     private readonly SemaphoreSlim _budget;
+    private readonly SemaphoreSlim _cursorLock = new(1, 1);
     private readonly TimeProvider _timeProvider;
     private readonly SignalizrMetrics _metrics;
+    private readonly string[] _groups;
     private readonly int _replayBatchSize;
     private long _nextMessageId;
+    // Highest id below which every message is delivered or not for this subscriber.
+    private long _scannedThrough;
+    private long _persistedCursor;
 
     internal InboundSubscription(
         string name,
+        string[] groups,
         int replayBatchSize,
         int maxOutstanding,
         long lastAcknowledgedMessageId,
@@ -30,8 +37,11 @@ public sealed class InboundSubscription : IDisposable
         IDbContextFactory<SignalizrDbContext> dbContextFactory)
     {
         Name = name;
+        _groups = groups;
         _replayBatchSize = replayBatchSize;
         _nextMessageId = lastAcknowledgedMessageId;
+        _scannedThrough = lastAcknowledgedMessageId;
+        _persistedCursor = lastAcknowledgedMessageId;
         _timeProvider = timeProvider;
         _metrics = metrics;
         _dbContextFactory = dbContextFactory;
@@ -47,57 +57,122 @@ public sealed class InboundSubscription : IDisposable
     /// <summary>Stable identity used as the durable cursor key.</summary>
     public string Name { get; }
 
-    /// <summary>Reads persisted messages after this subscriber's last acknowledged sequence.</summary>
+    /// <summary>Reads persisted messages for this subscriber's groups after its last acknowledged sequence.</summary>
     public async IAsyncEnumerable<InboundDelivery> ReadAllAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            await using var dbContext = await _dbContextFactory
+            List<InboundMessageEntity> messages;
+            long scanTail;
+            await using (var dbContext = await _dbContextFactory
                 .CreateDbContextAsync(cancellationToken)
-                .ConfigureAwait(false);
-            var messages = await dbContext.InboundMessages
-                .AsNoTracking()
-                .Include(message => message.Attachments)
-                .Where(message => message.Id > _nextMessageId)
-                .OrderBy(message => message.Id)
-                .Take(_replayBatchSize)
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            if (messages.Count == 0)
+                .ConfigureAwait(false))
             {
-                await _notifications.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
-                continue;
+                // Bounding the scan first means every unmatched id up to the tail is known to be skippable.
+                var tail = await dbContext.InboundMessages
+                    .Where(message => message.Id > _nextMessageId)
+                    .MaxAsync(message => (long?)message.Id, cancellationToken)
+                    .ConfigureAwait(false);
+                if (tail is null)
+                {
+                    await _notifications.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                scanTail = tail.Value;
+                messages = await dbContext.InboundMessages
+                    .AsNoTracking()
+                    .Include(message => message.Attachments)
+                    .Where(message => message.Id > _nextMessageId
+                        && message.Id <= scanTail
+                        && message.GroupName != null
+                        && _groups.Contains(message.GroupName))
+                    .OrderBy(message => message.Id)
+                    .Take(_replayBatchSize)
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
             }
 
             foreach (var message in messages)
             {
                 _nextMessageId = message.Id;
-                yield return new InboundDelivery
-                {
-                    DeliveryId = message.Id.ToString(CultureInfo.InvariantCulture),
-                    GroupName = message.GroupName,
-                    Sender = message.Sender,
-                    Message = message.Message,
-                    Timestamp = message.Timestamp,
-                    FromSelf = message.FromSelf,
-                    PollVote = message.PollVoteTimestamp is { } pollTimestamp
-                        ? new InboundPollVote
-                        {
-                            PollTimestamp = pollTimestamp,
-                            OptionIndexes = InboundPollVote.ParseOptionIndexes(message.PollVoteOptionIndexes)
-                        }
-                        : null,
-                    Attachments = [.. message.Attachments.Select(attachment => new InboundAttachment
-                    {
-                        Id = attachment.Id,
-                        ContentType = attachment.ContentType,
-                        Filename = attachment.Filename,
-                        Size = attachment.Content.LongLength
-                    })]
-                };
+                yield return ToDelivery(message);
             }
+
+            // A full batch may leave matching messages below the tail; read them before skipping ahead.
+            if (messages.Count < _replayBatchSize)
+            {
+                _nextMessageId = scanTail;
+                await SkipThroughAsync(scanTail, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private static InboundDelivery ToDelivery(InboundMessageEntity message) => new()
+    {
+        DeliveryId = message.Id.ToString(CultureInfo.InvariantCulture),
+        GroupName = message.GroupName,
+        Sender = message.Sender,
+        Message = message.Message,
+        Timestamp = message.Timestamp,
+        FromSelf = message.FromSelf,
+        PollVote = message.PollVoteTimestamp is { } pollTimestamp
+            ? new InboundPollVote
+            {
+                PollTimestamp = pollTimestamp,
+                OptionIndexes = InboundPollVote.ParseOptionIndexes(message.PollVoteOptionIndexes)
+            }
+            : null,
+        Attachments = [.. message.Attachments.Select(attachment => new InboundAttachment
+        {
+            Id = attachment.Id,
+            ContentType = attachment.ContentType,
+            Filename = attachment.Filename,
+            Size = attachment.Content.LongLength
+        })]
+    };
+
+    /// <summary>Records that nothing up to <paramref name="messageId"/> is still to be delivered.</summary>
+    /// <remarks>
+    /// The cursor moves only when nothing is outstanding; otherwise the acknowledgement that empties
+    /// the outstanding queue moves it, so an undelivered or unacknowledged message is never passed.
+    /// </remarks>
+    private async Task SkipThroughAsync(long messageId, CancellationToken cancellationToken)
+    {
+        bool idle;
+        lock (_outstandingLock)
+        {
+            _scannedThrough = Math.Max(_scannedThrough, messageId);
+            idle = _outstanding.Count == 0;
+        }
+
+        if (idle)
+            await PersistCursorAsync(messageId, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task PersistCursorAsync(long messageId, CancellationToken cancellationToken)
+    {
+        await _cursorLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (messageId <= _persistedCursor)
+                return;
+
+            await using var dbContext = await _dbContextFactory
+                .CreateDbContextAsync(cancellationToken)
+                .ConfigureAwait(false);
+            var cursor = await dbContext.SubscriberCursors
+                .SingleAsync(candidate => candidate.SubscriberName == Name, cancellationToken)
+                .ConfigureAwait(false);
+            cursor.LastAcknowledgedMessageId = messageId;
+            cursor.UpdatedAtUtc = _timeProvider.GetUtcNow();
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            _persistedCursor = messageId;
+        }
+        finally
+        {
+            _cursorLock.Release();
         }
     }
 
@@ -138,21 +213,20 @@ public sealed class InboundSubscription : IDisposable
                 return false;
         }
 
-        await using var dbContext = await _dbContextFactory
-            .CreateDbContextAsync(cancellationToken)
-            .ConfigureAwait(false);
-        var cursor = await dbContext.SubscriberCursors
-            .SingleAsync(candidate => candidate.SubscriberName == Name, cancellationToken)
-            .ConfigureAwait(false);
-        cursor.LastAcknowledgedMessageId = messageId;
-        cursor.UpdatedAtUtc = _timeProvider.GetUtcNow();
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await PersistCursorAsync(messageId, cancellationToken).ConfigureAwait(false);
         _metrics.RecordAcknowledged();
 
+        long skippedThrough = 0;
         lock (_outstandingLock)
+        {
             _outstanding.Dequeue();
+            if (_outstanding.Count == 0)
+                skippedThrough = _scannedThrough;
+        }
 
         _budget.Release();
+        if (skippedThrough > messageId)
+            await PersistCursorAsync(skippedThrough, cancellationToken).ConfigureAwait(false);
         return true;
     }
 
@@ -164,5 +238,6 @@ public sealed class InboundSubscription : IDisposable
     {
         Complete();
         _budget.Dispose();
+        _cursorLock.Dispose();
     }
 }

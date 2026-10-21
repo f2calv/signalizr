@@ -23,8 +23,11 @@ public sealed class GatewayBgService(
         await ApplyProfileAsync(cancellationToken).ConfigureAwait(false);
         operatorNotifier.Notify($"gateway started with {groups.GroupNames.Count} group(s): {string.Join(", ", groups.GroupNames)}");
 
-        logger.LogInformation("{ClassName} started with {ClientType}",
-            nameof(GatewayBgService), client.GetType().Name);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("{ClassName} started with {ClientType}",
+                nameof(GatewayBgService), client.GetType().Name);
+        }
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
     }
 
@@ -47,8 +50,11 @@ public sealed class GatewayBgService(
             }
             catch (HttpRequestException ex)
             {
-                logger.LogWarning(ex, "{ClassName} could not reach the wrapper, retrying in {Delay}",
-                    nameof(GatewayBgService), delay);
+                if (logger.IsEnabled(LogLevel.Warning))
+                {
+                    logger.LogWarning(ex, "{ClassName} could not reach the wrapper, retrying in {Delay}",
+                        nameof(GatewayBgService), delay);
+                }
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 60));
             }
@@ -72,13 +78,20 @@ public sealed class GatewayBgService(
             var updated = await client.UpdateProfile(signalCliConfig.Value.PhoneNumber,
                 new UpdateProfileRequest { Name = profileName + "\0" }, cancellationToken).ConfigureAwait(false);
             if (updated)
-                logger.LogInformation("{ClassName} applied the configured profile name", nameof(GatewayBgService));
+            {
+                if (logger.IsEnabled(LogLevel.Information))
+                    logger.LogInformation("{ClassName} applied the configured profile name", nameof(GatewayBgService));
+            }
             else
-                logger.LogWarning("{ClassName} the wrapper rejected the profile name", nameof(GatewayBgService));
+            {
+                if (logger.IsEnabled(LogLevel.Warning))
+                    logger.LogWarning("{ClassName} the wrapper rejected the profile name", nameof(GatewayBgService));
+            }
         }
         catch (HttpRequestException ex)
         {
-            logger.LogWarning(ex, "{ClassName} could not apply the profile name", nameof(GatewayBgService));
+            if (logger.IsEnabled(LogLevel.Warning))
+                logger.LogWarning(ex, "{ClassName} could not apply the profile name", nameof(GatewayBgService));
         }
     }
 }

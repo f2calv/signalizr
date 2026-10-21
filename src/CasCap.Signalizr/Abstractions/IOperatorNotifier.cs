@@ -12,5 +12,5 @@ public interface IOperatorNotifier
     /// Never blocks and never throws: callers include the receive path, which must not wait on an
     /// outbound send. When notices arrive faster than they can be sent, the oldest is discarded.
     /// </remarks>
-    void Notify(string notice);
+    public void Notify(string notice);
 }

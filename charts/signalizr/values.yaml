@@ -7,6 +7,12 @@
 # other account-linked identifier.
 # ─────────────────────────────────────────────────────────────────────
 
+dashboards:
+  enabled: true
+  dashboardFolder: Signalizr
+  datasources:
+    prometheus: prometheus
+
 # The upstream signal-cli REST wrapper. One account, one owner.
 signalcli:
   # The dedicated chart owns the image, service, probes and wrapper environment. Keep the
@@ -63,6 +69,8 @@ signalizr:
     # lacks that group, and Helm cannot remove a subchart map key once it is set. Add your own as
     # CasCap__GroupConfig__GroupNames__0: <exact Signal group name>.
     # Continue with __1, __2, etc. These exact names are the API group names.
+    # Each subscriber receives only its listed groups, and an unlisted subscriber is refused:
+    # CasCap__SubscriberConfig__SubscriberGroups__<subscriber name>__0: <exact Signal group name>.
   # The chiseled .NET image runs as APP_UID 1654. fsGroup makes a fresh PVC writable without
   # granting root privileges or adding an init container.
   podSecurityContext:
@@ -80,12 +88,10 @@ signalizr:
   volumeMounts:
     - name: data
       mountPath: /var/lib/signalizr
-  # The phone number is personal data and must arrive from a Secret, never from values.
-  # Create the Secret out of band with a key matching the environment variable name:
-  #   kubectl create secret generic signalizr \
-  #     --from-literal=CasCap__SignalCliConfig__PhoneNumber='+...'
-  envSecrets:
-    CasCap__SignalCliConfig__PhoneNumber: signalizr
+  # The phone number is personal data and must never appear in values. Supply
+  # CasCap__SignalCliConfig__PhoneNumber from a Secret through envSecrets, or load it from Azure Key
+  # Vault with AppConfig__KeyVaultName (secret CasCap--SignalCliConfig--PhoneNumber).
+  envSecrets: {}
   # Readiness includes the upstream signal-cli check, so a pod leaves the Service rotation when
   # the wrapper is unreachable rather than accepting sends it cannot fulfil. Liveness deliberately
   # excludes it: restarting the gateway cannot fix a wrapper outage, and would turn a recoverable
@@ -180,3 +186,81 @@ demo:
     limits:
       cpu: 200m
       memory: 128Mi
+
+# Comms responders: the same image running only the Comms role, each answering one chat group through
+# the Agent Runtime. Dormant by default. A deployment adds the exact group names, the Redis and Agent
+# Runtime addresses and the execution identity, either as CasCap__AgentRuntimeAzureAuthConfig__* from a
+# Secret or from Key Vault through AppConfig__KeyVaultName and AppConfig__AgentRuntimeKeyVaultPrefix.
+# Each is the single gRPC subscriber for its name, so pods never overlap and there is no Service.
+signalizrResponder:
+  replicaCount: 0
+  strategy:
+    type: Recreate
+  fullnameOverride: signalizr-responder
+  # The subchart defaults the container name to its camelCase alias, which Kubernetes rejects.
+  containerName: signalizr-responder
+  image:
+    repository: ghcr.io/f2calv/signalizr
+    pullPolicy: IfNotPresent
+    tag: ""
+  service:
+    enabled: false
+  envVars:
+    CasCap__FeatureConfig__EnabledFeatures: Comms
+    CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:80
+    CasCap__SignalizrClientConfig__GrpcAddress: http://signalizr:5001
+    CasCap__SignalizrClientConfig__SubscriberName: signalizr-comms
+    CasCap__CommsConfig__AgentName: SignalizrAgent
+    CasCap__CommsConfig__StreamConsumptionEnabled: "false"
+  startupProbe: false
+  readinessProbe: false
+  livenessProbe:
+    httpGet:
+      path: /healthz/live
+      port: 8080
+    periodSeconds: 30
+    initialDelaySeconds: 30
+    failureThreshold: 6
+  resources:
+    requests:
+      cpu: 25m
+      memory: 96Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+agentizrResponder:
+  replicaCount: 0
+  strategy:
+    type: Recreate
+  fullnameOverride: agentizr-responder
+  containerName: agentizr-responder
+  image:
+    repository: ghcr.io/f2calv/signalizr
+    pullPolicy: IfNotPresent
+    tag: ""
+  service:
+    enabled: false
+  envVars:
+    CasCap__FeatureConfig__EnabledFeatures: Comms
+    CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:80
+    CasCap__SignalizrClientConfig__GrpcAddress: http://signalizr:5001
+    CasCap__SignalizrClientConfig__SubscriberName: agentizr-comms
+    CasCap__CommsConfig__AgentName: AgentizrAgent
+    CasCap__CommsConfig__StreamConsumptionEnabled: "false"
+  startupProbe: false
+  readinessProbe: false
+  livenessProbe:
+    httpGet:
+      path: /healthz/live
+      port: 8080
+    periodSeconds: 30
+    initialDelaySeconds: 30
+    failureThreshold: 6
+  resources:
+    requests:
+      cpu: 25m
+      memory: 96Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi

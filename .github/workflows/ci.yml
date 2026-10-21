@@ -130,7 +130,7 @@ jobs:
       #with has-image true helm lint receives '--set image.tag=x' as one argv, and with it false the
       #empty array expands to a stray argument that swallows the next flag. helm lint still runs.
       chart-testing-cli-command: skip
-      push-chart: true
+      push-chart: ${{ github.event_name != 'pull_request' }}
 
   release:
     needs: [lint, versioning, build, helm, package, image, chart]

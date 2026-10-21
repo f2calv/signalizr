@@ -3,17 +3,19 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="CasCap.Api.Azure.Auth" Version="1.6.4" />
-    <PackageVersion Include="CasCap.Api.SignalCli" Version="0.11.8" />
-    <PackageVersion Include="CasCap.Api.Voice" Version="0.1.3" />
-    <PackageVersion Include="CasCap.Api.Voice.Testing" Version="0.1.3" />
-    <PackageVersion Include="CasCap.Common.Abstractions" Version="4.15.0" />
-    <PackageVersion Include="CasCap.Common.Caching" Version="4.15.0" />
-    <PackageVersion Include="CasCap.Common.Hosting.AspNetCore" Version="4.15.0" />
-    <PackageVersion Include="CasCap.Common.Configuration" Version="4.15.0" />
-    <PackageVersion Include="CasCap.Common.Extensions" Version="4.15.0" />
-    <PackageVersion Include="CasCap.Common.Services" Version="4.15.0" />
-    <PackageVersion Include="CasCap.Common.Testing" Version="4.15.0" />
+    <PackageVersion Include="CasCap.AgentRuntime.Client" Version="1.0.0" />
+    <PackageVersion Include="CasCap.AgentRuntime.Contracts" Version="1.0.0" />
+    <PackageVersion Include="CasCap.Api.Azure.Auth" Version="1.7.0" />
+    <PackageVersion Include="CasCap.Api.SignalCli" Version="0.11.9" />
+    <PackageVersion Include="CasCap.Api.Voice" Version="0.2.0" />
+    <PackageVersion Include="CasCap.Api.Voice.Testing" Version="0.2.0" />
+    <PackageVersion Include="CasCap.Common.Abstractions" Version="4.16.0" />
+    <PackageVersion Include="CasCap.Common.Caching" Version="4.16.0" />
+    <PackageVersion Include="CasCap.Common.Hosting.AspNetCore" Version="4.16.0" />
+    <PackageVersion Include="CasCap.Common.Configuration" Version="4.16.0" />
+    <PackageVersion Include="CasCap.Common.Extensions" Version="4.16.0" />
+    <PackageVersion Include="CasCap.Common.Services" Version="4.16.0" />
+    <PackageVersion Include="CasCap.Common.Testing" Version="4.16.0" />
   </ItemGroup>
   <ItemGroup>
     <PackageVersion Include="Google.Protobuf" Version="3.36.2" />
@@ -31,8 +33,8 @@
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
-    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
-    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
   </ItemGroup>

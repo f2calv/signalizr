@@ -20,7 +20,7 @@ x-signalizr-image: &signalizr-image
 
 services:
   signal-cli-rest-api:
-    image: bbernhard/signal-cli-rest-api:0.100
+    image: bbernhard/signal-cli-rest-api:0.101
     environment:
       MODE: json-rpc
     ports:

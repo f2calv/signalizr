@@ -4,21 +4,21 @@ dependencies:
   version: 0.1.0
 - name: signalcli
   repository: oci://ghcr.io/f2calv/charts
-  version: 1.0.2
+  version: 1.1.0
 - name: workload
   repository: oci://ghcr.io/f2calv/charts
-  version: 1.5.0
+  version: 1.6.0
 - name: workload
   repository: oci://ghcr.io/f2calv/charts
-  version: 1.5.0
+  version: 1.6.0
 - name: workload
   repository: oci://ghcr.io/f2calv/charts
-  version: 1.5.0
+  version: 1.6.0
 - name: workload
   repository: oci://ghcr.io/f2calv/charts
-  version: 1.5.0
+  version: 1.6.0
 - name: workload
   repository: oci://ghcr.io/f2calv/charts
-  version: 1.5.0
-digest: sha256:c01de565b8e61a41ffc4854ce6220f1c92d5a9769b17a6f8326a399f6dc56624
-generated: "2026-10-18T17:55:54.7572943+02:00"
+  version: 1.6.0
+digest: sha256:c1e9abd90ddcd712e7b032120a8e591578f5af66f65273618f3734154f0ef1b1
+generated: "2026-10-21T06:29:57.3617617+02:00"

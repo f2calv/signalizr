@@ -17,4 +17,9 @@
     <ProjectReference Include="..\..\..\agentizr\src\CasCap.AgentRuntime.Contracts\CasCap.AgentRuntime.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(Configuration)'=='Release'">
+    <PackageReference Include="CasCap.AgentRuntime.Client" />
+    <PackageReference Include="CasCap.AgentRuntime.Contracts" />
+  </ItemGroup>
+
 </Project>

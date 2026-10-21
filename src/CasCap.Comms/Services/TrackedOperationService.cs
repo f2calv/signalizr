@@ -29,7 +29,7 @@ public sealed partial class TrackedOperationService(
     public string Start(ITrackedOperation operation)
     {
         var operationId = Guid.NewGuid().ToString("N")[..8];
-        var task = Task.Run(() => TrackAsync(operationId, operation, _stopping.Token));
+        var task = Task.Run(() => TrackAsync(operationId, operation, _stopping.Token), _stopping.Token);
         _running[operationId] = task;
         _ = task.ContinueWith(_ => _running.TryRemove(operationId, out var _), TaskScheduler.Default);
         LogOperationStarted(logger, nameof(TrackedOperationService), operationId, operation.Description);

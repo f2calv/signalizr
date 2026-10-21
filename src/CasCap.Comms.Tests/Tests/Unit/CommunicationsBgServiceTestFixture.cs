@@ -339,7 +339,7 @@ public sealed class CommunicationsBgServiceTestFixture(
                     TimeProvider.System, signalizr, []);
                 agentRuntimeHttpClient = new HttpClient(new FakeAgentRuntimeHttpMessageHandler(agentRuntimeResponder))
                 {
-                    BaseAddress = new Uri("http://agent-runtime.test"),
+                    BaseAddress = new Uri("https://agent-runtime.test"),
                 };
                 responder = new AgentCommsResponder(
                     NullLogger<AgentCommsResponder>.Instance,

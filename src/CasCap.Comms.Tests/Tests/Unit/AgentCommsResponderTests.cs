@@ -50,7 +50,7 @@ public sealed class AgentCommsResponderTests
             }),
         }));
         var signalizr = new FakeSignalizrClient();
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
         var prefix = UniquePrefix();
         using var outcomes = new OutcomeRecorder(prefix);
         var responder = CreateResponder(httpClient, signalizr, prefix);
@@ -104,7 +104,7 @@ public sealed class AgentCommsResponderTests
                 },
             }),
         }));
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
         var prefix = UniquePrefix();
         using var outcomes = new OutcomeRecorder(prefix);
 
@@ -141,7 +141,7 @@ public sealed class AgentCommsResponderTests
             }),
             _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[{") }),
         });
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
         var prefix = UniquePrefix();
         using var outcomes = new OutcomeRecorder(prefix);
 
@@ -160,7 +160,7 @@ public sealed class AgentCommsResponderTests
     [Fact]
     public async Task RespondAsync_EmptyOutput_SendsNothingAndRecordsOutcome()
     {
-        using var httpClient = new HttpClient(new FakeAgentRuntimeHttpMessageHandler()) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(new FakeAgentRuntimeHttpMessageHandler()) { BaseAddress = new Uri("https://agent-runtime.test") };
         var prefix = UniquePrefix();
         using var outcomes = new OutcomeRecorder(prefix);
 
@@ -182,7 +182,7 @@ public sealed class AgentCommsResponderTests
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
         var prefix = UniquePrefix();
         using var outcomes = new OutcomeRecorder(prefix);
 
@@ -218,7 +218,7 @@ public sealed class AgentCommsResponderTests
                 }),
             };
         });
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
 
         await CreateResponder(httpClient, new FakeSignalizrClient(), UniquePrefix(), [new StubEnricher(enricherNeedsDetails)])
             .RespondAsync(new CommsTurn("run"), TestContext.Current.CancellationToken);
@@ -251,7 +251,7 @@ public sealed class AgentCommsResponderTests
                 }),
             };
         });
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
         var responder = CreateResponder(httpClient, new FakeSignalizrClient());
 
         var outcome = await responder.TryHandleCommandAsync(
@@ -267,7 +267,7 @@ public sealed class AgentCommsResponderTests
     public async Task TryHandleCommandAsync_BypassRemainsLocalDeferredTurn()
     {
         var handler = new FakeAgentRuntimeHttpMessageHandler();
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
         var responder = CreateResponder(httpClient, new FakeSignalizrClient());
 
         var outcome = await responder.TryHandleCommandAsync(
@@ -287,7 +287,7 @@ public sealed class AgentCommsResponderTests
     public async Task TryHandleCommandAsync_UnknownSlashCommandRepliesWithHelp(string text)
     {
         var handler = new FakeAgentRuntimeHttpMessageHandler();
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
         var responder = CreateResponder(httpClient, new FakeSignalizrClient());
 
         var outcome = await responder.TryHandleCommandAsync(text, TestContext.Current.CancellationToken);
@@ -303,7 +303,7 @@ public sealed class AgentCommsResponderTests
     public async Task TryHandleCommandAsync_PlainTextIsNotACommand()
     {
         var handler = new FakeAgentRuntimeHttpMessageHandler();
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
         var responder = CreateResponder(httpClient, new FakeSignalizrClient());
 
         var outcome = await responder.TryHandleCommandAsync("hello / goodbye", TestContext.Current.CancellationToken);
@@ -324,7 +324,7 @@ public sealed class AgentCommsResponderTests
                     Instructions = instructions,
                 }),
             }));
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
         var responder = CreateResponder(httpClient, new FakeSignalizrClient());
 
         var outcome = await responder.TryHandleCommandAsync("/instructions", TestContext.Current.CancellationToken);
@@ -347,7 +347,7 @@ public sealed class AgentCommsResponderTests
                 {
                     Content = JsonContent.Create(new AgentOverridesResponse { SessionEnabled = true }),
                 }));
-        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://agent-runtime.test") };
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://agent-runtime.test") };
         var responder = CreateResponder(httpClient, new FakeSignalizrClient());
 
         var outcome = await responder.TryHandleCommandAsync("/instructions", TestContext.Current.CancellationToken);

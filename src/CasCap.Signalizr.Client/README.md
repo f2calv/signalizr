@@ -9,8 +9,8 @@ and run polls on a named group over REST, and subscribe to inbound messages over
 dotnet add package CasCap.Signalizr.Client
 ```
 
-Use a package version compatible with your gateway. The public feed currently has releases through
-`0.1.2`; this README follows current source, which may expose APIs not present in that release.
+Use a package version compatible with your gateway; the client and gateway share the repository
+version.
 
 ## Configuration Examples
 

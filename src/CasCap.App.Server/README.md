@@ -17,10 +17,8 @@ dotnet run --project src/CasCap.App.Server/CasCap.App.Server.csproj --configurat
 ```
 
 Run from the repository root. Debug builds require the adjacent source dependencies declared by the
-project graph, including the remote Agent Runtime client and contracts. The current Release graph
-does not yet provide those two dependencies for `CasCap.Comms.AI`; building Release or the
-Dockerfile is therefore not a standalone clean-clone path. Selecting a non-Comms runtime role does
-not remove that compile-time dependency.
+project graph, including the remote Agent Runtime client and contracts. Release builds and the
+Dockerfile resolve the same dependencies from NuGet, so they work from a clean clone.
 
 Do not use the container's `/var/lib/signalizr` database path for a Windows source run. Override it
 with a writable local SQLite path as below.

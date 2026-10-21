@@ -6,9 +6,8 @@ configuration. These tests do not require a live Signal account or Agent Runtime
 ## Prerequisites
 
 Use the .NET 10 SDK with xUnit v3 on Microsoft.Testing.Platform. Debug project references require
-the adjacent shared-library and Agent Runtime sources used by the host. The host's current
-Release dependency gap also affects this test project's Release build; see the
-[host build prerequisites](../CasCap.App.Server/README.md#run).
+the adjacent shared-library and Agent Runtime sources used by the host; Release builds resolve them
+from NuGet.
 
 ## Purpose
 

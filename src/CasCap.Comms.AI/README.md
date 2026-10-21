@@ -7,10 +7,12 @@ runtime definitions, credentials or session storage.
 
 ## Installation and Usage
 
-This is a packable source project; no public `CasCap.Comms.AI` NuGet version is currently verified.
-Debug builds require the adjacent Agent Runtime client and contracts source projects declared in the
-project. The current project has no Release references for those dependencies, so a standalone
-Release build is not yet a supported installation path.
+```bash
+dotnet add package CasCap.Comms.AI
+```
+
+The package depends on `CasCap.Comms` and the Agent Runtime client and contracts. Debug builds of this
+repository use adjacent Agent Runtime source projects instead.
 
 After configuring the base Comms host and its Redis/gateway dependencies:
 

@@ -6,10 +6,9 @@ inbound messages, optional voice processing and a bounded reply queue for .NET 1
 
 ## Installation and Host Setup
 
-This project is packable, but no public `CasCap.Comms` version is currently verified on NuGet.org.
-Consume the source project until an immutable package is available. A source build also needs its
-declared shared-library dependencies; Debug resolves adjacent source projects and Release resolves
-published package references.
+```bash
+dotnet add package CasCap.Comms
+```
 
 Register the pipeline in a host that already supplies configuration, logging and `TimeProvider`:
 

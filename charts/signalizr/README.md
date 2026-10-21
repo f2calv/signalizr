@@ -51,17 +51,15 @@ helm upgrade --install signalizr oci://ghcr.io/f2calv/charts/signalizr \
   --set-string migrate.image.tag=<version>
 ```
 
-Use a version whose image provides the selected roles. The current source host has an unresolved
-Release dependency gap; see the [source-build limitation](../../README.md#quick-start).
-Do not assume an older published image implements unreleased source features.
+Use a version whose image provides the selected roles.
 
 ## Dependency Graph
 
 ```mermaid
 graph TD
     ROOT([signalizr application chart])
-    WRAPPER["signalcli 1.0.2"]
-    WORKLOAD["workload 1.5.0"]
+    WRAPPER["signalcli 1.1.0"]
+    WORKLOAD["workload 1.6.0"]
     DASH["signalizr-dashboards 0.1.0"]
     GATEWAY["signalizr: Gateway + Receiver"]
     MIGRATOR["migrate: DbMigrator"]

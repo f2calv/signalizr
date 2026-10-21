@@ -9,9 +9,7 @@ consumers, without a gateway, Signal account or network connection.
 dotnet add package CasCap.Signalizr.Client.Testing
 ```
 
-Reference it from test projects only.
-Match its version to `CasCap.Signalizr.Client`; the public feed currently includes `0.1.2`.
-This guide follows current source.
+Reference it from test projects only, and match its version to `CasCap.Signalizr.Client`.
 
 ## Purpose
 

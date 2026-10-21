@@ -27,15 +27,13 @@ Keep the real value out of source control.
 cp .env.example .env
 ```
 
-> [!IMPORTANT]
-> The current source build is not self-contained: the host references `CasCap.Comms.AI`, whose
-> Agent Runtime dependencies currently have Debug project references but no Release package
-> references. The Dockerfile builds Release. Resolve those dependency references before using
-> `--build`; this is not a credential or Compose setting. For an existing published image, select an
-> immutable version from [container packages](https://github.com/f2calv/signalizr/pkgs/container/signalizr)
-> and use matching configuration rather than assuming it contains unreleased source behavior.
+> [!NOTE]
+> `--build` compiles the Release graph, which resolves every shared dependency from NuGet. To use an
+> existing published image instead, select an immutable version from
+> [container packages](https://github.com/f2calv/signalizr/pkgs/container/signalizr) and use matching
+> configuration.
 
-Once the source-build prerequisites are satisfied:
+To build and run from source:
 
 ```bash
 docker compose up --build
@@ -106,16 +104,15 @@ All projects target .NET 10. The host and core are application components, not N
 | [CasCap.Signalizr](src/CasCap.Signalizr/README.md) | Understand gateway delivery and persistence behavior | Internal host component |
 | [CasCap.Signalizr.Client](src/CasCap.Signalizr.Client/README.md) | Send and subscribe from .NET | [NuGet](https://www.nuget.org/packages/CasCap.Signalizr.Client) |
 | [CasCap.Signalizr.Client.Testing](src/CasCap.Signalizr.Client.Testing/README.md) | Test a consumer without a gateway | [NuGet](https://www.nuget.org/packages/CasCap.Signalizr.Client.Testing) |
-| [CasCap.Comms](src/CasCap.Comms/README.md) | Redis event delivery, voice processing and reply queue | Packable source project; no public NuGet version verified |
-| [CasCap.Comms.AI](src/CasCap.Comms.AI/README.md) | Optional remote Agent Runtime responder | Packable source project; Release dependencies incomplete |
+| [CasCap.Comms](src/CasCap.Comms/README.md) | Redis event delivery, voice processing and reply queue | [NuGet](https://www.nuget.org/packages/CasCap.Comms) |
+| [CasCap.Comms.AI](src/CasCap.Comms.AI/README.md) | Optional remote Agent Runtime responder | [NuGet](https://www.nuget.org/packages/CasCap.Comms.AI) |
 | [Application chart](charts/signalizr/README.md) | Deploy the wrapper and gateway on Kubernetes | OCI Helm chart |
 | [Dashboard chart](charts/signalizr-dashboards/README.md) | Provision Grafana delivery dashboards | Bundled Helm subchart |
 | [REST Client requests](requests/README.md) | Inspect MCP without a model | Editor request collection |
 | [Host tests](src/CasCap.App.Server.Tests/README.md), [gateway tests](src/CasCap.Signalizr.Tests/README.md), [Comms tests](src/CasCap.Comms.Tests/README.md) | Contributor test scope and prerequisites | Source test projects |
 
-Published client packages currently include version `0.1.2`; source documentation can describe
-newer behavior. Pin a compatible immutable release instead of assuming every source feature is
-available in an older package.
+All four packages share the repository version. Pin the same immutable version for each one you
+use, and pick one that matches your deployed gateway image.
 
 ## Service Architecture
 

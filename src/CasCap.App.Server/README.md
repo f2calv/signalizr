@@ -43,6 +43,18 @@ untracked settings or secret stores.
 Empty and unknown values fail startup. The base settings select `Gateway,Receiver`.
 Disabled feature controllers are removed from routing and return `404`.
 
+The [group controller](Controllers/GroupsController.cs) returns typed JSON/no-content results.
+Automatic request validation uses `application/problem+json`; the scoped
+[group exception handler](Services/GroupsApiExceptionHandler.cs) maps unknown groups/deliveries to
+404, unavailable role operations to 501, and wrapper HTTP failures to sanitized 502 Problem Details.
+Error responses remain JSON even when the caller requests another media type. Cancellation is
+forwarded without retrying an operation whose outcome may be uncertain.
+
+The [attachment controller](Controllers/AttachmentsController.cs) returns retained bytes as
+`application/octet-stream` without a download filename, or 404 when absent. Its response metadata
+describes binary content rather than a JSON-serialized MVC result. The host does not currently
+publish a generated OpenAPI document.
+
 | Setting | Default / operator action |
 | --- | --- |
 | `SignalCliConfig:BaseAddress` | `http://localhost:8180` in base appsettings; point at your wrapper |

@@ -12,8 +12,10 @@ from NuGet.
 ## Purpose
 
 The unit tests validate feature parsing directly. The integration tests launch the real host through
-`WebApplicationFactory<AppEntryPoint>` with only `DemoClient`, or only `Comms`, enabled and remove hosted
-services so no Signal, database, gRPC or Agent Runtime dependency runs.
+`WebApplicationFactory<AppEntryPoint>` with `DemoClient`, `Comms`, or Gateway/Receiver enabled and remove
+hosted services so no external Signal, database, gRPC or Agent Runtime dependency runs. The gateway
+fixture replaces sending and group resolution with fakes and stores synthetic attachment rows in an
+isolated EF Core InMemory database.
 The configuration guard test exercises a missing Key Vault name and does not contact Azure.
 
 ## Tests
@@ -24,7 +26,8 @@ The configuration guard test exercises a missing Key Vault name and does not con
 | `HostStartupTests` | 2 | 2 | Verifies host options, infrastructure services, controller services, and the startup health endpoint |
 | `CommsHostStartupTests` | 2 | 2 | Verifies a `Comms`-only host registers the agent responder without gateway roles and with stream consumption off |
 | `HostApplicationBuilderExtensionsTests` | 1 | 1 | Rejects an Agent Runtime secret prefix without a configured Key Vault |
-| **Total** | **14** | **26** | |
+| [`GatewayApiContractTests`](Tests/Integration/GatewayApiContractTests.cs) | 8 | 26 | All group operation routes, typed JSON/no-content results, validation Problem Details, error mappings under non-JSON Accept headers, cancellation, feature gating, attachment bytes and API Explorer metadata |
+| **Total** | **22** | **52** | |
 
 Counts are derived from `[Fact]`, `[Theory]` and inline data in source, not an execution report.
 
@@ -32,7 +35,7 @@ Counts are derived from `[Fact]`, `[Theory]` and inline data in source, not an e
 
 | Category | Test-case count | Purpose |
 | --- | ---: | --- |
-| `Integration` | 4 | In-memory ASP.NET Core host and dependency-injection checks |
+| `Integration` | 30 | In-memory ASP.NET Core host, HTTP contract and dependency-injection checks |
 
 ## Skipped Tests
 
@@ -45,6 +48,8 @@ Tests/
 ├── Integration/
 │   ├── CommsHostStartupTests.cs
 │   ├── CommsWebApplicationFactory.cs
+│   ├── GatewayApiContractTests.cs
+│   ├── GatewayWebApplicationFactory.cs
 │   ├── HostStartupTests.cs
 │   └── SignalizrWebApplicationFactory.cs
 └── Unit/
@@ -68,3 +73,8 @@ dotnet test --project src/CasCap.App.Server.Tests/CasCap.App.Server.Tests.csproj
 
 Run from the repository root when you intend to execute the suite. The command builds and runs
 tests; documentation validation does not require it.
+
+Gateway contract checks substitute `IMessageGateway` completely: they verify HTTP dispatch and
+response contracts, not upstream Signal delivery or retry behavior. Attachment checks exercise the
+real query service over synthetic local rows, not downloads from the wrapper. The host has no
+OpenAPI document generator configured; metadata assertions inspect MVC API Explorer.

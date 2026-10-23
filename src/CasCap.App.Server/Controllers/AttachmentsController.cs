@@ -1,4 +1,5 @@
 using CasCap.Common.Abstractions;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CasCap.Controllers;
@@ -11,12 +12,11 @@ public sealed class AttachmentsController(InboundAttachmentService attachmentSvc
 {
     /// <inheritdoc cref="InboundAttachmentService.GetAsync(string, CancellationToken)"/>
     [HttpGet("{attachmentId}")]
-    [ProducesResponseType<FileContentResult>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Get(
+    [ProducesResponseType(typeof(byte[]), StatusCodes.Status200OK, "application/octet-stream")]
+    public async Task<Results<FileContentHttpResult, NotFound>> Get(
         string attachmentId,
         CancellationToken cancellationToken)
         => await attachmentSvc.GetAsync(attachmentId, cancellationToken).ConfigureAwait(false) is { } content
-            ? File(content, "application/octet-stream")
-            : NotFound();
+            ? TypedResults.File(content, "application/octet-stream")
+            : TypedResults.NotFound();
 }

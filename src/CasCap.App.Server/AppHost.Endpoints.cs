@@ -12,6 +12,7 @@ public static partial class AppHost
         IReadOnlySet<string> enabledFeatures,
         bool servesGrpc)
     {
+        app.UseExceptionHandler();
         app.MapControllers();
         app.MapSignalizrMcp(enabledFeatures);
 

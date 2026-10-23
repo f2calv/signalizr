@@ -1,0 +1,93 @@
+### Signalizr gateway REST API
+### Use an approved loopback port-forward; these routes do not enforce MCP Basic authentication.
+
+@baseUrl = {{$dotenv SIGNALIZR_BASE_URL}}
+@groupName = {{$dotenv SIGNALIZR_GROUP_NAME_URLENCODED}}
+@deliveryId = {{$dotenv SIGNALIZR_DELIVERY_ID}}
+@attachmentId = {{$dotenv SIGNALIZR_ATTACHMENT_ID}}
+@pollId = {{$dotenv SIGNALIZR_POLL_ID}}
+@targetTimestamp = 1
+
+### List configured groups - expected 200 JSON; Gateway must be enabled
+# @name getGroups
+GET {{baseUrl}}/api/v1/groups HTTP/1.1
+Accept: application/json
+
+### Send text - expected 200 JSON, 400 validation, 404 group or 502 upstream error
+# @name sendMessage
+# @note Sends a real Signal message to the selected group. Confirm destination/content; never retry an uncertain send automatically.
+POST {{baseUrl}}/api/v1/groups/messages?groupName={{groupName}} HTTP/1.1
+Content-Type: application/json
+Accept: application/json
+
+{"message":"Example operator-approved message"}
+
+### Set reaction on a gateway-authored message - expected 204 with no body
+# @name setReaction
+# @note Changes a real message reaction. Replace the synthetic timestamp with an approved message timestamp first.
+POST {{baseUrl}}/api/v1/groups/reactions?groupName={{groupName}} HTTP/1.1
+Content-Type: application/json
+
+{"reaction":"\uD83D\uDC4D","targetTimestamp":{{targetTimestamp}}}
+
+### Remove reaction - expected 204 with no body
+# @name removeReaction
+# @note Removes a real reaction on the selected timestamp; this is a separate mutation, not automatic cleanup.
+DELETE {{baseUrl}}/api/v1/groups/reactions?groupName={{groupName}} HTTP/1.1
+Content-Type: application/json
+
+{"reaction":"\uD83D\uDC4D","targetTimestamp":{{targetTimestamp}}}
+
+### React by retained delivery ID - expected 204; 404 unknown delivery or 501 unsupported role
+# @name setDeliveryReaction
+# @note Changes a reaction on an existing delivery; confirm the delivery belongs to the approved group.
+POST {{baseUrl}}/api/v1/groups/messages/{{deliveryId}}/reactions?groupName={{groupName}} HTTP/1.1
+Content-Type: application/json
+
+{"reaction":"\uD83D\uDC4D"}
+
+### Remove delivery reaction - expected 204
+# @name removeDeliveryReaction
+# @note Removes a real delivery reaction; do not run as implicit cleanup.
+DELETE {{baseUrl}}/api/v1/groups/messages/{{deliveryId}}/reactions?groupName={{groupName}} HTTP/1.1
+Content-Type: application/json
+
+{"reaction":"\uD83D\uDC4D"}
+
+### Start typing - expected 204
+# @name startTyping
+# @note Emits a real typing indicator to the selected group.
+PUT {{baseUrl}}/api/v1/groups/typing?groupName={{groupName}} HTTP/1.1
+
+### Stop typing - expected 204
+# @name stopTyping
+# @note Changes the group's typing indicator; obtain approval independently.
+DELETE {{baseUrl}}/api/v1/groups/typing?groupName={{groupName}} HTTP/1.1
+
+### Create poll - expected 200 JSON
+# @name createPoll
+# @note Creates a real Signal poll. Confirm group, question and choices before sending.
+POST {{baseUrl}}/api/v1/groups/polls?groupName={{groupName}} HTTP/1.1
+Content-Type: application/json
+Accept: application/json
+
+{"question":"Example approved poll?","answers":["Option A","Option B"],"allowMultipleSelections":false}
+
+### Close poll - expected 204
+# @name closePoll
+# @note Closes a real poll; confirm the selected poll ID and group.
+DELETE {{baseUrl}}/api/v1/groups/polls/{{pollId}}?groupName={{groupName}} HTTP/1.1
+
+### Read retained attachment - expected 200 octet-stream (possibly empty) or 404
+# @name getAttachment
+GET {{baseUrl}}/api/v1/attachments/{{attachmentId}} HTTP/1.1
+Accept: application/octet-stream
+
+### Expected 400 validation Problem Details - no message text
+# @name invalidMessage
+# @note Intentionally invalid send request. Approve execution individually; do not batch with valid sends.
+POST {{baseUrl}}/api/v1/groups/messages?groupName={{groupName}} HTTP/1.1
+Content-Type: application/json
+Accept: application/json
+
+{"message":""}

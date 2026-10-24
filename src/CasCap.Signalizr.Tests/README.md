@@ -8,7 +8,7 @@ Signal account.
 
 Use .NET 10 with xUnit v3 and Microsoft.Testing.Platform. The project references the application
 host; its Debug build requires the declared adjacent shared-library and Agent Runtime sources.
-The current host graph lacks Release runtime-client/contracts references; see
+Release builds resolve the same dependencies from NuGet; see
 [host prerequisites](../CasCap.App.Server/README.md#run).
 
 MCP and REST fixtures open local HTTP listeners. Persistence fixtures use EF Core InMemory or

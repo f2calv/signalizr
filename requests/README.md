@@ -1,19 +1,40 @@
 # Signalizr requests
 
-Use the VS Code REST Client extension to inspect signalizr's optional MCP endpoint without a model,
-or deliberately send text when that separate capability is enabled.
+Use the VS Code REST Client extension to inspect signalizr's MCP endpoint or gateway REST API.
+These are manual examples, not automated tests; sending, reactions, typing and polls have real effects.
 
 ## Setup
 
 Copy [.env.example](.env.example) to `.env` in this directory and set `SIGNALIZR_BASE_URL` to the
 HTTP origin reachable through your [localhost port-forward](../docs/mcp.md#connect-vs-code).
 Set `SIGNALIZR_MCP_USERNAME` and `SIGNALIZR_MCP_PASSWORD` to the gateway's `CasCap:ApiAuthConfig`
-credentials; every request sends them as HTTP Basic authentication.
+credentials; MCP requests send them as HTTP Basic authentication.
 The file is gitignored. Do not add `/mcp` to the base URL.
-The gateway must already be running with `Gateway,Receiver,Mcp` and configured Basic credentials;
-this collection does not start or configure it.
+The MCP collection requires `Gateway,Receiver,Mcp` and configured Basic credentials.
+The REST collection requires `Gateway` for groups and `Receiver` for attachments.
+Neither collection starts or configures the host.
 
-## Usage
+## REST API
+
+[signalizr-rest.http](signalizr-rest.http) covers group reads, sends, reactions, typing, polls,
+binary attachments and one intentionally invalid request. Group operations return JSON for reads,
+sends and poll creation, or empty 204 responses for other successful mutations. Validation errors
+use `application/problem+json`; mapped group/delivery/upstream failures use Problem Details.
+Disabled feature routes return 404. Attachment success is `application/octet-stream`, including
+an empty retained attachment; a missing attachment is 404.
+
+These REST controllers do **not** enforce MCP Basic authentication. Use only an approved loopback
+port-forward or an independently protected network boundary; do not expose them publicly or assume
+adding an Authorization header secures the service.
+
+Set `SIGNALIZR_GROUP_NAME_URLENCODED` to the exact configured group name encoded as one query value
+(spaces as `%20`, literal plus as `%2B`, ampersand as `%26`). The example name does not provision a
+group. Supply retained delivery, attachment and poll IDs locally for their respective requests.
+The synthetic `targetTimestamp` must be replaced with an approved gateway-authored message's actual
+timestamp before timestamp-based reactions. No request consumes another request's response or
+automatically cleans up its effects. Every operation requires separate execution approval.
+
+## MCP
 
 Open [signalizr-mcp.http](signalizr-mcp.http) and send the initialize request, then the initialized
 notification, tool discovery and desired query. The examples use the supported `2025-11-25`
@@ -34,4 +55,5 @@ the group with one discovered by the group tool. Its response can expose private
 text, so do not copy it into issues, logs or commits.
 
 See the [MCP access boundary](../docs/mcp.md#access-boundary) before using any non-loopback endpoint.
-REST sending and gRPC subscriptions are different contracts; this collection only exercises MCP.
+REST sending and gRPC subscriptions are different contracts; the MCP collection does not exercise
+either consumer transport.

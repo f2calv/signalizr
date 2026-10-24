@@ -6,9 +6,9 @@ Source-declared, credential-free tests for [CasCap.Comms](../CasCap.Comms/README
 ## Prerequisites
 
 Use .NET 10, xUnit v3 and Microsoft.Testing.Platform. Debug builds require the declared adjacent
-shared, voice and Agent Runtime source dependencies. `CasCap.Comms.AI` currently lacks Release
-references for its runtime client/contracts, so Release validation is blocked until those are
-provided. No Redis server, gateway, model or runtime credential is needed by these fixtures.
+shared, voice and Agent Runtime source dependencies. Release builds resolve those dependencies
+from NuGet, including the runtime client and contracts consumed through `CasCap.Comms.AI`.
+No Redis server, gateway, model or runtime credential is needed by these fixtures.
 
 ## Purpose
 

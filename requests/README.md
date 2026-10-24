@@ -55,4 +55,5 @@ the group with one discovered by the group tool. Its response can expose private
 text, so do not copy it into issues, logs or commits.
 
 See the [MCP access boundary](../docs/mcp.md#access-boundary) before using any non-loopback endpoint.
-REST sending and gRPC subscriptions are different contracts; this collection only exercises MCP.
+REST sending and gRPC subscriptions are different contracts; the MCP collection does not exercise
+either consumer transport.

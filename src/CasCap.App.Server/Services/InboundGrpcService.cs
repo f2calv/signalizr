@@ -60,31 +60,28 @@ public sealed class InboundGrpcService(
         // Acknowledgements arrive independently of deliveries, so they are read concurrently.
         var acknowledgements = ReadAcknowledgementsAsync(requestStream, subscription, streamCancellation.Token);
         var deliveries = DeliverAsync(responseStream, subscription, ackTimeout, streamCancellation.Token);
+        var expiry = MonitorAcknowledgementsAsync(subscription, ackTimeout, streamCancellation.Token);
 
         try
         {
-            await await Task.WhenAny(acknowledgements, deliveries).ConfigureAwait(false);
+            await Task.WhenAny(acknowledgements, deliveries, expiry).ConfigureAwait(false);
+            await streamCancellation.CancelAsync().ConfigureAwait(false);
+            await Task.WhenAll(acknowledgements, deliveries, expiry).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (streamCancellation.IsCancellationRequested)
         {
             // The client went away or the host is shutting down. Both are ordinary ends to a
             // long-lived subscription, not failures to report.
         }
+        catch (RpcException ex) when (ex.StatusCode is StatusCode.DeadlineExceeded)
+        {
+            metrics.RecordAcknowledgementTimeout();
+            operatorNotifier.Notify($"{name} stopped acknowledging within {ackTimeout}; disconnecting it");
+            throw;
+        }
         finally
         {
-            await streamCancellation.CancelAsync().ConfigureAwait(false);
-            try
-            {
-                await Task.WhenAll(acknowledgements, deliveries).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (streamCancellation.IsCancellationRequested)
-            {
-                // The sibling task stops when either half closes or the caller cancels.
-            }
-            finally
-            {
-                registry.Unsubscribe(subscription);
-            }
+            registry.Unsubscribe(subscription);
         }
     }
 
@@ -98,17 +95,25 @@ public sealed class InboundGrpcService(
         {
             if (!await subscription.TryReserveAsync(
                 delivery.DeliveryId, ackTimeout, cancellationToken).ConfigureAwait(false))
-            {
-                metrics.RecordAcknowledgementTimeout();
-                operatorNotifier.Notify($"{subscription.Name} stopped acknowledging within {ackTimeout}; disconnecting it");
-                throw new RpcException(new Status(StatusCode.DeadlineExceeded,
-                    $"No acknowledgement within {ackTimeout}. The subscriber is receiving but not acknowledging."));
-            }
+                throw AcknowledgementTimeout(ackTimeout);
 
             await responseStream.WriteAsync(ToMessage(delivery), cancellationToken).ConfigureAwait(false);
             metrics.RecordDelivered();
         }
     }
+
+    private static async Task MonitorAcknowledgementsAsync(
+        InboundSubscription subscription,
+        TimeSpan ackTimeout,
+        CancellationToken cancellationToken)
+    {
+        await subscription.WaitForAcknowledgementTimeoutAsync(ackTimeout, cancellationToken).ConfigureAwait(false);
+        throw AcknowledgementTimeout(ackTimeout);
+    }
+
+    private static RpcException AcknowledgementTimeout(TimeSpan ackTimeout) =>
+        new(new Status(StatusCode.DeadlineExceeded,
+            $"No acknowledgement within {ackTimeout}. The subscriber is receiving but not acknowledging."));
 
     private static async Task ReadAcknowledgementsAsync(
         IAsyncStreamReader<SubscribeRequest> requestStream,

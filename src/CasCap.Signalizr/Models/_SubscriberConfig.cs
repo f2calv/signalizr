@@ -21,7 +21,12 @@ public sealed record SubscriberConfig
     [Range(1, 10_000)]
     public int MaxOutstanding { get; init; } = 32;
 
-    /// <summary>How long to wait for acknowledgements before disconnecting a subscriber.</summary>
+    /// <summary>Maximum age of an unacknowledged delivery reservation before disconnecting a subscriber.</summary>
+    /// <remarks>
+    /// Starts before the response write, including blocked writes. Each reservation keeps its own
+    /// deadline; later deliveries or invalid acknowledgements do not extend it. Quiet streams with
+    /// no outstanding deliveries do not expire.
+    /// </remarks>
     [Range(1_000, 600_000)]
     public int AckTimeoutMs { get; init; } = 30_000;
 

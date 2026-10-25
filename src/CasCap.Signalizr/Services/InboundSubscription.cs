@@ -13,7 +13,14 @@ public sealed class InboundSubscription : IDisposable
 {
     private readonly IDbContextFactory<SignalizrDbContext> _dbContextFactory;
     private readonly Channel<bool> _notifications;
-    private readonly Queue<long> _outstanding = new();
+    private readonly Queue<(long Id, long ReservedAt)> _outstanding = new();
+    private readonly Channel<bool> _acknowledgementChanges = Channel.CreateBounded<bool>(
+        new BoundedChannelOptions(1)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleReader = true,
+            SingleWriter = false
+        });
     private readonly Lock _outstandingLock = new();
     private readonly SemaphoreSlim _budget;
     private readonly SemaphoreSlim _cursorLock = new(1, 1);
@@ -21,6 +28,7 @@ public sealed class InboundSubscription : IDisposable
     private readonly SignalizrMetrics _metrics;
     private readonly string[] _groups;
     private readonly int _replayBatchSize;
+    private TimeSpan? _acknowledgementTimeout;
     private long _nextMessageId;
     // Highest id below which every message is delivered or not for this subscriber.
     private long _scannedThrough;
@@ -194,9 +202,56 @@ public sealed class InboundSubscription : IDisposable
             return false;
 
         lock (_outstandingLock)
-            _outstanding.Enqueue(messageId);
+            _outstanding.Enqueue((messageId, _timeProvider.GetTimestamp()));
 
+        _acknowledgementChanges.Writer.TryWrite(true);
         return true;
+    }
+
+    /// <summary>Waits until the oldest reservation expires, even when no new messages arrive.</summary>
+    /// <remarks>
+    /// One stream-owned monitor sets the maximum reservation age independently of admission waits.
+    /// It must be cancelled and awaited before disposing this subscription.
+    /// </remarks>
+    public async Task WaitForAcknowledgementTimeoutAsync(
+        TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
+        lock (_outstandingLock)
+            _acknowledgementTimeout = timeout;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            TimeSpan? remaining = null;
+            lock (_outstandingLock)
+            {
+                if (_outstanding.TryPeek(out var oldest))
+                {
+                    remaining = timeout - _timeProvider.GetElapsedTime(oldest.ReservedAt);
+                    if (remaining <= TimeSpan.Zero)
+                        return;
+                }
+            }
+
+            if (remaining is null)
+            {
+                await _acknowledgementChanges.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            using var expiry = new CancellationTokenSource(remaining.Value, _timeProvider);
+            using var wakeup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, expiry.Token);
+            try
+            {
+                await _acknowledgementChanges.Reader.ReadAsync(wakeup.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (expiry.IsCancellationRequested
+                && !cancellationToken.IsCancellationRequested)
+            {
+                // Recheck under the lock: a timely acknowledgement may have changed the head.
+            }
+        }
     }
 
     /// <summary>Advances the durable cursor when the oldest outstanding delivery is acknowledged.</summary>
@@ -209,7 +264,9 @@ public sealed class InboundSubscription : IDisposable
 
         lock (_outstandingLock)
         {
-            if (_outstanding.Count == 0 || _outstanding.Peek() != messageId)
+            if (!_outstanding.TryPeek(out var oldest) || oldest.Id != messageId
+                || (_acknowledgementTimeout is { } timeout
+                    && _timeProvider.GetElapsedTime(oldest.ReservedAt) >= timeout))
                 return false;
         }
 
@@ -225,6 +282,7 @@ public sealed class InboundSubscription : IDisposable
         }
 
         _budget.Release();
+        _acknowledgementChanges.Writer.TryWrite(true);
         if (skippedThrough > messageId)
             await PersistCursorAsync(skippedThrough, cancellationToken).ConfigureAwait(false);
         return true;

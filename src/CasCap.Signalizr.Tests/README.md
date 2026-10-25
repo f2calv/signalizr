@@ -25,7 +25,7 @@ Source includes test configuration files, but these fixtures use synthetic optio
 | `InboundAttachmentServiceTests` | 1 | 1 | Stored binary attachment retrieval |
 | `InboundMessageQueueTests` | 7 | 7 | Bounded drop-oldest queue and counters |
 | `InboundPollVoteTests` | 2 | 4 | Stored vote option-index serialization and absent selections |
-| `InboundSubscriberRegistryTests` | 13 | 13 | Replay, independent cursors, identities, ordered acknowledgements, per-subscriber group filtering and cursor advance past other groups |
+| `InboundSubscriberRegistryTests` | 14 | 15 | Replay, independent cursors, identities, ordered acknowledgements, exact oldest-reservation deadlines, group filtering and cursor advance past other groups |
 | `MessageGatewayTests` | 9 | 13 | Upstream send-request projection, data URIs and reaction-target validation |
 | `SignalizrClientConfigTests` | 1 | 1 | Explicit durable subscriber-name requirement |
 | `SignalizrClientExtensionsTests` | 8 | 8 | Best-effort interactions, cancellation and startup group checks |
@@ -33,10 +33,10 @@ Source includes test configuration files, but these fixtures use synthetic optio
 | `SubscriberConfigValidatorTests` | 3 | 4 | Subscriber groups must be served groups, matched exactly, and never empty |
 | `GroupNameMigrationTests` | 1 | 1 | SQLite migration preserves rows across schema transitions and rollback |
 | `GroupRestTests` | 1 | 5 | Exact group-name query routing over local HTTP |
-| `InboundGrpcServiceTests` | 7 | 8 | Acknowledgement timeout, independent consumers, duplicate identity/refusal, request EOF/failure, blocked-write cancellation and caller cancellation |
+| `InboundGrpcServiceTests` | 9 | 11 | Quiet/blocked-write acknowledgement expiry, healthy idle streams, independent consumers, duplicate identity/refusal, request EOF/failure and cancellation |
 | `SignalizrClientTransportTests` | 3 | 3 | gRPC liveness budgets, unchanged REST transport and a loopback HTTP/2 peer that ignores keepalive pings |
 | `SignalizrMcpTests` | 25 | 41 | Authentication, feature gates, status, groups, bounded history, prompts and controlled sending |
-| **Total** | **110** | **139** | |
+| **Total** | **113** | **144** | |
 
 Counts are statically derived from facts, theories and inline data, not observed test results.
 These fixtures do not establish production-scale reliability, long-running stability or loss
@@ -48,7 +48,7 @@ behavior during a real wrapper outage.
 | --- | ---: | --- |
 | `Integration` | 50 | Local HTTP REST/MCP fixtures, HTTP/2 transport and SQLite schema migrations |
 
-The remaining 89 cases have no category trait, including the service-level gRPC fixtures.
+The remaining 94 cases have no category trait, including the service-level gRPC fixtures.
 Filtering out `Category=Integration` therefore does not mean “no database-backed fixture.”
 
 ## Skipped Tests

@@ -260,6 +260,58 @@ public sealed class InboundSubscriberRegistryTests
             await fixture.GetCursorAsync(FilteredSubscriberName));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AcknowledgementDeadline_PreservesReservationAge(bool acknowledgeHead)
+    {
+        var clock = new ManualTimestampProvider();
+        using var fixture = new RegistryFixture(maxOutstanding: 2, timeProvider: clock);
+        using var subscription = await fixture.Registry.SubscribeAsync("ordered", TestContext.Current.CancellationToken);
+        var budget = TimeSpan.FromSeconds(1);
+        Assert.True(await subscription.TryReserveAsync("1", budget, TestContext.Current.CancellationToken));
+        clock.Advance(TimeSpan.FromMilliseconds(400));
+        Assert.True(await subscription.TryReserveAsync("2", budget, TestContext.Current.CancellationToken));
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var monitor = subscription.WaitForAcknowledgementTimeoutAsync(budget, cancellation.Token);
+        if (acknowledgeHead)
+            Assert.True(await subscription.AcknowledgeAsync("1", TestContext.Current.CancellationToken));
+        else
+        {
+            Assert.False(await subscription.AcknowledgeAsync("invalid", TestContext.Current.CancellationToken));
+            Assert.False(await subscription.AcknowledgeAsync("2", TestContext.Current.CancellationToken));
+        }
+
+        await cancellation.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => monitor);
+
+        // Fixed timestamps verify the exact threshold without a wall-clock scheduling assertion.
+        clock.Advance(TimeSpan.FromMilliseconds(acknowledgeHead ? 999 : 599));
+        using var beforeDeadline = new CancellationTokenSource();
+        var pending = subscription.WaitForAcknowledgementTimeoutAsync(budget, beforeDeadline.Token);
+        Assert.False(pending.IsCompleted);
+        await beforeDeadline.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        await subscription.WaitForAcknowledgementTimeoutAsync(budget, TestContext.Current.CancellationToken)
+            .WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        Assert.False(await subscription.AcknowledgeAsync(
+            acknowledgeHead ? "2" : "1", TestContext.Current.CancellationToken));
+        Assert.Equal(acknowledgeHead ? 1 : 0, await fixture.GetCursorAsync("ordered"));
+    }
+
+    private sealed class ManualTimestampProvider : TimeProvider
+    {
+        private long _timestamp;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => _timestamp;
+
+        public void Advance(TimeSpan elapsed) => _timestamp += elapsed.Ticks;
+    }
+
     private static async Task<InboundDelivery> ReadOneAsync(InboundSubscription subscription)
     {
         await using var enumerator = subscription
@@ -269,10 +321,11 @@ public sealed class InboundSubscriberRegistryTests
         return enumerator.Current;
     }
 
-    private sealed class RegistryFixture(int maxOutstanding = 4) : IDisposable
+    private sealed class RegistryFixture(int maxOutstanding = 4, TimeProvider? timeProvider = null) : IDisposable
     {
         private readonly (SignalizrMetrics Metrics, TestDbContextFactory DbContextFactory,
-            FakeOperatorNotifier Notifier, InboundSubscriberRegistry Registry) _state = CreateState(maxOutstanding);
+            FakeOperatorNotifier Notifier, InboundSubscriberRegistry Registry) _state =
+            CreateState(maxOutstanding, timeProvider ?? TimeProvider.System);
 
         public InboundSubscriberRegistry Registry => _state.Registry;
 
@@ -310,7 +363,8 @@ public sealed class InboundSubscriberRegistryTests
         public void Dispose() => _state.Metrics.Dispose();
 
         private static (SignalizrMetrics Metrics, TestDbContextFactory DbContextFactory,
-            FakeOperatorNotifier Notifier, InboundSubscriberRegistry Registry) CreateState(int maxOutstanding)
+            FakeOperatorNotifier Notifier, InboundSubscriberRegistry Registry) CreateState(
+                int maxOutstanding, TimeProvider timeProvider)
         {
             var metrics = new SignalizrMetrics();
             var dbContextFactory = new TestDbContextFactory();
@@ -323,7 +377,7 @@ public sealed class InboundSubscriberRegistryTests
                     MaxOutstanding = maxOutstanding,
                     SubscriberGroups = SubscriberNames.ToDictionary(name => name, _ => new[] { ExampleGroup })
                 }),
-                TimeProvider.System,
+                timeProvider,
                 metrics,
                 dbContextFactory,
                 notifier);

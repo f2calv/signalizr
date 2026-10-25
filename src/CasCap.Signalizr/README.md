@@ -40,6 +40,10 @@ After persistence, stable subscriber identities have independent durable cursors
 delivery within retention. New subscribers start at the current tail; reconnecting subscribers
 resume after their last contiguous acknowledgement. An identity can own only one live stream.
 Outstanding-message bounds and acknowledgement timeouts isolate stalled subscribers.
+Each delivery's acknowledgement budget starts when its slot is reserved, before writing the
+response, and expires even if it is the last message. Acknowledging the head does not reset the age
+of the next outstanding delivery. Invalid or late acknowledgements do not advance the cursor.
+An idle stream with no outstanding deliveries remains connected.
 
 Attachments are stored with the inbound message, exposed as descriptors and downloaded through
 the host's REST attachment endpoint. Retention cascades to attachment bytes. Both `dataMessage`

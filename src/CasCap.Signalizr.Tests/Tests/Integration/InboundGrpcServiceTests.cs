@@ -165,6 +165,60 @@ public class InboundGrpcServiceTests
         Assert.True(session.Call.IsCompletedSuccessfully);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AcknowledgementTimeout_ExpiresQuietDelivery(bool pauseWrites)
+    {
+        // Regression: expiry previously required a later delivery to exhaust the budget.
+        using var fixture = new RegistryFixture(maxOutstanding: 2);
+        var service = CreateService(fixture, ackTimeoutMs: 100);
+        await using var session = StartSession(service, "non-acknowledging", pauseWrites);
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+        await fixture.AddMessageAsync("pending");
+        if (pauseWrites)
+            await session.Response.WaitForWriteAsync(TestContext.Current.CancellationToken);
+        else
+            _ = await ReadResponseAsync(session.Response);
+
+        var exception = await Assert.ThrowsAsync<RpcException>(() =>
+            session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+
+        Assert.Equal(StatusCode.DeadlineExceeded, exception.StatusCode);
+        Assert.Equal(0, fixture.Registry.Count);
+        Assert.Single(fixture.Notifier.Notices, notice =>
+            notice.Contains("stopped acknowledging", StringComparison.Ordinal));
+        await using var replay = StartSession(CreateService(fixture, 2_000), "non-acknowledging");
+        Assert.Equal("pending", (await ReadResponseAsync(replay.Response)).Message);
+    }
+
+    [Fact]
+    public async Task AcknowledgementTimeout_KeepsHealthyIdleStreamConnected()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 500);
+        await using var session = StartSession(service, "acknowledging");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+
+        for (var cycle = 0; cycle < 2; cycle++)
+        {
+            await Task.Delay(600, TestContext.Current.CancellationToken);
+            Assert.False(session.Call.IsCompleted);
+            await fixture.AddMessageAsync("acknowledged");
+            var delivery = await ReadResponseAsync(session.Response);
+            session.Request.Write(new SubscribeRequest { Ack = new Ack { DeliveryId = delivery.DeliveryId } });
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            while (await fixture.GetCursorAsync("acknowledging") != long.Parse(
+                delivery.DeliveryId, System.Globalization.CultureInfo.InvariantCulture))
+                await Task.Delay(10, timeout.Token);
+        }
+
+        await Task.Delay(600, TestContext.Current.CancellationToken);
+        Assert.False(session.Call.IsCompleted);
+        Assert.DoesNotContain(fixture.Notifier.Notices, notice =>
+            notice.Contains("stopped acknowledging", StringComparison.Ordinal));
+    }
+
     private static InboundGrpcService CreateService(
         RegistryFixture fixture, int ackTimeoutMs) =>
         new(fixture.Registry, fixture.Metrics,
@@ -213,6 +267,15 @@ public class InboundGrpcServiceTests
         public FakeOperatorNotifier Notifier => _state.Notifier;
 
         public InboundSubscriberRegistry Registry => _state.Registry;
+
+        public async Task<long> GetCursorAsync(string name)
+        {
+            await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
+            return await dbContext.SubscriberCursors
+                .Where(cursor => cursor.SubscriberName == name)
+                .Select(cursor => cursor.LastAcknowledgedMessageId)
+                .SingleAsync();
+        }
 
         public async Task AddMessageAsync(string message)
         {

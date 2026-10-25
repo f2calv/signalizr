@@ -66,6 +66,9 @@ public sealed partial class CommunicationsBgService(
     private ICommsResponder? ActiveResponder => responder is { IsAvailable: true } ? responder : null;
 
     /// <inheritdoc/>
+    // TODO: Coordinate responder admission with required tool/API routability and bounded discovery recovery.
+    // Subscription replay can precede this consumer's own HTTP readiness; defer gating until the responder
+    // exposes a recovery contract, avoiding arbitrary sleeps or a circular readiness dependency.
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var monitorEnabled = !string.IsNullOrEmpty(commsConfig.Value.MonitorGroupName);

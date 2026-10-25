@@ -15,6 +15,9 @@ public sealed class InboundSubscriberRegistry(
     IDbContextFactory<SignalizrDbContext> dbContextFactory,
     IOperatorNotifier operatorNotifier) : IInboundSubscriberRegistry
 {
+    // TODO: Introduce durable ownership/fencing before allowing overlapping gateway replicas.
+    // This registry enforces identity only within one process; retain single-owner deployment until
+    // distributed cursor concurrency and takeover/replay behavior have explicit tests.
     private readonly ConcurrentDictionary<string, InboundSubscription> _subscriptions =
         new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _registrationLock = new(1, 1);

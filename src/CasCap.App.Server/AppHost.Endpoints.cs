@@ -7,6 +7,9 @@ namespace CasCap;
 
 public static partial class AppHost
 {
+    // TODO: Expose role-aware subscription/cursor progress separately from HTTP process health.
+    // Defer probe changes until sparse-traffic thresholds and dependency readiness contracts are agreed;
+    // lack of messages alone must not restart a healthy subscriber.
     private static void MapEndpoints(
         WebApplication app,
         IReadOnlySet<string> enabledFeatures,

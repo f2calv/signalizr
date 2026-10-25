@@ -33,10 +33,10 @@ Source includes test configuration files, but these fixtures use synthetic optio
 | `SubscriberConfigValidatorTests` | 3 | 4 | Subscriber groups must be served groups, matched exactly, and never empty |
 | `GroupNameMigrationTests` | 1 | 1 | SQLite migration preserves rows across schema transitions and rollback |
 | `GroupRestTests` | 1 | 5 | Exact group-name query routing over local HTTP |
-| `InboundGrpcServiceTests` | 4 | 4 | Acknowledgement timeout, independent consumers, duplicate live identity and unconfigured subscriber refusal |
+| `InboundGrpcServiceTests` | 7 | 8 | Acknowledgement timeout, independent consumers, duplicate identity/refusal, request EOF/failure, blocked-write cancellation and caller cancellation |
 | `SignalizrClientTransportTests` | 3 | 3 | gRPC liveness budgets, unchanged REST transport and a loopback HTTP/2 peer that ignores keepalive pings |
 | `SignalizrMcpTests` | 25 | 41 | Authentication, feature gates, status, groups, bounded history, prompts and controlled sending |
-| **Total** | **107** | **135** | |
+| **Total** | **110** | **139** | |
 
 Counts are statically derived from facts, theories and inline data, not observed test results.
 These fixtures do not establish production-scale reliability, long-running stability or loss
@@ -48,7 +48,7 @@ behavior during a real wrapper outage.
 | --- | ---: | --- |
 | `Integration` | 50 | Local HTTP REST/MCP fixtures, HTTP/2 transport and SQLite schema migrations |
 
-The remaining 85 cases have no category trait, including the service-level gRPC fixtures.
+The remaining 89 cases have no category trait, including the service-level gRPC fixtures.
 Filtering out `Category=Integration` therefore does not mean “no database-backed fixture.”
 
 ## Skipped Tests

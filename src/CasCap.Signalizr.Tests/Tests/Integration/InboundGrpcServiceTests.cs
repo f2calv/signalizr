@@ -103,9 +103,71 @@ public class InboundGrpcServiceTests
         Assert.Equal(0, fixture.Registry.Count);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RequestCompletion_ReleasesIdleSubscriber(bool fail)
+    {
+        // Regression: request EOF/failure left the response loop and durable identity connected.
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 2_000);
+        await using var session = StartSession(service, "duplicate");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+
+        var failure = fail ? new RpcException(new Status(StatusCode.Unavailable, "Test request failure.")) : null;
+        session.Request.Complete(failure);
+        var completion = session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        if (fail)
+        {
+            var exception = await Assert.ThrowsAsync<RpcException>(() => completion);
+            Assert.Equal(StatusCode.Unavailable, exception.StatusCode);
+        }
+        else
+            await completion;
+
+        Assert.Equal(0, fixture.Registry.Count);
+        await using var reconnected = StartSession(service, "duplicate");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+        Assert.False(reconnected.Call.IsCompleted);
+    }
+
+    [Fact]
+    public async Task RequestCompletion_CancelsBlockedResponseWrite()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 2_000);
+        await using var session = StartSession(service, "duplicate", pauseWrites: true);
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+        await fixture.AddMessageAsync("pending");
+        await session.Response.WaitForWriteAsync(TestContext.Current.CancellationToken);
+
+        session.Request.Complete();
+        await session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, fixture.Registry.Count);
+        await using var reconnected = StartSession(service, "duplicate");
+        var replay = await ReadResponseAsync(reconnected.Response);
+        Assert.Equal("pending", replay.Message);
+    }
+
+    [Fact]
+    public async Task CallerCancellation_ReleasesIdleSubscriber()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 2_000);
+        await using var session = StartSession(service, "duplicate");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+
+        await session.CancelAsync();
+        await session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, fixture.Registry.Count);
+        Assert.True(session.Call.IsCompletedSuccessfully);
+    }
+
     private static InboundGrpcService CreateService(
         RegistryFixture fixture, int ackTimeoutMs) =>
-        new(NullLogger<InboundGrpcService>.Instance, fixture.Registry, fixture.Metrics,
+        new(fixture.Registry, fixture.Metrics,
             Options.Create(new SubscriberConfig
             {
                 ReplayBatchSize = 10,
@@ -218,6 +280,8 @@ public class InboundGrpcServiceTests
 
         public Task Call { get; } = call;
 
+        public Task CancelAsync() => cancellation.CancelAsync();
+
         public async ValueTask DisposeAsync()
         {
             await cancellation.CancelAsync();
@@ -245,7 +309,7 @@ public class InboundGrpcServiceTests
 
         public void Write(T item) => _channel.Writer.TryWrite(item);
 
-        public void Complete() => _channel.Writer.TryComplete();
+        public void Complete(Exception? error = null) => _channel.Writer.TryComplete(error);
 
         public async Task<bool> MoveNext(CancellationToken cancellationToken)
         {
@@ -283,10 +347,12 @@ public class InboundGrpcServiceTests
 
         public WriteOptions? WriteOptions { get; set; }
 
-        public async Task WriteAsync(T message)
+        public Task WriteAsync(T message) => WriteAsync(message, CancellationToken.None);
+
+        public async Task WriteAsync(T message, CancellationToken cancellationToken)
         {
             _writeStarted.TrySetResult();
-            await _writeGate.Task;
+            await _writeGate.Task.WaitAsync(cancellationToken);
             _channel.Writer.TryWrite(message);
         }
 

@@ -167,6 +167,8 @@ the iterator.
 Each message is acknowledged when the consumer asks for the next one, so an acknowledgement means
 "the previous message was processed" rather than "it arrived". A consumer that stops enumerating
 leaves the last message unacknowledged, which is correct: it may not have been processed.
+Closing the request stream ends the subscription and releases its live identity; a request-stream
+failure also terminates the response loop. Unacknowledged deliveries remain eligible for replay.
 
 Subscriptions do not select or authorize a group on the server. Inspect `GroupName` before handling
 a delivery; it can be null for direct messages or messages outside the configured groups.

@@ -1,15 +1,21 @@
-# SQLite quickstart: a one-shot migrator, the Signal REST wrapper, the gateway, and a demo client.
+# Default: docker compose up -d --wait starts only the Signal REST wrapper for IDE development.
+# SQLite demo: docker compose --profile demo up --build
+# PostgreSQL demo: docker compose --profile postgres up --build
+# Choose demo OR postgres, never both: they represent alternative owners of one Signal account.
 #
 # The wrapper needs a registered Signal account before anything can be sent. Follow the upstream
 # registration/linking steps first: https://github.com/bbernhard/signal-cli-rest-api
 #
 #   cp .env.example .env     # then edit, it holds a phone number and is gitignored
-#   docker compose up --build
+# Existing PostgreSQL-only stacks: select their account volume through SIGNALIZR_ACCOUNT_VOLUME
+# before starting; the default preserves the original SQLite stack's account registrations.
 #
 # Endpoints:
 #   signal-cli REST  : http://localhost:8180
-#   Signalizr REST   : http://localhost:8080
-#   Signalizr gRPC   : localhost:5001 (plaintext HTTP/2)
+#   Signalizr REST   : http://localhost:8080 [demo or postgres]
+#   Signalizr gRPC   : localhost:5001 (plaintext HTTP/2) [demo or postgres]
+#   PostgreSQL       : localhost:5432 [postgres]
+# Database/cache contents are disposable local data; never remove account state as routine cleanup.
 name: signalizr
 
 x-signalizr-image: &signalizr-image
@@ -18,63 +24,106 @@ x-signalizr-image: &signalizr-image
     context: .
     dockerfile: Dockerfile
 
+x-gateway-environment: &gateway-environment
+  CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
+  CasCap__SignalCliConfig__BaseAddress: http://signal-cli-rest-api:8080
+  CasCap__SignalCliConfig__PhoneNumber: ${SIGNALIZR_PHONE_NUMBER:-+10000000000}
+  CasCap__GroupConfig__GroupNames__0: CasCap.Signalizr System
+  CasCap__GroupConfig__GroupNames__1: CasCap.Signalizr Demo
+  CasCap__SubscriberConfig__SubscriberGroups__signalizr-demo__0: CasCap.Signalizr Demo
+  CasCap__DatabaseConfig__MigrateOnStartup: "false"
+  ASPNETCORE_ENVIRONMENT: Development
+
+x-postgres-database: &postgres-database
+  CasCap__DatabaseConfig__Provider: Postgres
+  CasCap__DatabaseConfig__ConnectionString: Host=postgres;Database=signalizr;Username=signalizr;Password=${SIGNALIZR_POSTGRES_PASSWORD:-signalizr}
+  CasCap__DatabaseConfig__MigrateOnStartup: "false"
+
+# The application image is chiseled and has no shell/HTTP probe executable.
+# A bounded one-shot HTTP gate lets demo clients wait for real gateway readiness.
+x-readiness-gate: &readiness-gate
+  image: alpine:3
+  restart: "no"
+  command:
+    - sh
+    - -ec
+    - |
+      attempt=0
+      until wget -q -T 2 -O /dev/null "http://$$GATEWAY_HOST:8080/healthz/ready"; do
+        attempt=$$((attempt + 1))
+        if [ "$$attempt" -ge 60 ]; then
+          echo "Gateway readiness timed out" >&2
+          exit 1
+        fi
+        sleep 2
+      done
+
 services:
   signal-cli-rest-api:
+    # Upstream publishes no :0 major alias; retain this verified release tag.
     image: bbernhard/signal-cli-rest-api:0.101
     environment:
       MODE: json-rpc
     ports:
-      - "8180:8080"
+      - "127.0.0.1:8180:8080"
     volumes:
-      - signal-cli-data:/home/.local/share/signal-cli
+      - signal_cli_data:/home/.local/share/signal-cli
+    healthcheck:
+      test: [CMD-SHELL, curl -sf http://localhost:8080/v1/health || exit 1]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
     restart: unless-stopped
 
   # Schema barrier: exits successfully only after all SQLite migrations are applied.
   signalizr-migrate:
     <<: *signalizr-image
+    profiles: [demo]
     environment:
       CasCap__FeatureConfig__EnabledFeatures: DbMigrator
       CasCap__DatabaseConfig__Provider: Sqlite
       CasCap__DatabaseConfig__ConnectionString: Data Source=/var/lib/signalizr/signalizr.db
       CasCap__DatabaseConfig__MigrateOnStartup: "false"
     volumes:
-      - signalizr-data:/var/lib/signalizr
+      - signalizr_data:/var/lib/signalizr
     restart: "no"
 
   # Default role: the gateway surface plus the single receive owner.
   signalizr:
     <<: *signalizr-image
+    profiles: [demo]
     depends_on:
       signal-cli-rest-api:
-        condition: service_started
+        condition: service_healthy
       signalizr-migrate:
         condition: service_completed_successfully
     environment:
-      CasCap__FeatureConfig__EnabledFeatures: Gateway,Receiver
-      CasCap__SignalCliConfig__BaseAddress: http://signal-cli-rest-api:8080
-      # Personal data: keep the real value in .env, never in this file.
-      CasCap__SignalCliConfig__PhoneNumber: ${SIGNALIZR_PHONE_NUMBER:-+10000000000}
-      # Example groups: create Signal groups with these names on the account, or rename them.
-      CasCap__GroupConfig__GroupNames__0: CasCap.Signalizr System
-      CasCap__GroupConfig__GroupNames__1: CasCap.Signalizr Demo
-      # The demo client receives only the demo group.
-      CasCap__SubscriberConfig__SubscriberGroups__signalizr-demo__0: CasCap.Signalizr Demo
+      <<: *gateway-environment
       CasCap__DatabaseConfig__Provider: Sqlite
       CasCap__DatabaseConfig__ConnectionString: Data Source=/var/lib/signalizr/signalizr.db
-      CasCap__DatabaseConfig__MigrateOnStartup: "false"
-      ASPNETCORE_ENVIRONMENT: Development
     ports:
-      - "8080:8080"
-      - "5001:5001"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:5001:5001"
     volumes:
-      - signalizr-data:/var/lib/signalizr
+      - signalizr_data:/var/lib/signalizr
     restart: unless-stopped
 
-  # Same image, second role - selected purely by the feature flag.
+  signalizr-ready:
+    <<: *readiness-gate
+    profiles: [demo]
+    environment:
+      GATEWAY_HOST: signalizr
+    depends_on:
+      signalizr:
+        condition: service_started
+
   signalizr-demo-client:
     image: signalizr:local
+    profiles: [demo]
     depends_on:
-      - signalizr
+      signalizr-ready:
+        condition: service_completed_successfully
     environment:
       CasCap__FeatureConfig__EnabledFeatures: DemoClient
       CasCap__SignalizrClientConfig__BaseAddress: http://signalizr:8080
@@ -83,6 +132,76 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
     restart: unless-stopped
 
+  postgres:
+    image: postgres:18-alpine
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: signalizr
+      POSTGRES_USER: signalizr
+      POSTGRES_PASSWORD: ${SIGNALIZR_POSTGRES_PASSWORD:-signalizr}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready --username=$$POSTGRES_USER --dbname=$$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  signalizr-postgres-migrate:
+    <<: *signalizr-image
+    profiles: [postgres]
+    environment:
+      <<: *postgres-database
+      CasCap__FeatureConfig__EnabledFeatures: DbMigrator
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  signalizr-postgres:
+    <<: *signalizr-image
+    profiles: [postgres]
+    environment:
+      <<: [*gateway-environment, *postgres-database]
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:5001:5001"
+    depends_on:
+      signal-cli-rest-api:
+        condition: service_healthy
+      signalizr-postgres-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  signalizr-postgres-ready:
+    <<: *readiness-gate
+    profiles: [postgres]
+    environment:
+      GATEWAY_HOST: signalizr-postgres
+    depends_on:
+      signalizr-postgres:
+        condition: service_started
+
+  signalizr-postgres-demo-client:
+    image: signalizr:local
+    profiles: [postgres]
+    environment:
+      CasCap__FeatureConfig__EnabledFeatures: DemoClient
+      CasCap__SignalizrClientConfig__BaseAddress: http://signalizr-postgres:8080
+      CasCap__SignalizrClientConfig__GrpcAddress: http://signalizr-postgres:5001
+      CasCap__SignalizrClientConfig__SubscriberName: signalizr-demo
+      ASPNETCORE_ENVIRONMENT: Development
+    depends_on:
+      signalizr-postgres-ready:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
-  signal-cli-data:
-  signalizr-data:
+  signal_cli_data:
+    # Account registrations are not disposable; preserve the original generated volume name.
+    name: ${SIGNALIZR_ACCOUNT_VOLUME:-signalizr_signal-cli-data}
+  signalizr_data:
+  postgres_data:

@@ -36,21 +36,20 @@ cp .env.example .env
 To build and run from source:
 
 ```bash
-docker compose up --build
+docker compose --profile demo up --build
 ```
 
-Compose runs a one-shot SQLite migrator before the gateway, then starts a DemoClient subscriber.
-The wrapper retains account state and the gateway retains messages, attachments and cursors on
-separate named volumes. The alternative
-[PostgreSQL Compose example](docker-compose.postgres.yml) also publishes PostgreSQL on port 5432;
-supply non-default database credentials before using it outside local development.
+The [Compose definition](docker-compose.yml) starts only the upstream wrapper by default.
+The `demo` profile runs a one-shot SQLite migrator before the gateway and waits for gateway
+readiness before starting a DemoClient subscriber. To use the alternative PostgreSQL topology:
 
-| Local endpoint | Purpose |
-| --- | --- |
-| `http://localhost:8080/api/v1/groups` | Resolved group names |
-| `http://localhost:8080/healthz/ready` | Readiness, including wrapper reachability |
-| `http://localhost:5001` | Plaintext HTTP/2 gRPC subscriptions |
-| `http://localhost:8180` | Upstream wrapper; account setup, not the consumer API |
+```bash
+docker compose --profile postgres up --build
+```
+
+Choose one application profile, never both: only one receiver may own the account. Dependency
+endpoints and storage wiring live in the Compose header/definition. Its database credentials are
+local-only examples, not deployment credentials.
 
 Stopping Compose preserves volumes. Removing volumes deletes Signal account state and gateway
 history; do not use `down --volumes` as routine cleanup.

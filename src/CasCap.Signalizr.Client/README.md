@@ -197,6 +197,13 @@ while (!cancellationToken.IsCancellationRequested)
 }
 ```
 
+The gRPC transport limits connection establishment to 10 seconds. While a subscription is active,
+it sends an HTTP/2 keepalive ping after 60 seconds without incoming frames and closes the connection
+if the peer does not answer within another 30 seconds. This surfaces a half-open connection to the
+caller's reconnect loop without imposing a maximum subscription lifetime. The gateway or any
+HTTP/2 intermediary must support keepalive pings. These limits do not change REST send behavior or
+automatically replay sends.
+
 ## Privacy
 
 `SignalizrMessage.Sender` is a Signal identifier and `Message` is someone's content. Neither belongs

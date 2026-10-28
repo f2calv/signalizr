@@ -45,7 +45,7 @@ documentation there rather than in these repository-specific constraints.
 
 ## Maintenance
 
-- Change shared build/deploy orchestration and its tests in the central `container-workflows`
+- Change shared build/deploy orchestration and its tests in the central `containers-workflows`
   skill, not in this repository's root shims.
 - This repository owns and publishes `CasCap.Signalizr.Client`, `CasCap.Signalizr.Client.Testing`,
   `CasCap.Comms`, and `CasCap.Comms.AI` under one repository version. Keep same-repository project

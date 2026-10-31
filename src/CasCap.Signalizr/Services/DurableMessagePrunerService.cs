@@ -1,7 +1,6 @@
 using CasCap.Data;
 using CasCap.Diagnostics;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
 
 namespace CasCap.Services;
 
@@ -11,16 +10,19 @@ public sealed class DurableMessagePrunerService(
     IOptions<DatabaseConfig> databaseConfig,
     TimeProvider timeProvider,
     SignalizrMetrics metrics,
-    IDbContextFactory<SignalizrDbContext> dbContextFactory) : BackgroundService
+    IDbContextFactory<SignalizrDbContext> dbContextFactory) : IBgFeature
 {
     /// <inheritdoc/>
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public string FeatureName => FeatureNames.Receiver;
+
+    /// <inheritdoc/>
+    public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var interval = TimeSpan.FromMilliseconds(databaseConfig.Value.PruneIntervalMs);
-        while (!stoppingToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            await Task.Delay(interval, timeProvider, stoppingToken).ConfigureAwait(false);
-            await PruneOnceAsync(stoppingToken).ConfigureAwait(false);
+            await Task.Delay(interval, timeProvider, cancellationToken).ConfigureAwait(false);
+            await PruneOnceAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 

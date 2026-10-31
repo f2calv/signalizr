@@ -35,6 +35,7 @@ public static partial class AppHost
             builder.Services.AddSingleton<InboundAttachmentService>();
             builder.Services.AddSingleton<InboundMessagePersistenceService>();
             builder.Services.AddSingleton<IBgFeature, ReceiverBgService>();
+            builder.Services.AddSingleton<IBgFeature, DurableMessagePrunerService>();
             // Separate from the receive loop: per-message work belongs here, where it cannot stop the
             // upstream being read.
             builder.Services.AddSingleton<IBgFeature, DispatcherBgService>();

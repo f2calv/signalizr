@@ -20,7 +20,7 @@ Source includes test configuration files, but these fixtures use synthetic optio
 | Class | Methods | Expanded cases | Scope |
 | --- | ---: | ---: | --- |
 | `DispatcherMappingTests` | 12 | 12 | Group mapping, text/self-message handling, poll votes and delivery identity |
-| `DurableMessagePrunerServiceTests` | 2 | 2 | Globally acknowledged cleanup and hard content-retention cap |
+| `DurableMessagePrunerServiceTests` | 3 | 3 | Receiver ownership, globally acknowledged cleanup and hard content-retention cap |
 | `GroupResolverTests` | 12 | 13 | Exact names, ambiguous/missing groups and indexed configuration validation |
 | `InboundAttachmentServiceTests` | 1 | 1 | Stored binary attachment retrieval |
 | `InboundMessageQueueTests` | 7 | 7 | Bounded drop-oldest queue and counters |
@@ -36,7 +36,7 @@ Source includes test configuration files, but these fixtures use synthetic optio
 | `InboundGrpcServiceTests` | 9 | 11 | Quiet/blocked-write acknowledgement expiry, healthy idle streams, independent consumers, duplicate identity/refusal, request EOF/failure and cancellation |
 | `SignalizrClientTransportTests` | 3 | 3 | gRPC liveness budgets, unchanged REST transport and a loopback HTTP/2 peer that ignores keepalive pings |
 | `SignalizrMcpTests` | 25 | 41 | Authentication, feature gates, status, groups, bounded history, prompts and controlled sending |
-| **Total** | **113** | **144** | |
+| **Total** | **114** | **145** | |
 
 Counts are statically derived from facts, theories and inline data, not observed test results.
 These fixtures do not establish production-scale reliability, long-running stability or loss

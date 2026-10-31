@@ -56,10 +56,7 @@ public static class DataServiceCollectionExtensions
         });
 
         if (addRuntimeServices)
-        {
             services.AddHostedService<DatabaseInitializationService>();
-            services.AddHostedService<DurableMessagePrunerService>();
-        }
 
         return services;
     }

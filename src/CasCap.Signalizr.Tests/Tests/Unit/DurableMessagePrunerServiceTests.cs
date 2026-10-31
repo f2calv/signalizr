@@ -1,3 +1,4 @@
+using CasCap.Constants;
 using CasCap.Data;
 using CasCap.Data.Entities;
 using CasCap.Diagnostics;
@@ -101,6 +102,14 @@ public sealed class DurableMessagePrunerServiceTests : IDisposable
         new FixedTimeProvider(_now),
         _metrics,
         _dbContextFactory);
+
+    [Fact]
+    public void FeatureName_IsReceiver()
+    {
+        var service = CreateService();
+
+        Assert.Equal(FeatureNames.Receiver, service.FeatureName);
+    }
 
     private async Task SeedAsync(params InboundMessageEntity[] messages)
     {

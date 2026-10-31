@@ -77,5 +77,5 @@ without starting an application.
 The fake does not model durable cursors, acknowledgement timeouts, retention, automatic reconnects
 or Signal send validation. `Complete()` permanently closes its queue after queued deliveries drain;
 later subscriptions end immediately. Use the gateway's
-[source test guide](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Signalizr.Tests/README.md)
+[source test guide](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Backend.Tests/README.md)
 for coverage of the real delivery contract.

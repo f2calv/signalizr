@@ -1,4 +1,4 @@
-# CasCap.Signalizr.Tests
+# CasCap.Backend.Tests
 
 Source-declared tests for signalizr's .NET 10 gateway, durable delivery, .NET client helpers and
 HTTP MCP contract. Fixtures use synthetic inputs and local/in-memory dependencies, not a live
@@ -89,7 +89,7 @@ Tests/
 From the repository root, when you intend to execute the suite:
 
 ```powershell
-dotnet test --project src/CasCap.Signalizr.Tests/CasCap.Signalizr.Tests.csproj
+dotnet test --project src/CasCap.Backend.Tests/CasCap.Backend.Tests.csproj
 ```
 
 For the consumer-facing semantics behind these cases, read the

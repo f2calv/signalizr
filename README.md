@@ -108,7 +108,7 @@ All projects target .NET 10. The host and core are application components, not N
 | [Application chart](charts/signalizr/README.md) | Deploy the wrapper and gateway on Kubernetes | OCI Helm chart |
 | [Dashboard chart](charts/signalizr-dashboards/README.md) | Provision Grafana delivery dashboards | Bundled Helm subchart |
 | [REST Client requests](requests/README.md) | Call gateway REST and inspect MCP without a model | Editor request collection |
-| [Host tests](src/CasCap.App.Server.Tests/README.md), [gateway tests](src/CasCap.Signalizr.Tests/README.md), [Comms tests](src/CasCap.Comms.Tests/README.md) | Contributor test scope and prerequisites | Source test projects |
+| [Host tests](src/CasCap.App.Server.Tests/README.md), [gateway tests](src/CasCap.Backend.Tests/README.md), [Comms tests](src/CasCap.Comms.Tests/README.md) | Contributor test scope and prerequisites | Source test projects |
 
 All four packages share the repository version. Pin the same immutable version for each one you
 use, and pick one that matches your deployed gateway image.

@@ -76,5 +76,5 @@ enabled, go to the account's Note-to-Self conversation.
 
 Debug builds use adjacent shared-library sources; Release uses the package references declared in
 the project. Run/build through the host only after its dependency prerequisites are met.
-The [gateway test guide](../CasCap.Signalizr.Tests/README.md) describes offline queue, cursor,
+The [gateway test guide](../CasCap.Backend.Tests/README.md) describes offline queue, cursor,
 retention, REST, gRPC and MCP coverage.

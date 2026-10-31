@@ -230,7 +230,7 @@ cancellation and a single gateway invocation without sending real messages.
 | Operator prompts | [SignalizrMcpPrompts](../src/CasCap.App.Server/Models/SignalizrMcpPrompts.cs) |
 | MCP options | [McpConfig](../src/CasCap.App.Server/Models/McpConfig.cs) |
 | Output DTOs | `SignalizrMcp*Response` records in [Models/Dtos](../src/CasCap.App.Server/Models/Dtos) |
-| Protocol coverage | [SignalizrMcpTests](../src/CasCap.Signalizr.Tests/Tests/Integration/SignalizrMcpTests.cs) |
+| Protocol coverage | [SignalizrMcpTests](../src/CasCap.Backend.Tests/Tests/Integration/SignalizrMcpTests.cs) |
 
 MCP-specific filenames contain `Mcp`, so scoped guidance applies without pulling shared runtime
 services into the transport layer. [GroupsController](../src/CasCap.App.Server/Controllers/GroupsController.cs)

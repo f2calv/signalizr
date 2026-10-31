@@ -22,12 +22,12 @@ The configuration guard test exercises a missing Key Vault name and does not con
 
 | Class | Method count | Test-case count | Description |
 | --- | ---: | ---: | --- |
-| `FeatureConfigTests` | 9 | 21 | Validates missing, empty, unknown, case-insensitive, MCP-dependent and Comms-exclusive feature configuration |
+| `FeatureConfigTests` | 11 | 24 | Validates missing, empty, unknown, case-insensitive, MCP-dependent and exclusive Comms/migration feature configuration |
 | `HostStartupTests` | 2 | 2 | Verifies host options, infrastructure services, controller services, and the startup health endpoint |
 | `CommsHostStartupTests` | 2 | 2 | Verifies a `Comms`-only host registers the agent responder without gateway roles and with stream consumption off |
 | `HostApplicationBuilderExtensionsTests` | 1 | 1 | Rejects an Agent Runtime secret prefix without a configured Key Vault |
 | [`GatewayApiContractTests`](Tests/Integration/GatewayApiContractTests.cs) | 8 | 26 | All group operation routes, typed JSON/no-content results, validation Problem Details, error mappings under non-JSON Accept headers, cancellation, feature gating, attachment bytes and API Explorer metadata |
-| **Total** | **22** | **52** | |
+| **Total** | **24** | **55** | |
 
 Counts are derived from `[Fact]`, `[Theory]` and inline data in source, not an execution report.
 

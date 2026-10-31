@@ -13,12 +13,6 @@ public static partial class AppHost
         WebApplicationBuilder builder,
         HashSet<string> enabledFeatures)
     {
-        if (enabledFeatures.Contains(FeatureNames.DbMigrator))
-        {
-            builder.Services.AddSignalizrDataLayer(builder.Configuration, addRuntimeServices: false);
-            builder.Services.AddSingleton<IBgFeature, DbMigratorBgService>();
-        }
-
         if (enabledFeatures.Contains(FeatureNames.Gateway))
         {
             builder.Services.AddOptionsWithValidateOnStart<GatewayConfig>()

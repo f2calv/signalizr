@@ -1,21 +1,16 @@
 using CasCap.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
 
 namespace CasCap.Services;
 
-/// <summary>Applies relational EF Core migrations and stops the one-shot host.</summary>
-public sealed class DbMigratorBgService(
-    ILogger<DbMigratorBgService> logger,
+/// <summary>Applies relational Signalizr migrations for the finite external migration job.</summary>
+public sealed class SignalizrDatabaseMigrator(
+    ILogger<SignalizrDatabaseMigrator> logger,
     IOptions<DatabaseConfig> databaseConfig,
-    IHostApplicationLifetime appLifetime,
-    IDbContextFactory<SignalizrDbContext> dbContextFactory) : IBgFeature
+    IDbContextFactory<SignalizrDbContext> dbContextFactory)
 {
-    /// <inheritdoc/>
-    public string FeatureName => FeatureNames.DbMigrator;
-
-    /// <inheritdoc/>
-    public async Task ExecuteAsync(CancellationToken cancellationToken)
+    /// <summary>Applies pending migrations and returns when the schema is current.</summary>
+    public async Task MigrateAsync(CancellationToken cancellationToken)
     {
         var config = databaseConfig.Value;
 
@@ -26,16 +21,12 @@ public sealed class DbMigratorBgService(
         }
 
         if (logger.IsEnabled(LogLevel.Information))
-            logger.LogInformation("{ClassName} applying pending migrations", nameof(DbMigratorBgService));
+            logger.LogInformation("{ClassName} applying pending migrations", nameof(SignalizrDatabaseMigrator));
         await using var dbContext = await dbContextFactory
             .CreateDbContextAsync(cancellationToken)
             .ConfigureAwait(false);
         await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
         if (logger.IsEnabled(LogLevel.Information))
-            logger.LogInformation("{ClassName} migrations applied", nameof(DbMigratorBgService));
-
-        await Task.Delay(Timeout.InfiniteTimeSpan, appLifetime.ApplicationStarted)
-            .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-        appLifetime.StopApplication();
+            logger.LogInformation("{ClassName} migrations applied", nameof(SignalizrDatabaseMigrator));
     }
 }

@@ -80,8 +80,8 @@ services:
   signalizr-migrate:
     <<: *signalizr-image
     profiles: [demo]
+    command: [--migrate]
     environment:
-      CasCap__FeatureConfig__EnabledFeatures: DbMigrator
       CasCap__DatabaseConfig__Provider: Sqlite
       CasCap__DatabaseConfig__ConnectionString: Data Source=/var/lib/signalizr/signalizr.db
       CasCap__DatabaseConfig__MigrateOnStartup: "false"
@@ -153,9 +153,9 @@ services:
   signalizr-postgres-migrate:
     <<: *signalizr-image
     profiles: [postgres]
+    command: [--migrate]
     environment:
       <<: *postgres-database
-      CasCap__FeatureConfig__EnabledFeatures: DbMigrator
     depends_on:
       postgres:
         condition: service_healthy

@@ -45,6 +45,10 @@ public sealed record FeatureConfig
             throw new InvalidOperationException(
                 "The Comms role runs alone: it subscribes to a gateway as a client and must not share a process with another role.");
 
+        if (features.Contains(FeatureNames.DbMigrator) && features.Count > 1)
+            throw new InvalidOperationException(
+                "The finite DbMigrator role cannot be combined with daemon roles.");
+
         return features;
     }
 }

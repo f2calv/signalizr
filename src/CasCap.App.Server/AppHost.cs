@@ -21,12 +21,19 @@ public static partial class AppHost
 
         try
         {
+            var migrateArgument = args.Contains(MigrateArgument, StringComparer.Ordinal);
+            var configurationArgs = args.Where(argument => argument != MigrateArgument).ToArray();
+
             // Host builder
-            var builder = WebApplication.CreateBuilder(args);
+            var builder = WebApplication.CreateBuilder(configurationArgs);
             builder.Services.AddApplicationExitState();
 
             // Configuration
-            var (appConfig, enabledFeatures, applicationMetadata) = builder.InitializeConfiguration(entryAssembly);
+            var (appConfig, configuredFeatures, applicationMetadata) = builder.InitializeConfiguration(entryAssembly);
+            var enabledFeatures = migrateArgument
+                ? new HashSet<string>([FeatureNames.DbMigrator], StringComparer.OrdinalIgnoreCase)
+                : configuredFeatures;
+            var migrateOnly = enabledFeatures.SetEquals([FeatureNames.DbMigrator]);
 
             // Logging
             var logger = SerilogWebApplicationBuilderExtensions.InitializeSerilog(builder);
@@ -46,6 +53,14 @@ public static partial class AppHost
                 configureTracing: tracing => tracing
                     .AddSource(appConfig.MetricNamePrefix)
                     .AddSource(SignalCliTelemetry.ActivitySourceName));
+
+            if (migrateOnly)
+            {
+                AddDatabaseMigration(builder);
+                await using var migrationApp = builder.Build();
+                await RunDatabaseMigrationAsync(migrationApp.Services, CancellationToken.None);
+                return 0;
+            }
 
             // Feature validation and startup diagnostics
             if (logger.IsEnabled(LogLevel.Information))

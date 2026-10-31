@@ -38,7 +38,7 @@ jobs:
       solution-name: signalizr.Release.slnx
       dotnet-test-args: '["--filter-not-trait", "Category=Integration"]'
 
-  #The shared chart workflow skips chart-testing, so each chart and every ci/ fixture is linted here.
+  #Lints each chart against every ci/ fixture with the repository's pinned Helm, independent of chart-testing.
   helm:
     name: helm (${{ matrix.chart }})
     runs-on: ubuntu-24.04
@@ -91,7 +91,8 @@ jobs:
           configuration: Release
           version: ${{ needs.versioning.outputs.version }}
           solution-name: signalizr.Release.slnx
-          dotnet-test-args: --filter-not-trait Category=Integration
+          #The build job has already run these tests on the same commit.
+          execute-tests: false
 
   image:
     needs: [versioning, build]
@@ -126,19 +127,16 @@ jobs:
       #The umbrella chart owns no top-level image value; each component carries its own, so
       #chart-testing must not inject --set image.tag.
       has-image: false
-      #Skipped because the shared workflow mishandles both branches of its chart-testing arguments:
-      #with has-image true helm lint receives '--set image.tag=x' as one argv, and with it false the
-      #empty array expands to a stray argument that swallows the next flag. helm lint still runs.
-      chart-testing-cli-command: skip
       push-chart: ${{ github.event_name != 'pull_request' }}
 
   release:
     needs: [lint, versioning, build, helm, package, image, chart]
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: needs.versioning.outputs.release-exists == 'false'
+      && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     uses: f2calv/gha-workflows/.github/workflows/gha-release-versioning.yml@v1
     permissions:
       contents: write
     with:
-      semVer: ${{ needs.versioning.outputs.version }}
+      semVer: ${{ format('{0}.{1}.{2}', needs.versioning.outputs.major, needs.versioning.outputs.minor, needs.versioning.outputs.patch) }}
       tag-prefix: ''
       move-major-tag: false

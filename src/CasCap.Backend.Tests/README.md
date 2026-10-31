@@ -32,11 +32,12 @@ Source includes test configuration files, but these fixtures use synthetic optio
 | `SignalizrMetricsTests` | 3 | 3 | Instrument units/descriptions, backlog gauge and outbound counters |
 | `SubscriberConfigValidatorTests` | 3 | 4 | Subscriber groups must be served groups, matched exactly, and never empty |
 | `GroupNameMigrationTests` | 1 | 1 | SQLite migration preserves rows across schema transitions and rollback |
+| `PersistenceModelTests` | 1 | 1 | Data assembly, exact migration identifiers and model/snapshot consistency without database access |
 | `GroupRestTests` | 1 | 5 | Exact group-name query routing over local HTTP |
 | `InboundGrpcServiceTests` | 9 | 11 | Quiet/blocked-write acknowledgement expiry, healthy idle streams, independent consumers, duplicate identity/refusal, request EOF/failure and cancellation |
 | `SignalizrClientTransportTests` | 3 | 3 | gRPC liveness budgets, unchanged REST transport and a loopback HTTP/2 peer that ignores keepalive pings |
 | `SignalizrMcpTests` | 25 | 41 | Authentication, feature gates, status, groups, bounded history, prompts and controlled sending |
-| **Total** | **114** | **145** | |
+| **Total** | **115** | **145** | |
 
 Counts are statically derived from facts, theories and inline data, not observed test results.
 These fixtures do not establish production-scale reliability, long-running stability or loss
@@ -46,10 +47,13 @@ behavior during a real wrapper outage.
 
 | Category | Expanded cases | Scope |
 | --- | ---: | --- |
-| `Integration` | 50 | Local HTTP REST/MCP fixtures, HTTP/2 transport and SQLite schema migrations |
+| `Integration` | 51 | Local HTTP REST/MCP fixtures, HTTP/2 transport, SQLite schema migrations and offline EF metadata |
 
 The remaining 94 cases have no category trait, including the service-level gRPC fixtures.
 Filtering out `Category=Integration` therefore does not mean “no database-backed fixture.”
+
+`PersistenceModelTests` uses the [Data design-time factory](../CasCap.Data/SignalizrDbContextDesignTimeFactory.cs)
+to inspect metadata only. It does not connect to PostgreSQL or apply migrations.
 
 ## Skipped Tests
 
@@ -74,6 +78,7 @@ Tests/
 │   └── SubscriberConfigValidatorTests.cs
 ├── Integration/
 │   ├── GroupNameMigrationTests.cs
+│   ├── PersistenceModelTests.cs
 │   ├── GroupRestTests.cs
 │   ├── InboundGrpcServiceTests.cs
 │   ├── SignalizrClientTransportTests.cs

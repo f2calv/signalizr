@@ -4,6 +4,9 @@ The .NET 10 gateway core used by the signalizr application host. It resolves nam
 inbound persistence and subscriber cursors, and implements Signal sends and group interactions.
 It is not a published NuGet package or a standalone service.
 
+[CasCap.Data](../CasCap.Data/README.md) owns the EF Core context, entities, migrations and design-time
+factory. Backend owns database registration, initialization metrics, retention and delivery policy.
+
 Its assembly identity is `CasCap.Signalizr`; existing namespaces, telemetry service names and
 consumer-client package identities are independent of the backend project name.
 

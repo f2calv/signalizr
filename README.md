@@ -101,6 +101,7 @@ All projects target .NET 10. The host and core are application components, not N
 | --- | --- | --- |
 | [CasCap.App.Server](src/CasCap.App.Server/README.md) | Configure and run the feature-selected host | Container/application |
 | [CasCap.Backend](src/CasCap.Backend/README.md) | Understand gateway delivery and persistence behavior | Internal host component |
+| [CasCap.Data](src/CasCap.Data/README.md) | EF Core model, entities and durable-delivery migrations | Internal persistence library |
 | [CasCap.Signalizr.Client](src/CasCap.Signalizr.Client/README.md) | Send and subscribe from .NET | [NuGet](https://www.nuget.org/packages/CasCap.Signalizr.Client) |
 | [CasCap.Signalizr.Client.Testing](src/CasCap.Signalizr.Client.Testing/README.md) | Test a consumer without a gateway | [NuGet](https://www.nuget.org/packages/CasCap.Signalizr.Client.Testing) |
 | [CasCap.Comms](src/CasCap.Comms/README.md) | Redis event delivery, voice processing and reply queue | [NuGet](https://www.nuget.org/packages/CasCap.Comms) |

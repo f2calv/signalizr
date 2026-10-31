@@ -35,6 +35,7 @@
     <Project Path="src/CasCap.Signalizr.Client.Testing/CasCap.Signalizr.Client.Testing.csproj" />
     <Project Path="src/CasCap.Backend.Tests/CasCap.Backend.Tests.csproj" />
     <Project Path="src/CasCap.Backend/CasCap.Backend.csproj" />
+    <Project Path="src/CasCap.Data/CasCap.Data.csproj" />
   </Folder>
   <Folder Name="/signalizr/comms/">
     <Project Path="src/CasCap.Comms.AI/CasCap.Comms.AI.csproj" />

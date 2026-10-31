@@ -1,4 +1,3 @@
-using CasCap.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace CasCap.Data;

@@ -234,7 +234,7 @@ cancellation and a single gateway invocation without sending real messages.
 
 MCP-specific filenames contain `Mcp`, so scoped guidance applies without pulling shared runtime
 services into the transport layer. [GroupsController](../src/CasCap.App.Server/Controllers/GroupsController.cs)
-owns `/api/v1/groups`; [IGroupResolver](../src/CasCap.Signalizr/Abstractions/IGroupResolver.cs)
+owns `/api/v1/groups`; [IGroupResolver](../src/CasCap.Backend/Abstractions/IGroupResolver.cs)
 and the subscriber registry remain shared application components.
 
 Reactions, poll actions and durable send deduplication remain outside this

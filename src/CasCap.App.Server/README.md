@@ -57,6 +57,7 @@ publish a generated OpenAPI document.
 
 | Setting | Default / operator action |
 | --- | --- |
+| `HostLifecycleConfig:ShutdownTimeoutMs` | `60000`; graceful daemon shutdown budget |
 | `SignalCliConfig:BaseAddress` | `http://localhost:8180` in base appsettings; point at your wrapper |
 | `SignalCliConfig:PhoneNumber` | Synthetic placeholder; supply the registered account |
 | `GroupConfig:GroupNames` | Empty; configure exact names, preserving spaces and case; missing, duplicate or ambiguous matches fail resolution |

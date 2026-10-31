@@ -26,10 +26,10 @@ public static partial class AppHost
 
             // Host builder
             var builder = WebApplication.CreateBuilder(configurationArgs);
-            builder.Services.AddApplicationExitState();
 
             // Configuration
             var (appConfig, configuredFeatures, applicationMetadata) = builder.InitializeConfiguration(entryAssembly);
+            builder.Services.AddApplicationHostLifecycle(builder.Configuration);
             var enabledFeatures = migrateArgument
                 ? new HashSet<string>([FeatureNames.DbMigrator], StringComparer.OrdinalIgnoreCase)
                 : configuredFeatures;

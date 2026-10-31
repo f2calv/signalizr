@@ -27,6 +27,7 @@ signalcli:
 # The gateway. Send and Subscribe surfaces plus the single receive owner.
 signalizr:
   replicaCount: 1
+  terminationGracePeriodSeconds: 90
   # The Receiver is single-owner. Never overlap old and new pods during rollout.
   strategy:
     type: RollingUpdate
@@ -153,6 +154,7 @@ migrate:
 # Disabled by default: set replicaCount to 1 to enable it.
 demo:
   replicaCount: 0
+  terminationGracePeriodSeconds: 90
   fullnameOverride: signalizr-demo
   image:
     repository: ghcr.io/f2calv/signalizr
@@ -194,6 +196,7 @@ demo:
 # Each is the single gRPC subscriber for its name, so pods never overlap and there is no Service.
 signalizrResponder:
   replicaCount: 0
+  terminationGracePeriodSeconds: 90
   strategy:
     type: Recreate
   fullnameOverride: signalizr-responder
@@ -231,6 +234,7 @@ signalizrResponder:
 
 agentizrResponder:
   replicaCount: 0
+  terminationGracePeriodSeconds: 90
   strategy:
     type: Recreate
   fullnameOverride: agentizr-responder

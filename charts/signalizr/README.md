@@ -86,6 +86,7 @@ The authoritative [values file](values.yaml) contains workload settings; use the
 | Value | Default and purpose |
 | --- | --- |
 | `signalizr.replicaCount` | `1`; single receive owner |
+| `signalizr.terminationGracePeriodSeconds` | `90`; exceeds the 60-second application shutdown budget |
 | `signalizr.strategy` | RollingUpdate with `maxSurge: 0`, `maxUnavailable: 1`; avoids overlap but permits downtime |
 | `signalizr.image.tag` | Empty; set an explicit compatible immutable version |
 | `signalizr.service` | ClusterIP HTTP port 80 to container 8080 |
@@ -97,6 +98,7 @@ The authoritative [values file](values.yaml) contains workload settings; use the
 | `migrate.kind`, `migrate.replicaCount` | `Job`, `0`; finite `--migrate` schema owner |
 | `demo.replicaCount` | `0`; set `1` for the length-only inbound demo subscriber |
 | `signalizrResponder.replicaCount`, `agentizrResponder.replicaCount` | `0`; enable each only after configuring its Comms dependencies |
+| Daemon alias `terminationGracePeriodSeconds` | `90`; shared graceful shutdown budget |
 | `dashboards.enabled` | `true`; renders dashboard ConfigMaps, not Grafana |
 | `signalcli` | Wrapper chart settings; default account-state claim requests 512 MiB |
 

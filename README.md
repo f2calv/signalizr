@@ -114,33 +114,29 @@ All projects target .NET 10. The host and core are application components, not N
 All four packages share the repository version. Pin the same immutable version for each one you
 use, and pick one that matches your deployed gateway image.
 
-## Service Architecture
+## System Context
+
+signalizr owns one Signal account and shares it with applications through named-group REST
+messaging and durable gRPC subscriptions. The [architecture drilldown](docs/architecture.md) opens
+this box into its containers and components.
 
 ```mermaid
 flowchart LR
-    GROUPS(["Signal groups"])
-    WRAPPER["signal-cli-rest-api"]
-    subgraph Gateway["signalizr"]
-        REST["REST group operations"]
-        RECEIVE["Single receive owner"]
-        QUEUE["Bounded process queue"]
-        STORE[("Messages, attachments and cursors")]
-        STREAM["gRPC subscriptions"]
-    end
-    APP["Consumer applications"]
-    MCP["Optional MCP operator tools"]
-    GROUPS <--> WRAPPER
-    APP --> REST --> WRAPPER
-    WRAPPER --> RECEIVE --> QUEUE --> STORE --> STREAM
-    STREAM --> APP
-    APP -->|"Acknowledgements"| STREAM
-    MCP --> REST
-    MCP --> STORE
-    classDef owned fill:#dbeafe,stroke:#2563eb,color:#172554
-    classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827
-    class REST,RECEIVE,QUEUE,STORE,STREAM,MCP owned
-    class GROUPS,WRAPPER,APP external
+    classDef system fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef person fill:#ede9fe,stroke:#6d28d9,color:#2e1065
+    classDef external fill:#fef3c7,stroke:#d97706,color:#78350f
+
+    members([Signal group members]):::person <-->|Signal| signal[Signal service]:::external
+    signal <-->|"Signal protocol"| signalizr[signalizr<br/>shared Signal account gateway]:::system
+    apps([Consumer applications]):::person -->|"REST send"| signalizr
+    signalizr -->|"gRPC deliveries, acknowledged"| apps
+    operator([Operator]):::person -->|"MCP tools"| signalizr
+    producers([Event-producing applications]):::person -->|"events, Redis stream"| signalizr
+    signalizr -.->|"optional streamed agent runs"| runtime[Agent Runtime]:::external
+    signalizr -.->|"optional transcription and speech"| speech[Speech providers]:::external
 ```
+
+Dotted edges belong to the optional Comms responder role.
 
 ## Receiving
 

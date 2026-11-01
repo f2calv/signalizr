@@ -62,7 +62,7 @@ graph TD
     WORKLOAD["workload 1.6.0"]
     DASH["signalizr-dashboards 0.1.0"]
     GATEWAY["signalizr: Gateway + Receiver"]
-    MIGRATOR["migrate: DbMigrator"]
+    MIGRATOR["migrate: --migrate"]
     DEMO["demo: DemoClient"]
     RESPONDER["Optional Comms responders"]
     ROOT --> WRAPPER
@@ -74,8 +74,9 @@ graph TD
 ```
 
 The wrapper chart owns the account-state volume and stable `signalcli` Service.
-Gateway, migration, demo and responder workloads use the same application image with different
-feature flags. The [dashboard guide](../signalizr-dashboards/README.md) explains Grafana discovery.
+Gateway, migration, demo and responder workloads use the same application image. Daemon roles use
+feature configuration; the finite migration Job uses `--migrate`. The
+[dashboard guide](../signalizr-dashboards/README.md) explains Grafana discovery.
 
 ## Configuration
 
@@ -85,6 +86,7 @@ The authoritative [values file](values.yaml) contains workload settings; use the
 | Value | Default and purpose |
 | --- | --- |
 | `signalizr.replicaCount` | `1`; single receive owner |
+| `signalizr.terminationGracePeriodSeconds` | `90`; exceeds the 60-second application shutdown budget |
 | `signalizr.strategy` | RollingUpdate with `maxSurge: 0`, `maxUnavailable: 1`; avoids overlap but permits downtime |
 | `signalizr.image.tag` | Empty; set an explicit compatible immutable version |
 | `signalizr.service` | ClusterIP HTTP port 80 to container 8080 |
@@ -93,9 +95,10 @@ The authoritative [values file](values.yaml) contains workload settings; use the
 | `signalizr.envVars.CasCap__SubscriberConfig__SubscriberGroups__<subscriber>__*` | None; groups each subscriber name receives. Configure an entry for every enabled responder and the demo client |
 | `signalizr.envSecrets` | Empty map of environment key to Secret name |
 | `signalizr.persistentVolumeClaims` | 1 GiB SQLite claim, mounted at `/var/lib/signalizr`; group ownership 1654 |
-| `migrate.kind`, `migrate.replicaCount` | `Job`, `0`; **a Job still renders with zero replicas** |
+| `migrate.kind`, `migrate.replicaCount` | `Job`, `0`; finite `--migrate` schema owner |
 | `demo.replicaCount` | `0`; set `1` for the length-only inbound demo subscriber |
 | `signalizrResponder.replicaCount`, `agentizrResponder.replicaCount` | `0`; enable each only after configuring its Comms dependencies |
+| Daemon alias `terminationGracePeriodSeconds` | `90`; shared graceful shutdown budget |
 | `dashboards.enabled` | `true`; renders dashboard ConfigMaps, not Grafana |
 | `signalcli` | Wrapper chart settings; default account-state claim requests 512 MiB |
 

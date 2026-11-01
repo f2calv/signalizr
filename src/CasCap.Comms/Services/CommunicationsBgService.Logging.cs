@@ -113,6 +113,18 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} received message of {MessageLength} character(s) and {AttachmentCount} attachment(s)")]
     private static partial void LogInboundMessage(ILogger logger, string className, int messageLength, int attachmentCount);
 
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "{ClassName} ignored stale inbound message, age {AgeSeconds}s exceeds the configured maximum")]
+    private static partial void LogStaleInboundIgnored(ILogger logger, string className, long ageSeconds);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "{ClassName} failed to mark or report an inbound message that was not acted on")]
+    private static partial void LogInboundNotActedOnReportFailed(ILogger logger, Exception ex, string className);
+
+    [LoggerMessage(Level = LogLevel.Error,
+        Message = "{ClassName} inbound message handling exceeded {TimeoutSeconds}s; abandoned so the subscription can continue")]
+    private static partial void LogInboundProcessingTimedOut(ILogger logger, string className, long timeoutSeconds);
+
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} duplicate message suppressed, already reserved")]
     private static partial void LogDuplicateSuppressed(ILogger logger, string className);

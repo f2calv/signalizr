@@ -51,3 +51,16 @@ public enum CommsAgentRunOutcome
     /// <summary>Any other failure, such as a malformed response stream.</summary>
     Error,
 }
+
+/// <summary>Result of asking the chat group to approve a tool call.</summary>
+public enum ToolApprovalOutcome
+{
+    /// <summary>An accepted approver chose to run the tool.</summary>
+    Approved,
+    /// <summary>An accepted approver chose not to run the tool.</summary>
+    Denied,
+    /// <summary>No accepted answer arrived in time, so the tool did not run.</summary>
+    TimedOut,
+    /// <summary>The approval prompt could not be shown, so the tool did not run.</summary>
+    Unavailable,
+}

@@ -31,6 +31,15 @@ public static class ServiceCollectionExtensions
         {
             var config = sp.GetRequiredService<IOptions<SignalizrClientConfig>>().Value;
             options.Address = new Uri(config.GrpcAddress);
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+            EnableMultipleHttp2Connections = true,
+            // Surface a half-open subscription to the caller's reconnect loop even when no messages arrive.
+            KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+            KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+            KeepAlivePingPolicy = HttpKeepAlivePingPolicy.WithActiveRequests
         });
 
         return services;

@@ -36,21 +36,20 @@ cp .env.example .env
 To build and run from source:
 
 ```bash
-docker compose up --build
+docker compose --profile demo up --build
 ```
 
-Compose runs a one-shot SQLite migrator before the gateway, then starts a DemoClient subscriber.
-The wrapper retains account state and the gateway retains messages, attachments and cursors on
-separate named volumes. The alternative
-[PostgreSQL Compose example](docker-compose.postgres.yml) also publishes PostgreSQL on port 5432;
-supply non-default database credentials before using it outside local development.
+The [Compose definition](docker-compose.yml) starts only the upstream wrapper by default.
+The `demo` profile runs a one-shot SQLite migrator before the gateway and waits for gateway
+readiness before starting a DemoClient subscriber. To use the alternative PostgreSQL topology:
 
-| Local endpoint | Purpose |
-| --- | --- |
-| `http://localhost:8080/api/v1/groups` | Resolved group names |
-| `http://localhost:8080/healthz/ready` | Readiness, including wrapper reachability |
-| `http://localhost:5001` | Plaintext HTTP/2 gRPC subscriptions |
-| `http://localhost:8180` | Upstream wrapper; account setup, not the consumer API |
+```bash
+docker compose --profile postgres up --build
+```
+
+Choose one application profile, never both: only one receiver may own the account. Dependency
+endpoints and storage wiring live in the Compose header/definition. Its database credentials are
+local-only examples, not deployment credentials.
 
 Stopping Compose preserves volumes. Removing volumes deletes Signal account state and gateway
 history; do not use `down --volumes` as routine cleanup.
@@ -101,7 +100,8 @@ All projects target .NET 10. The host and core are application components, not N
 | Component | Consumer purpose | Delivery |
 | --- | --- | --- |
 | [CasCap.App.Server](src/CasCap.App.Server/README.md) | Configure and run the feature-selected host | Container/application |
-| [CasCap.Signalizr](src/CasCap.Signalizr/README.md) | Understand gateway delivery and persistence behavior | Internal host component |
+| [CasCap.Backend](src/CasCap.Backend/README.md) | Understand gateway delivery and persistence behavior | Internal host component |
+| [CasCap.Data](src/CasCap.Data/README.md) | EF Core model, entities and durable-delivery migrations | Internal persistence library |
 | [CasCap.Signalizr.Client](src/CasCap.Signalizr.Client/README.md) | Send and subscribe from .NET | [NuGet](https://www.nuget.org/packages/CasCap.Signalizr.Client) |
 | [CasCap.Signalizr.Client.Testing](src/CasCap.Signalizr.Client.Testing/README.md) | Test a consumer without a gateway | [NuGet](https://www.nuget.org/packages/CasCap.Signalizr.Client.Testing) |
 | [CasCap.Comms](src/CasCap.Comms/README.md) | Redis event delivery, voice processing and reply queue | [NuGet](https://www.nuget.org/packages/CasCap.Comms) |
@@ -109,38 +109,34 @@ All projects target .NET 10. The host and core are application components, not N
 | [Application chart](charts/signalizr/README.md) | Deploy the wrapper and gateway on Kubernetes | OCI Helm chart |
 | [Dashboard chart](charts/signalizr-dashboards/README.md) | Provision Grafana delivery dashboards | Bundled Helm subchart |
 | [REST Client requests](requests/README.md) | Call gateway REST and inspect MCP without a model | Editor request collection |
-| [Host tests](src/CasCap.App.Server.Tests/README.md), [gateway tests](src/CasCap.Signalizr.Tests/README.md), [Comms tests](src/CasCap.Comms.Tests/README.md) | Contributor test scope and prerequisites | Source test projects |
+| [Host tests](src/CasCap.App.Server.Tests/README.md), [gateway tests](src/CasCap.Backend.Tests/README.md), [Comms tests](src/CasCap.Comms.Tests/README.md) | Contributor test scope and prerequisites | Source test projects |
 
 All four packages share the repository version. Pin the same immutable version for each one you
 use, and pick one that matches your deployed gateway image.
 
-## Service Architecture
+## System Context
+
+signalizr owns one Signal account and shares it with applications through named-group REST
+messaging and durable gRPC subscriptions. The [architecture drilldown](docs/architecture.md) opens
+this box into its containers and components.
 
 ```mermaid
 flowchart LR
-    GROUPS(["Signal groups"])
-    WRAPPER["signal-cli-rest-api"]
-    subgraph Gateway["signalizr"]
-        REST["REST group operations"]
-        RECEIVE["Single receive owner"]
-        QUEUE["Bounded process queue"]
-        STORE[("Messages, attachments and cursors")]
-        STREAM["gRPC subscriptions"]
-    end
-    APP["Consumer applications"]
-    MCP["Optional MCP operator tools"]
-    GROUPS <--> WRAPPER
-    APP --> REST --> WRAPPER
-    WRAPPER --> RECEIVE --> QUEUE --> STORE --> STREAM
-    STREAM --> APP
-    APP -->|"Acknowledgements"| STREAM
-    MCP --> REST
-    MCP --> STORE
-    classDef owned fill:#dbeafe,stroke:#2563eb,color:#172554
-    classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827
-    class REST,RECEIVE,QUEUE,STORE,STREAM,MCP owned
-    class GROUPS,WRAPPER,APP external
+    classDef system fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef person fill:#ede9fe,stroke:#6d28d9,color:#2e1065
+    classDef external fill:#fef3c7,stroke:#d97706,color:#78350f
+
+    members([Signal group members]):::person <-->|Signal| signal[Signal service]:::external
+    signal <-->|"Signal protocol"| signalizr[signalizr<br/>shared Signal account gateway]:::system
+    apps([Consumer applications]):::person -->|"REST send"| signalizr
+    signalizr -->|"gRPC deliveries, acknowledged"| apps
+    operator([Operator]):::person -->|"MCP tools"| signalizr
+    producers([Event-producing applications]):::person -->|"events, Redis stream"| signalizr
+    signalizr -.->|"optional streamed agent runs"| runtime[Agent Runtime]:::external
+    signalizr -.->|"optional transcription and speech"| speech[Speech providers]:::external
 ```
+
+Dotted edges belong to the optional Comms responder role.
 
 ## Receiving
 

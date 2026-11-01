@@ -30,6 +30,7 @@ public sealed partial class CommunicationsBgService(
     ICommsEventFormatter eventFormatter,
     ICommsGroupRouter groupRouter,
     IRemoteCache remoteCache,
+    IEnumerable<IPollVoteHandler> pollVoteHandlers,
     ICommsResponder? responder = null) : IBgFeature
 {
     //Every delivery arrives through the gateway, so the identity no longer names the account.
@@ -54,6 +55,7 @@ public sealed partial class CommunicationsBgService(
     private long _rateLimitedSinceNotice;
     private long _staleSinceNotice;
     private long _lastDropNoticeTicks;
+    private long _lastStaleInboundNoticeTicks;
 
     /// <inheritdoc/>
     public string FeatureName => CommsFeatureNames.Comms;
@@ -66,6 +68,9 @@ public sealed partial class CommunicationsBgService(
     private ICommsResponder? ActiveResponder => responder is { IsAvailable: true } ? responder : null;
 
     /// <inheritdoc/>
+    // TODO: Coordinate responder admission with required tool/API routability and bounded discovery recovery.
+    // Subscription replay can precede this consumer's own HTTP readiness; defer gating until the responder
+    // exposes a recovery contract, avoiding arbitrary sleeps or a circular readiness dependency.
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var monitorEnabled = !string.IsNullOrEmpty(commsConfig.Value.MonitorGroupName);

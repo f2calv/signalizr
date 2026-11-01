@@ -37,7 +37,7 @@ untracked settings or secret stores.
 | `Mcp` | Requires Gateway and Receiver together, plus Basic credentials; see the [MCP guide](../../docs/mcp.md) |
 | `DemoClient` | Subscribes to an existing gateway; requires both gateway addresses and a stable subscriber name; never sends a reply |
 | `Comms` | Runs alone as a gateway client; Redis, chat group, subscriber identity and Agent Runtime configuration |
-| `DbMigrator` | Applies SQLite/PostgreSQL migrations and stops the host; rejects InMemory |
+| `DbMigrator` | Legacy configuration name for the exclusive finite migration role; `--migrate` is the deployment entry point |
 
 `CasCap:FeatureConfig:EnabledFeatures` is a comma-separated, case-insensitive list.
 Empty and unknown values fail startup. The base settings select `Gateway,Receiver`.
@@ -57,6 +57,7 @@ publish a generated OpenAPI document.
 
 | Setting | Default / operator action |
 | --- | --- |
+| `HostLifecycleConfig:ShutdownTimeoutMs` | `60000`; graceful daemon shutdown budget |
 | `SignalCliConfig:BaseAddress` | `http://localhost:8180` in base appsettings; point at your wrapper |
 | `SignalCliConfig:PhoneNumber` | Synthetic placeholder; supply the registered account |
 | `GroupConfig:GroupNames` | Empty; configure exact names, preserving spaces and case; missing, duplicate or ambiguous matches fail resolution |
@@ -119,7 +120,8 @@ PostgreSQL with externally ordered migrations; provide the connection string sep
 }
 ```
 
-Run the same database settings with `EnabledFeatures=DbMigrator` first. Do not overlap Receiver
+Run the same database settings through `--migrate` first. The finite mode registers only persistence
+and migration services and exits without starting HTTP or daemon features. Do not overlap Receiver
 instances or allow concurrent migrations against the same database.
 
 ## Comms Responder

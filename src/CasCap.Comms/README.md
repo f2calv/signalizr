@@ -91,6 +91,7 @@ flowchart LR
 | `CommsMediaStore` | Caches attachment bytes in Redis and returns the `MediaReference` a producer puts in `JsonPayload` |
 | [`ITrackedOperationService`](https://github.com/f2calv/signalizr/blob/b5ae4f04ff8a6f9f9f611da60a08872a41e34176/src/CasCap.Comms/Abstractions/ITrackedOperationService.cs), `TrackedOperationService` | Stream-based progress, completion and timeout notifications |
 | [`ICommsResponder`](https://github.com/f2calv/signalizr/blob/b5ae4f04ff8a6f9f9f611da60a08872a41e34176/src/CasCap.Comms/Abstractions/ICommsResponder.cs) | Seam that produces replies: stream-event turns, poll votes, commands and queued turns |
+| `IPollVoteHandler` | Claims poll votes decided by code, such as approval answers, before the responder sees them |
 | `CommsTurn`, `CommsReply`, `CommsCommandOutcome` | The units of work and results exchanged with a responder |
 | `PlainCommsEventFormatter` | Default [`ICommsEventFormatter`](https://github.com/f2calv/CasCap.Common/blob/main/src/CasCap.Common.Abstractions/Abstractions/ICommsEventFormatter.cs): the event message unchanged |
 | `TimestampedCommsEventFormatter` | `ICommsEventFormatter` producing `HH:mm:ss.fff UTC [environment] [source] message` |
@@ -140,6 +141,9 @@ groups exactly, including spaces and case.
 | `MediaCacheKeyPrefix` | `"comms:cache:media"` | Redis key prefix for cached attachments |
 | `MediaCacheTtlMs` | `300000` | Lifetime of an unsent cached attachment |
 | `MessageDeduplicationTtlHours` | `168` | Duplicate-suppression window |
+| `StaleInboundDroppingEnabled` | `true` | Ignore inbound chat messages older than `MaxInboundMessageAgeMs`, so a replayed backlog cannot act on old requests |
+| `MaxInboundMessageAgeMs` | `300000` | Stale inbound-message cut-off, measured from the sender's Signal timestamp |
+| `InboundProcessingTimeoutMs` | `120000` | Per-message handling limit; a hung handler is abandoned so the subscription keeps acknowledging |
 | `PollTtlMs` | `3600000` | Process-local poll tracker expiry when the AI responder is installed |
 
 ## Configuration Examples

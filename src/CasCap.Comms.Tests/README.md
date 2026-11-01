@@ -25,8 +25,8 @@ AI provider.
 
 | Class | Methods | Cases | Category | Description |
 | --- | ---: | ---: | --- | --- |
-| `CommunicationsBgServiceTests` | 17 | 22 | Messaging | Inbound admission, duplicate suppression, durable attachments, voice-processing modes, transcript echo, reply-queue backpressure, the runtime failure notice, spoken-reply attachment, the monitor notice for a failed spoken reply and answering with stream consumption disabled |
-| `CommunicationsBgServiceStreamTests` | 14 | 17 | Comms | Direct and responder stream delivery, disabled stream turns, direct-delivery sources, monitor routing, stale and throttled drops, cached media, startup retry, the missing-group fault, resubscription, the no-responder inbound behaviour and the inbound filter |
+| `CommunicationsBgServiceTests` | 20 | 25 | Messaging | Inbound admission, duplicate suppression, stale inbound messages ignored, hung inbound handling abandoned, durable attachments, voice-processing modes, transcript echo, reply-queue backpressure, the runtime failure notice, spoken-reply attachment, the monitor notice for a failed spoken reply and answering with stream consumption disabled |
+| `CommunicationsBgServiceStreamTests` | 15 | 19 | Comms | Direct and responder stream delivery, disabled stream turns, direct-delivery sources, monitor routing, stale and throttled drops, cached media, startup retry, the missing-group fault, resubscription, the no-responder inbound behaviour, the inbound filter and poll-vote claiming before the responder |
 | `SignalMessageDeduplicatorTests` | 9 | 11 | Comms | Redis-backed duplicate Signal message suppression |
 | `MonitorSourcesGroupRouterTests` | 2 | 3 | Comms | Routing of configured operational sources to the monitor group |
 | `CommsEventFormatterTests` | 2 | 2 | Comms | The plain and timestamped direct-send formats |
@@ -35,7 +35,9 @@ AI provider.
 | `CommsDebugNotifierTests` | 3 | 9 | Comms | Monitor diagnostics disclose prompts, tool arguments and event text only when `MonitorContentEnabled` is set; the reply footer shows only duration and tools unless token counts, session size or session counts are enabled |
 | `MessagingMcpQueryServiceTests` | 1 | 1 | Comms | Poll tools activated per call by the MCP server use the configured group |
 | `TrackedOperationServiceTests` | 2 | 2 | Comms | Tracked-operation progress, completion and timeout messages |
-| **Total** | **64** | **88** | | |
+| `ToolApprovalServiceTests` | 6 | 7 | Approval | Approve and deny votes, the approver allowlist, any-member approval, timeout, an unreachable gateway and question truncation |
+| `ToolApprovalMcpFilterTests` | 3 | 11 | Approval | Gating by attribute and configuration, requester naming from call metadata and refusals that are not errors |
+| **Total** | **74** | **108** | | |
 
 Counts expand the inline-data theories in current source. They are not a claim that the suite was
 executed during documentation maintenance.
@@ -47,6 +49,7 @@ executed during documentation maintenance.
 | `Messaging` | Inbound message orchestration |
 | `Comms` | Stream delivery, routing, formatting and duplicate suppression |
 | `Agent Runtime` | Remote responder protocol and command ownership |
+| `Approval` | Human approval of gated MCP tool calls |
 
 ## Skipped Tests
 
@@ -76,6 +79,8 @@ Tests/
     ├── SignalMessageDeduplicatorTests.cs
     ├── TestMetrics.cs
     ├── ThrowingRemoteCache.cs
+    ├── ToolApprovalMcpFilterTests.cs
+    ├── ToolApprovalServiceTests.cs
     └── TrackedOperationServiceTests.cs
 ```
 

@@ -1,0 +1,404 @@
+using CasCap.Data;
+using CasCap.Data.Entities;
+using CasCap.Diagnostics;
+using CasCap.Exceptions;
+using CasCap.Models;
+using CasCap.Models.Dtos;
+using CasCap.Services;
+using CasCap.Tests.Fakes;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Xunit;
+
+namespace CasCap.Tests;
+
+/// <summary>Covers durable subscriber registration, replay, and acknowledgement cursors.</summary>
+public sealed class InboundSubscriberRegistryTests
+{
+    private const string DurableSubscriberName = "durable";
+    private const string FilteredSubscriberName = "filtered";
+    private const string ExampleGroup = "Example Group";
+    private const string OtherGroup = "Other Group";
+
+    private static readonly string[] SubscriberNames =
+    [
+        "a", "b", "new-subscriber", DurableSubscriberName, "first", "second", "duplicate", "concurrent",
+        "budget", "ordered", FilteredSubscriberName,
+    ];
+
+    [Fact]
+    public async Task Subscribing_and_unsubscribing_tracks_the_count()
+    {
+        using var fixture = new RegistryFixture();
+        Assert.Equal(0, fixture.Registry.Count);
+
+        var first = await fixture.Registry.SubscribeAsync("a", TestContext.Current.CancellationToken);
+        var second = await fixture.Registry.SubscribeAsync("b", TestContext.Current.CancellationToken);
+        Assert.Equal(2, fixture.Registry.Count);
+
+        fixture.Registry.Unsubscribe(first);
+        fixture.Registry.Unsubscribe(first);
+        Assert.Equal(1, fixture.Registry.Count);
+
+        fixture.Registry.Unsubscribe(second);
+        Assert.Equal(0, fixture.Registry.Count);
+    }
+
+    [Fact]
+    public async Task First_subscription_starts_at_the_current_tail()
+    {
+        using var fixture = new RegistryFixture();
+        await fixture.AddMessageAsync("before");
+        var subscription = await fixture.Registry.SubscribeAsync(
+            "new-subscriber", TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("after");
+        fixture.Registry.NotifyMessageAvailable();
+
+        var delivery = await ReadOneAsync(subscription);
+
+        Assert.Equal("after", delivery.Message);
+    }
+
+    [Fact]
+    public async Task Unacknowledged_message_is_replayed_after_reconnect()
+    {
+        using var fixture = new RegistryFixture();
+        var first = await fixture.Registry.SubscribeAsync(DurableSubscriberName, TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("replay-me");
+        fixture.Registry.NotifyMessageAvailable();
+        var firstAttempt = await ReadOneAsync(first);
+        fixture.Registry.Unsubscribe(first);
+
+        var second = await fixture.Registry.SubscribeAsync(DurableSubscriberName, TestContext.Current.CancellationToken);
+        var replay = await ReadOneAsync(second);
+
+        Assert.Equal(firstAttempt.DeliveryId, replay.DeliveryId);
+        Assert.Equal("replay-me", replay.Message);
+    }
+
+    [Fact]
+    public async Task Acknowledged_message_is_not_replayed_after_reconnect()
+    {
+        using var fixture = new RegistryFixture();
+        var first = await fixture.Registry.SubscribeAsync(DurableSubscriberName, TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("ack-me");
+        fixture.Registry.NotifyMessageAvailable();
+        var acknowledged = await ReadOneAsync(first);
+        Assert.True(await first.TryReserveAsync(
+            acknowledged.DeliveryId, TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
+        Assert.True(await first.AcknowledgeAsync(
+            acknowledged.DeliveryId, TestContext.Current.CancellationToken));
+        fixture.Registry.Unsubscribe(first);
+
+        var second = await fixture.Registry.SubscribeAsync(DurableSubscriberName, TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("next");
+        fixture.Registry.NotifyMessageAvailable();
+        var delivery = await ReadOneAsync(second);
+
+        Assert.Equal("next", delivery.Message);
+    }
+
+    [Fact]
+    public async Task Two_subscribers_maintain_independent_cursors()
+    {
+        using var fixture = new RegistryFixture();
+        var first = await fixture.Registry.SubscribeAsync("first", TestContext.Current.CancellationToken);
+        var second = await fixture.Registry.SubscribeAsync("second", TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("shared");
+        fixture.Registry.NotifyMessageAvailable();
+        var firstDelivery = await ReadOneAsync(first);
+        var secondDelivery = await ReadOneAsync(second);
+        Assert.Equal(firstDelivery.DeliveryId, secondDelivery.DeliveryId);
+
+        Assert.True(await first.TryReserveAsync(
+            firstDelivery.DeliveryId, TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
+        Assert.True(await first.AcknowledgeAsync(
+            firstDelivery.DeliveryId, TestContext.Current.CancellationToken));
+        fixture.Registry.Unsubscribe(first);
+        fixture.Registry.Unsubscribe(second);
+
+        var reconnectedSecond = await fixture.Registry.SubscribeAsync(
+            "second", TestContext.Current.CancellationToken);
+        var replay = await ReadOneAsync(reconnectedSecond);
+        Assert.Equal(secondDelivery.DeliveryId, replay.DeliveryId);
+    }
+
+    [Fact]
+    public async Task Duplicate_live_subscriber_identity_is_rejected()
+    {
+        using var fixture = new RegistryFixture();
+        _ = await fixture.Registry.SubscribeAsync("duplicate", TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<SubscriberAlreadyConnectedException>(() =>
+            fixture.Registry.SubscribeAsync("duplicate", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Concurrent_first_subscriptions_accept_exactly_one_stream()
+    {
+        using var fixture = new RegistryFixture();
+        var attempts = Enumerable.Range(0, 2).Select(async _ =>
+        {
+            try
+            {
+                return await fixture.Registry.SubscribeAsync(
+                    "concurrent", TestContext.Current.CancellationToken);
+            }
+            catch (SubscriberAlreadyConnectedException)
+            {
+                return null;
+            }
+        });
+
+        var results = await Task.WhenAll(attempts);
+
+        Assert.Single(results, subscription => subscription is not null);
+        Assert.Single(results, subscription => subscription is null);
+        Assert.Equal(1, fixture.Registry.Count);
+    }
+
+    [Fact]
+    public async Task Delivery_pauses_once_the_outstanding_budget_is_exhausted()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 2);
+        var subscription = await fixture.Registry.SubscribeAsync("budget", TestContext.Current.CancellationToken);
+        var instant = TimeSpan.FromMilliseconds(50);
+
+        Assert.True(await subscription.TryReserveAsync("1", instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync("2", instant, TestContext.Current.CancellationToken));
+        Assert.False(await subscription.TryReserveAsync("3", instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.AcknowledgeAsync("1", TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync("3", instant, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Acknowledgements_must_advance_in_delivery_order()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 2);
+        var subscription = await fixture.Registry.SubscribeAsync("ordered", TestContext.Current.CancellationToken);
+        var instant = TimeSpan.FromMilliseconds(50);
+
+        Assert.True(await subscription.TryReserveAsync("1", instant, TestContext.Current.CancellationToken));
+        Assert.True(await subscription.TryReserveAsync("2", instant, TestContext.Current.CancellationToken));
+        Assert.False(await subscription.AcknowledgeAsync("2", TestContext.Current.CancellationToken));
+        Assert.True(await subscription.AcknowledgeAsync("1", TestContext.Current.CancellationToken));
+        Assert.True(await subscription.AcknowledgeAsync("2", TestContext.Current.CancellationToken));
+        Assert.False(await subscription.AcknowledgeAsync("2", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Subscriber_without_configured_groups_is_refused()
+    {
+        using var fixture = new RegistryFixture();
+
+        await Assert.ThrowsAsync<SubscriberNotPermittedException>(() =>
+            fixture.Registry.SubscribeAsync("unconfigured", TestContext.Current.CancellationToken));
+        Assert.Equal(0, fixture.Registry.Count);
+        Assert.Equal(0, await fixture.CountCursorsAsync());
+    }
+
+    [Fact]
+    public async Task Only_messages_from_configured_groups_are_delivered()
+    {
+        using var fixture = new RegistryFixture();
+        var subscription = await fixture.Registry.SubscribeAsync(
+            FilteredSubscriberName, TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("other", OtherGroup);
+        await fixture.AddMessageAsync("direct", groupName: null);
+        await fixture.AddMessageAsync("mine");
+        fixture.Registry.NotifyMessageAvailable();
+
+        var delivery = await ReadOneAsync(subscription);
+
+        Assert.Equal("mine", delivery.Message);
+        Assert.Equal(ExampleGroup, delivery.GroupName);
+    }
+
+    /// <summary>
+    /// A subscriber whose groups are quiet must still advance past other groups' messages, otherwise
+    /// its cursor holds back acknowledged-message pruning for every subscriber.
+    /// </summary>
+    [Fact]
+    public async Task Idle_subscriber_cursor_advances_past_other_groups()
+    {
+        using var fixture = new RegistryFixture();
+        var subscription = await fixture.Registry.SubscribeAsync(
+            FilteredSubscriberName, TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("other-1", OtherGroup);
+        var tail = await fixture.AddMessageAsync("other-2", OtherGroup);
+        fixture.Registry.NotifyMessageAvailable();
+
+        using var reading = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        await using var enumerator = subscription.ReadAllAsync(reading.Token).GetAsyncEnumerator(reading.Token);
+        var pending = enumerator.MoveNextAsync().AsTask();
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        while (await fixture.GetCursorAsync(FilteredSubscriberName) != tail)
+            await Task.Delay(10, timeout.Token);
+
+        await reading.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+    }
+
+    [Fact]
+    public async Task Acknowledging_a_later_message_moves_the_cursor_past_other_groups()
+    {
+        using var fixture = new RegistryFixture();
+        var first = await fixture.Registry.SubscribeAsync(FilteredSubscriberName, TestContext.Current.CancellationToken);
+        await fixture.AddMessageAsync("other", OtherGroup);
+        await fixture.AddMessageAsync("mine");
+        fixture.Registry.NotifyMessageAvailable();
+        var delivery = await ReadOneAsync(first);
+        Assert.True(await first.TryReserveAsync(
+            delivery.DeliveryId, TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
+        Assert.True(await first.AcknowledgeAsync(delivery.DeliveryId, TestContext.Current.CancellationToken));
+        fixture.Registry.Unsubscribe(first);
+
+        Assert.Equal(long.Parse(delivery.DeliveryId, System.Globalization.CultureInfo.InvariantCulture),
+            await fixture.GetCursorAsync(FilteredSubscriberName));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AcknowledgementDeadline_PreservesReservationAge(bool acknowledgeHead)
+    {
+        var clock = new ManualTimestampProvider();
+        using var fixture = new RegistryFixture(maxOutstanding: 2, timeProvider: clock);
+        using var subscription = await fixture.Registry.SubscribeAsync("ordered", TestContext.Current.CancellationToken);
+        var budget = TimeSpan.FromSeconds(1);
+        Assert.True(await subscription.TryReserveAsync("1", budget, TestContext.Current.CancellationToken));
+        clock.Advance(TimeSpan.FromMilliseconds(400));
+        Assert.True(await subscription.TryReserveAsync("2", budget, TestContext.Current.CancellationToken));
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var monitor = subscription.WaitForAcknowledgementTimeoutAsync(budget, cancellation.Token);
+        if (acknowledgeHead)
+            Assert.True(await subscription.AcknowledgeAsync("1", TestContext.Current.CancellationToken));
+        else
+        {
+            Assert.False(await subscription.AcknowledgeAsync("invalid", TestContext.Current.CancellationToken));
+            Assert.False(await subscription.AcknowledgeAsync("2", TestContext.Current.CancellationToken));
+        }
+
+        await cancellation.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => monitor);
+
+        // Fixed timestamps verify the exact threshold without a wall-clock scheduling assertion.
+        clock.Advance(TimeSpan.FromMilliseconds(acknowledgeHead ? 999 : 599));
+        using var beforeDeadline = new CancellationTokenSource();
+        var pending = subscription.WaitForAcknowledgementTimeoutAsync(budget, beforeDeadline.Token);
+        Assert.False(pending.IsCompleted);
+        await beforeDeadline.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        await subscription.WaitForAcknowledgementTimeoutAsync(budget, TestContext.Current.CancellationToken)
+            .WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        Assert.False(await subscription.AcknowledgeAsync(
+            acknowledgeHead ? "2" : "1", TestContext.Current.CancellationToken));
+        Assert.Equal(acknowledgeHead ? 1 : 0, await fixture.GetCursorAsync("ordered"));
+    }
+
+    private sealed class ManualTimestampProvider : TimeProvider
+    {
+        private long _timestamp;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => _timestamp;
+
+        public void Advance(TimeSpan elapsed) => _timestamp += elapsed.Ticks;
+    }
+
+    private static async Task<InboundDelivery> ReadOneAsync(InboundSubscription subscription)
+    {
+        await using var enumerator = subscription
+            .ReadAllAsync(TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        Assert.True(await enumerator.MoveNextAsync());
+        return enumerator.Current;
+    }
+
+    private sealed class RegistryFixture(int maxOutstanding = 4, TimeProvider? timeProvider = null) : IDisposable
+    {
+        private readonly (SignalizrMetrics Metrics, TestDbContextFactory DbContextFactory,
+            FakeOperatorNotifier Notifier, InboundSubscriberRegistry Registry) _state =
+            CreateState(maxOutstanding, timeProvider ?? TimeProvider.System);
+
+        public InboundSubscriberRegistry Registry => _state.Registry;
+
+        public FakeOperatorNotifier Notifier => _state.Notifier;
+
+        public async Task<long> AddMessageAsync(string message, string? groupName = ExampleGroup)
+        {
+            await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
+            var entity = new InboundMessageEntity
+            {
+                GroupName = groupName,
+                Message = message,
+                PersistedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
+            dbContext.InboundMessages.Add(entity);
+            await dbContext.SaveChangesAsync();
+            return entity.Id;
+        }
+
+        public async Task<long?> GetCursorAsync(string subscriberName)
+        {
+            await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
+            return await dbContext.SubscriberCursors
+                .Where(cursor => cursor.SubscriberName == subscriberName)
+                .Select(cursor => (long?)cursor.LastAcknowledgedMessageId)
+                .SingleOrDefaultAsync();
+        }
+
+        public async Task<int> CountCursorsAsync()
+        {
+            await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
+            return await dbContext.SubscriberCursors.CountAsync();
+        }
+
+        public void Dispose() => _state.Metrics.Dispose();
+
+        private static (SignalizrMetrics Metrics, TestDbContextFactory DbContextFactory,
+            FakeOperatorNotifier Notifier, InboundSubscriberRegistry Registry) CreateState(
+                int maxOutstanding, TimeProvider timeProvider)
+        {
+            var metrics = new SignalizrMetrics();
+            var dbContextFactory = new TestDbContextFactory();
+            var notifier = new FakeOperatorNotifier();
+            var registry = new InboundSubscriberRegistry(
+                NullLogger<InboundSubscriberRegistry>.Instance,
+                Options.Create(new SubscriberConfig
+                {
+                    ReplayBatchSize = 10,
+                    MaxOutstanding = maxOutstanding,
+                    SubscriberGroups = SubscriberNames.ToDictionary(name => name, _ => new[] { ExampleGroup })
+                }),
+                timeProvider,
+                metrics,
+                dbContextFactory,
+                notifier);
+            return (metrics, dbContextFactory, notifier, registry);
+        }
+    }
+
+    private sealed class TestDbContextFactory : IDbContextFactory<SignalizrDbContext>
+    {
+        private readonly DbContextOptions<SignalizrDbContext> _options =
+            new DbContextOptionsBuilder<SignalizrDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString(), new InMemoryDatabaseRoot())
+                .Options;
+
+        public SignalizrDbContext CreateDbContext() => new(_options);
+
+        public ValueTask<SignalizrDbContext> CreateDbContextAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(CreateDbContext());
+        }
+    }
+}

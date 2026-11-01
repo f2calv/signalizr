@@ -24,7 +24,13 @@ public sealed partial class CommunicationsBgService
                     if (!ShouldProcessMessage(message))
                         continue;
 
-                    await ProcessInboundAsync(message, cancellationToken);
+                    if (IsStaleInbound(message))
+                    {
+                        await IgnoreStaleInboundAsync(message, cancellationToken);
+                        continue;
+                    }
+
+                    await ProcessInboundWithTimeoutAsync(message, cancellationToken);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException and not TaskCanceledException)
@@ -48,8 +54,92 @@ public sealed partial class CommunicationsBgService
         && (!string.IsNullOrWhiteSpace(message.Message) || message.Attachments.Count > 0 || message.PollVote is not null)
         && string.Equals(message.GroupName, commsConfig.Value.GroupName, StringComparison.Ordinal);
 
+    /// <summary>Whether a delivery is too old to act on, typically a backlog replayed after a stall or restart.</summary>
+    /// <remarks>A delivery without a sender timestamp cannot be aged and is processed as before.</remarks>
+    internal bool IsStaleInbound(SignalizrMessage message)
+    {
+        var config = commsConfig.Value;
+        if (!config.StaleInboundDroppingEnabled || message.Timestamp <= 0)
+            return false;
+        var age = timeProvider.GetUtcNow() - DateTimeOffset.FromUnixTimeMilliseconds(message.Timestamp);
+        return age > TimeSpan.FromMilliseconds(config.MaxInboundMessageAgeMs);
+    }
+
+    /// <summary>Marks a stale delivery as not acted on and tells the chat, at most once per notice interval.</summary>
+    /// <remarks>The notice carries only the age, never the message text or sender.</remarks>
+    private async Task IgnoreStaleInboundAsync(SignalizrMessage message, CancellationToken cancellationToken)
+    {
+        var age = timeProvider.GetUtcNow() - DateTimeOffset.FromUnixTimeMilliseconds(message.Timestamp);
+        LogStaleInboundIgnored(logger, nameof(CommunicationsBgService), (long)age.TotalSeconds);
+        try
+        {
+            await signalizrClient.SetReactionAsync(message, RedCross, cancellationToken);
+            var nowTicks = timeProvider.GetUtcNow().UtcTicks;
+            var intervalTicks = TimeSpan.FromMilliseconds(commsConfig.Value.DropNoticeIntervalMs).Ticks;
+            if (_lastStaleInboundNoticeTicks != 0 && nowTicks - _lastStaleInboundNoticeTicks < intervalTicks)
+                return;
+            _lastStaleInboundNoticeTicks = nowTicks;
+            await SendMessageAsync(
+                $"\u23ED Ignored a message sent {FormatAge(age)} ago because it arrived too late to act on safely. " +
+                "Please send it again if it still applies.", cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            LogInboundNotActedOnReportFailed(logger, ex, nameof(CommunicationsBgService));
+        }
+    }
+
+    private static string FormatAge(TimeSpan age) =>
+        age.TotalDays >= 1 ? $"{(int)age.TotalDays} day(s)"
+        : age.TotalHours >= 1 ? $"{(int)age.TotalHours} hour(s)"
+        : $"{(int)age.TotalMinutes} minute(s)";
+
+    /// <summary>Handles one delivery within <see cref="CommsConfig.InboundProcessingTimeoutMs"/>.</summary>
+    /// <remarks>
+    /// <see cref="Task.WaitAsync(TimeSpan, TimeProvider, CancellationToken)"/> stops waiting even when the hung
+    /// code ignores cancellation; the abandoned handler is still cancelled so cooperative work stops too.
+    /// </remarks>
+    private async Task ProcessInboundWithTimeoutAsync(SignalizrMessage message, CancellationToken cancellationToken)
+    {
+        var timeout = TimeSpan.FromMilliseconds(commsConfig.Value.InboundProcessingTimeoutMs);
+        using var handling = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        try
+        {
+            await ProcessInboundAsync(message, handling.Token).WaitAsync(timeout, timeProvider, cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            await handling.CancelAsync();
+            LogInboundProcessingTimedOut(logger, nameof(CommunicationsBgService), (long)timeout.TotalSeconds);
+            try
+            {
+                await signalizrClient.SetReactionAsync(message, RedCross, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                LogInboundNotActedOnReportFailed(logger, ex, nameof(CommunicationsBgService));
+            }
+        }
+    }
+
+    /// <summary>Offers a poll vote to each <see cref="IPollVoteHandler"/> until one claims it.</summary>
+    internal bool TryClaimPollVote(SignalizrMessage message)
+    {
+        if (message.PollVote is not { } pollVote || string.IsNullOrEmpty(message.Sender))
+            return false;
+
+        foreach (var handler in pollVoteHandlers)
+            if (handler.TryHandle(message.Sender, pollVote))
+                return true;
+        return false;
+    }
+
     private async Task ProcessInboundAsync(SignalizrMessage message, CancellationToken cancellationToken)
     {
+        // Claimed votes, such as approval answers, are decided by code and never reach a responder.
+        if (TryClaimPollVote(message))
+            return;
+
         var active = ActiveResponder;
         if (active is null)
         {

@@ -13,12 +13,6 @@ public static partial class AppHost
         WebApplicationBuilder builder,
         HashSet<string> enabledFeatures)
     {
-        if (enabledFeatures.Contains(FeatureNames.DbMigrator))
-        {
-            builder.Services.AddSignalizrDataLayer(builder.Configuration, addRuntimeServices: false);
-            builder.Services.AddSingleton<IBgFeature, DbMigratorBgService>();
-        }
-
         if (enabledFeatures.Contains(FeatureNames.Gateway))
         {
             builder.Services.AddOptionsWithValidateOnStart<GatewayConfig>()
@@ -41,6 +35,7 @@ public static partial class AppHost
             builder.Services.AddSingleton<InboundAttachmentService>();
             builder.Services.AddSingleton<InboundMessagePersistenceService>();
             builder.Services.AddSingleton<IBgFeature, ReceiverBgService>();
+            builder.Services.AddSingleton<IBgFeature, DurableMessagePrunerService>();
             // Separate from the receive loop: per-message work belongs here, where it cannot stop the
             // upstream being read.
             builder.Services.AddSingleton<IBgFeature, DispatcherBgService>();

@@ -62,6 +62,13 @@ public sealed class FeatureConfigTests
     public void GetEnabledFeatures_AcceptsCommsAlone() =>
         Assert.Equal([FeatureNames.Comms], new FeatureConfig { EnabledFeatures = "comms" }.GetEnabledFeatures(), StringComparer.OrdinalIgnoreCase);
 
+    [Fact]
+    public void GetEnabledFeatures_AcceptsDbMigratorAlone() =>
+        Assert.Equal(
+            [FeatureNames.DbMigrator],
+            new FeatureConfig { EnabledFeatures = "dbmigrator" }.GetEnabledFeatures(),
+            StringComparer.OrdinalIgnoreCase);
+
     [Theory]
     [InlineData("Comms,Gateway")]
     [InlineData("Comms,Receiver")]
@@ -72,6 +79,18 @@ public sealed class FeatureConfigTests
 
         var exception = Assert.Throws<InvalidOperationException>(config.GetEnabledFeatures);
         Assert.Contains("Comms", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("DbMigrator,Gateway")]
+    [InlineData("Receiver,DbMigrator")]
+    public void GetEnabledFeatures_RejectsDbMigratorWithDaemonRole(string value)
+    {
+        var config = new FeatureConfig { EnabledFeatures = value };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.GetEnabledFeatures);
+
+        Assert.Contains("DbMigrator", exception.Message);
     }
 
     [Theory]

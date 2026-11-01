@@ -1,0 +1,479 @@
+using CasCap.Data;
+using CasCap.Data.Entities;
+using CasCap.Diagnostics;
+using CasCap.Grpc;
+using CasCap.Models;
+using CasCap.Models.Dtos;
+using CasCap.Services;
+using CasCap.Tests.Fakes;
+using Grpc.Core;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using System.Threading.Channels;
+using Xunit;
+
+namespace CasCap.Tests;
+
+/// <summary>Service-level tests for the bidirectional inbound gRPC contract.</summary>
+public class InboundGrpcServiceTests
+{
+    private const string SecondMessage = "second";
+    private const string ExampleGroup = "Example Group";
+
+    private static readonly string[] SubscriberNames = ["non-acknowledging", "acknowledging", "stalled", "duplicate"];
+
+    [Fact]
+    public async Task Acknowledgement_timeout_returns_deadline_exceeded()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 100);
+        await using var session = StartSession(service, "non-acknowledging");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+
+        await fixture.AddMessageAsync("first");
+        _ = await ReadResponseAsync(session.Response);
+        await fixture.AddMessageAsync(SecondMessage);
+
+        var exception = await Assert.ThrowsAsync<RpcException>(
+            () => session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+
+        Assert.Equal(StatusCode.DeadlineExceeded, exception.StatusCode);
+        Assert.Equal(0, fixture.Registry.Count);
+    }
+
+    [Fact]
+    public async Task Two_subscribers_acknowledge_independently()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 250);
+        await using var acknowledging = StartSession(service, "acknowledging");
+        await using var stalled = StartSession(service, "stalled");
+        await WaitForSubscribersAsync(fixture.Registry, 2);
+
+        await fixture.AddMessageAsync("first");
+        var acknowledgedFirst = await ReadResponseAsync(acknowledging.Response);
+        var stalledFirst = await ReadResponseAsync(stalled.Response);
+        Assert.Equal(acknowledgedFirst.DeliveryId, stalledFirst.DeliveryId);
+
+        acknowledging.Request.Write(new SubscribeRequest
+        {
+            Ack = new Ack { DeliveryId = acknowledgedFirst.DeliveryId }
+        });
+        await acknowledging.Request.WaitForReadAsync(
+            request => request.PayloadCase is SubscribeRequest.PayloadOneofCase.Ack,
+            TestContext.Current.CancellationToken);
+
+        await fixture.AddMessageAsync(SecondMessage);
+        var acknowledgedSecond = await ReadResponseAsync(acknowledging.Response);
+        Assert.Equal(SecondMessage, acknowledgedSecond.Message);
+        // Acknowledge the second delivery too; otherwise its own deadline can expire on a slow runner
+        // before the assertion below and close this healthy subscription.
+        acknowledging.Request.Write(new SubscribeRequest
+        {
+            Ack = new Ack { DeliveryId = acknowledgedSecond.DeliveryId }
+        });
+        await acknowledging.Request.WaitForReadAsync(
+            request => request.PayloadCase is SubscribeRequest.PayloadOneofCase.Ack
+                && request.Ack.DeliveryId == acknowledgedSecond.DeliveryId,
+            TestContext.Current.CancellationToken);
+
+        var exception = await Assert.ThrowsAsync<RpcException>(
+            () => stalled.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+        Assert.Equal(StatusCode.DeadlineExceeded, exception.StatusCode);
+        Assert.False(acknowledging.Call.IsCompleted);
+    }
+
+    [Fact]
+    public async Task Duplicate_live_subscriber_identity_returns_already_exists()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 2_000);
+        await using var first = StartSession(service, "duplicate");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+        await using var second = StartSession(service, "duplicate");
+
+        var exception = await Assert.ThrowsAsync<RpcException>(
+            () => second.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+        Assert.Equal(StatusCode.AlreadyExists, exception.StatusCode);
+        Assert.Equal(1, fixture.Registry.Count);
+    }
+
+    [Fact]
+    public async Task Subscriber_without_configured_groups_returns_permission_denied()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 2_000);
+        await using var session = StartSession(service, "unconfigured");
+
+        var exception = await Assert.ThrowsAsync<RpcException>(
+            () => session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+        Assert.Equal(StatusCode.PermissionDenied, exception.StatusCode);
+        Assert.Equal(0, fixture.Registry.Count);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RequestCompletion_ReleasesIdleSubscriber(bool fail)
+    {
+        // Regression: request EOF/failure left the response loop and durable identity connected.
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 2_000);
+        await using var session = StartSession(service, "duplicate");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+
+        var failure = fail ? new RpcException(new Status(StatusCode.Unavailable, "Test request failure.")) : null;
+        session.Request.Complete(failure);
+        var completion = session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        if (fail)
+        {
+            var exception = await Assert.ThrowsAsync<RpcException>(() => completion);
+            Assert.Equal(StatusCode.Unavailable, exception.StatusCode);
+        }
+        else
+            await completion;
+
+        Assert.Equal(0, fixture.Registry.Count);
+        await using var reconnected = StartSession(service, "duplicate");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+        Assert.False(reconnected.Call.IsCompleted);
+    }
+
+    [Fact]
+    public async Task RequestCompletion_CancelsBlockedResponseWrite()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 2_000);
+        await using var session = StartSession(service, "duplicate", pauseWrites: true);
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+        await fixture.AddMessageAsync("pending");
+        await session.Response.WaitForWriteAsync(TestContext.Current.CancellationToken);
+
+        session.Request.Complete();
+        await session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, fixture.Registry.Count);
+        await using var reconnected = StartSession(service, "duplicate");
+        var replay = await ReadResponseAsync(reconnected.Response);
+        Assert.Equal("pending", replay.Message);
+    }
+
+    [Fact]
+    public async Task CallerCancellation_ReleasesIdleSubscriber()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 2_000);
+        await using var session = StartSession(service, "duplicate");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+
+        await session.CancelAsync();
+        await session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, fixture.Registry.Count);
+        Assert.True(session.Call.IsCompletedSuccessfully);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AcknowledgementTimeout_ExpiresQuietDelivery(bool pauseWrites)
+    {
+        // Regression: expiry previously required a later delivery to exhaust the budget.
+        using var fixture = new RegistryFixture(maxOutstanding: 2);
+        var service = CreateService(fixture, ackTimeoutMs: 100);
+        await using var session = StartSession(service, "non-acknowledging", pauseWrites);
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+        await fixture.AddMessageAsync("pending");
+        if (pauseWrites)
+            await session.Response.WaitForWriteAsync(TestContext.Current.CancellationToken);
+        else
+            _ = await ReadResponseAsync(session.Response);
+
+        var exception = await Assert.ThrowsAsync<RpcException>(() =>
+            session.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+
+        Assert.Equal(StatusCode.DeadlineExceeded, exception.StatusCode);
+        Assert.Equal(0, fixture.Registry.Count);
+        Assert.Single(fixture.Notifier.Notices, notice =>
+            notice.Contains("stopped acknowledging", StringComparison.Ordinal));
+        await using var replay = StartSession(CreateService(fixture, 2_000), "non-acknowledging");
+        Assert.Equal("pending", (await ReadResponseAsync(replay.Response)).Message);
+    }
+
+    [Fact]
+    public async Task AcknowledgementTimeout_KeepsHealthyIdleStreamConnected()
+    {
+        using var fixture = new RegistryFixture(maxOutstanding: 1);
+        var service = CreateService(fixture, ackTimeoutMs: 500);
+        await using var session = StartSession(service, "acknowledging");
+        await WaitForSubscribersAsync(fixture.Registry, 1);
+
+        for (var cycle = 0; cycle < 2; cycle++)
+        {
+            await Task.Delay(600, TestContext.Current.CancellationToken);
+            Assert.False(session.Call.IsCompleted);
+            await fixture.AddMessageAsync("acknowledged");
+            var delivery = await ReadResponseAsync(session.Response);
+            session.Request.Write(new SubscribeRequest { Ack = new Ack { DeliveryId = delivery.DeliveryId } });
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            while (await fixture.GetCursorAsync("acknowledging") != long.Parse(
+                delivery.DeliveryId, System.Globalization.CultureInfo.InvariantCulture))
+                await Task.Delay(10, timeout.Token);
+        }
+
+        await Task.Delay(600, TestContext.Current.CancellationToken);
+        Assert.False(session.Call.IsCompleted);
+        Assert.DoesNotContain(fixture.Notifier.Notices, notice =>
+            notice.Contains("stopped acknowledging", StringComparison.Ordinal));
+    }
+
+    private static InboundGrpcService CreateService(
+        RegistryFixture fixture, int ackTimeoutMs) =>
+        new(fixture.Registry, fixture.Metrics,
+            Options.Create(new SubscriberConfig
+            {
+                ReplayBatchSize = 10,
+                MaxOutstanding = 1,
+                AckTimeoutMs = ackTimeoutMs,
+            }),
+            fixture.Notifier);
+
+    private static async Task<InboundMessage> ReadResponseAsync(TestServerStreamWriter<InboundMessage> response)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        return await response.ReadAsync(timeout.Token);
+    }
+
+    private static TestSession StartSession(
+        InboundGrpcService service, string name, bool pauseWrites = false)
+    {
+        var cancellation = new CancellationTokenSource();
+        var request = new TestAsyncStreamReader<SubscribeRequest>();
+        request.Write(new SubscribeRequest { Hello = new Hello { SubscriberName = name } });
+        var response = new TestServerStreamWriter<InboundMessage>(pauseWrites);
+        var context = new TestServerCallContext(cancellation.Token);
+        var call = service.Subscribe(request, response, context);
+        return new TestSession(cancellation, request, response, call);
+    }
+
+    private static async Task WaitForSubscribersAsync(
+        InboundSubscriberRegistry registry, int expected)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        while (registry.Count != expected)
+            await Task.Delay(10, timeout.Token);
+    }
+
+    private sealed class RegistryFixture(int maxOutstanding) : IDisposable
+    {
+        private readonly (SignalizrMetrics Metrics, FakeOperatorNotifier Notifier,
+            TestDbContextFactory DbContextFactory, InboundSubscriberRegistry Registry) _state =
+            CreateState(maxOutstanding);
+
+        public SignalizrMetrics Metrics => _state.Metrics;
+
+        public FakeOperatorNotifier Notifier => _state.Notifier;
+
+        public InboundSubscriberRegistry Registry => _state.Registry;
+
+        public async Task<long> GetCursorAsync(string name)
+        {
+            await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
+            return await dbContext.SubscriberCursors
+                .Where(cursor => cursor.SubscriberName == name)
+                .Select(cursor => cursor.LastAcknowledgedMessageId)
+                .SingleAsync();
+        }
+
+        public async Task AddMessageAsync(string message)
+        {
+            await using var dbContext = await _state.DbContextFactory.CreateDbContextAsync();
+            dbContext.InboundMessages.Add(new InboundMessageEntity
+            {
+                GroupName = ExampleGroup,
+                Message = message,
+                PersistedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            });
+            await dbContext.SaveChangesAsync();
+            Registry.NotifyMessageAvailable();
+        }
+
+        public void Dispose() => Metrics.Dispose();
+
+        private static (SignalizrMetrics Metrics, FakeOperatorNotifier Notifier,
+            TestDbContextFactory DbContextFactory, InboundSubscriberRegistry Registry) CreateState(int maxOutstanding)
+        {
+            var metrics = new SignalizrMetrics();
+            var notifier = new FakeOperatorNotifier();
+            var dbContextFactory = new TestDbContextFactory();
+            var registry = new InboundSubscriberRegistry(
+                NullLogger<InboundSubscriberRegistry>.Instance,
+                Options.Create(new SubscriberConfig
+                {
+                    ReplayBatchSize = 10,
+                    MaxOutstanding = maxOutstanding,
+                    SubscriberGroups = SubscriberNames.ToDictionary(name => name, _ => new[] { ExampleGroup })
+                }),
+                TimeProvider.System,
+                metrics,
+                dbContextFactory,
+                notifier);
+            return (metrics, notifier, dbContextFactory, registry);
+        }
+    }
+
+    private sealed class TestDbContextFactory : IDbContextFactory<SignalizrDbContext>
+    {
+        private readonly DbContextOptions<SignalizrDbContext> _options =
+            new DbContextOptionsBuilder<SignalizrDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString(), new InMemoryDatabaseRoot())
+                .Options;
+
+        public SignalizrDbContext CreateDbContext() => new(_options);
+
+        public ValueTask<SignalizrDbContext> CreateDbContextAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(CreateDbContext());
+        }
+    }
+
+    private sealed class TestSession(
+        CancellationTokenSource cancellation,
+        TestAsyncStreamReader<SubscribeRequest> request,
+        TestServerStreamWriter<InboundMessage> response,
+        Task call) : IAsyncDisposable
+    {
+        public TestAsyncStreamReader<SubscribeRequest> Request { get; } = request;
+
+        public TestServerStreamWriter<InboundMessage> Response { get; } = response;
+
+        public Task Call { get; } = call;
+
+        public Task CancelAsync() => cancellation.CancelAsync();
+
+        public async ValueTask DisposeAsync()
+        {
+            await cancellation.CancelAsync();
+            Request.Complete();
+            try
+            {
+                await Call.ConfigureAwait(false);
+            }
+            catch (RpcException)
+            {
+                // Expected when the scenario deliberately exhausts the acknowledgement budget.
+            }
+            cancellation.Dispose();
+        }
+    }
+
+    private sealed class TestAsyncStreamReader<T> : IAsyncStreamReader<T> where T : class
+    {
+        private readonly Channel<T> _channel = Channel.CreateUnbounded<T>();
+        private readonly Channel<T> _observed = Channel.CreateUnbounded<T>();
+        private T? _current;
+
+        public T Current => _current
+            ?? throw new InvalidOperationException("MoveNext must succeed before Current is read.");
+
+        public void Write(T item) => _channel.Writer.TryWrite(item);
+
+        public void Complete(Exception? error = null) => _channel.Writer.TryComplete(error);
+
+        public async Task<bool> MoveNext(CancellationToken cancellationToken)
+        {
+            while (await _channel.Reader.WaitToReadAsync(cancellationToken))
+            {
+                if (_channel.Reader.TryRead(out var item))
+                {
+                    _current = item;
+                    _observed.Writer.TryWrite(item);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public async Task WaitForReadAsync(Func<T, bool> predicate, CancellationToken cancellationToken)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(2));
+
+            while (await _observed.Reader.WaitToReadAsync(timeout.Token))
+            {
+                if (_observed.Reader.TryRead(out var item) && predicate(item))
+                    return;
+            }
+        }
+    }
+
+    private sealed class TestServerStreamWriter<T>(bool pauseWrites = false) : IServerStreamWriter<T>
+    {
+        private readonly Channel<T> _channel = Channel.CreateUnbounded<T>();
+        private readonly TaskCompletionSource _writeGate = CreateWriteGate(pauseWrites);
+        private readonly TaskCompletionSource _writeStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public WriteOptions? WriteOptions { get; set; }
+
+        public Task WriteAsync(T message) => WriteAsync(message, CancellationToken.None);
+
+        public async Task WriteAsync(T message, CancellationToken cancellationToken)
+        {
+            _writeStarted.TrySetResult();
+            await _writeGate.Task.WaitAsync(cancellationToken);
+            _channel.Writer.TryWrite(message);
+        }
+
+        public void ReleaseWrites() => _writeGate.TrySetResult();
+
+        public Task WaitForWriteAsync(CancellationToken cancellationToken) =>
+            _writeStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), cancellationToken);
+
+        public ValueTask<T> ReadAsync(CancellationToken cancellationToken) =>
+            _channel.Reader.ReadAsync(cancellationToken);
+
+        private static TaskCompletionSource CreateWriteGate(bool pauseWrites)
+        {
+            var writeGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!pauseWrites)
+                writeGate.TrySetResult();
+            return writeGate;
+        }
+    }
+
+    private sealed class TestServerCallContext(CancellationToken cancellationToken) : ServerCallContext
+    {
+        private readonly Metadata _responseTrailers = [];
+
+        protected override string MethodCore => "signalizr.v1.Inbound/Subscribe";
+
+        protected override string HostCore => "localhost";
+
+        protected override string PeerCore => "test";
+
+        protected override DateTime DeadlineCore => DateTime.MaxValue;
+
+        protected override Metadata RequestHeadersCore => [];
+
+        protected override CancellationToken CancellationTokenCore => cancellationToken;
+
+        protected override Metadata ResponseTrailersCore => _responseTrailers;
+
+        protected override Status StatusCore { get; set; }
+
+        protected override WriteOptions? WriteOptionsCore { get; set; }
+
+        protected override AuthContext AuthContextCore => new("anonymous", []);
+
+        protected override ContextPropagationToken CreatePropagationTokenCore(
+            ContextPropagationOptions? options) => throw new NotSupportedException();
+
+        protected override Task WriteResponseHeadersAsyncCore(Metadata responseHeaders) =>
+            Task.CompletedTask;
+    }
+}

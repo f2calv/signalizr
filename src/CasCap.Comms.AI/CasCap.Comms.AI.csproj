@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="CasCap.Comms.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\CasCap.Comms\CasCap.Comms.csproj" />
     <PackageReference Include="ModelContextProtocol" />
   </ItemGroup>

@@ -221,4 +221,36 @@ public sealed class CommunicationsBgServiceStreamTests
 
         Assert.Equal(expected, fixture.Service.ShouldProcessMessage(message));
     }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task TryClaimPollVote_OffersVotesToHandlersBeforeTheResponder(bool handlerClaims, bool expected)
+    {
+        var handler = new RecordingPollVoteHandler(handlerClaims);
+        await using var fixture = new CommunicationsBgServiceTestFixture(pollVoteHandlers: [handler]);
+        var message = new SignalizrMessage
+        {
+            DeliveryId = "d1",
+            GroupName = ChatGroupName,
+            Sender = Sender,
+            Timestamp = 1,
+            PollVote = new SignalizrPollVote { PollId = "poll-1", OptionIndexes = [0] },
+        };
+
+        Assert.Equal(expected, fixture.Service.TryClaimPollVote(message));
+        Assert.Equal((Sender, "poll-1"), Assert.Single(handler.Votes));
+    }
+
+    /// <summary>Records offered votes and claims them when configured to.</summary>
+    private sealed class RecordingPollVoteHandler(bool claims) : IPollVoteHandler
+    {
+        public List<(string Voter, string PollId)> Votes { get; } = [];
+
+        public bool TryHandle(string voter, SignalizrPollVote pollVote)
+        {
+            Votes.Add((voter, pollVote.PollId));
+            return claims;
+        }
+    }
 }

@@ -48,8 +48,24 @@ public sealed partial class CommunicationsBgService
         && (!string.IsNullOrWhiteSpace(message.Message) || message.Attachments.Count > 0 || message.PollVote is not null)
         && string.Equals(message.GroupName, commsConfig.Value.GroupName, StringComparison.Ordinal);
 
+    /// <summary>Offers a poll vote to each <see cref="IPollVoteHandler"/> until one claims it.</summary>
+    internal bool TryClaimPollVote(SignalizrMessage message)
+    {
+        if (message.PollVote is not { } pollVote || string.IsNullOrEmpty(message.Sender))
+            return false;
+
+        foreach (var handler in pollVoteHandlers)
+            if (handler.TryHandle(message.Sender, pollVote))
+                return true;
+        return false;
+    }
+
     private async Task ProcessInboundAsync(SignalizrMessage message, CancellationToken cancellationToken)
     {
+        // Claimed votes, such as approval answers, are decided by code and never reach a responder.
+        if (TryClaimPollVote(message))
+            return;
+
         var active = ActiveResponder;
         if (active is null)
         {

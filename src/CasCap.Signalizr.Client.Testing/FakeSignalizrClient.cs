@@ -51,6 +51,9 @@ public sealed class FakeSignalizrClient(TimeProvider? timeProvider = null) : ISi
     /// <summary>When set, reaction and typing calls fail with this instead of being recorded.</summary>
     public Exception? InteractionFailure { get; set; }
 
+    /// <summary>When set, <see cref="CreatePollAsync"/> fails with this instead of recording the poll.</summary>
+    public Exception? PollFailure { get; set; }
+
     /// <summary>Messages sent through the client, in order.</summary>
     public ConcurrentQueue<(string GroupName, string Message, IReadOnlyList<string>? Attachments)> Sent { get; } = new();
 
@@ -187,6 +190,9 @@ public sealed class FakeSignalizrClient(TimeProvider? timeProvider = null) : ISi
     public Task<string> CreatePollAsync(string groupName, string question, IReadOnlyList<string> answers,
         bool allowMultipleSelections = false, CancellationToken cancellationToken = default)
     {
+        if (PollFailure is { } failure)
+            return Task.FromException<string>(failure);
+
         var pollId = NowTimestamp();
         Polls.Enqueue(new Poll(groupName, pollId, question, answers, allowMultipleSelections));
         return Task.FromResult(pollId);

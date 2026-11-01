@@ -5,7 +5,7 @@ public static class CommsAgentServiceCollectionExtensions
 {
     /// <summary>
     /// Registers <see cref="AgentCommsResponder"/> as the <see cref="ICommsResponder"/>, with its
-    /// <see cref="CommsDebugNotifier"/> and poll tracker.
+    /// <see cref="CommsDebugNotifier"/>, poll tracker and the <see cref="ToolApprovalService"/>.
     /// </summary>
     /// <remarks>
     /// Register <see cref="IAgentRunEnricher"/> implementations to add host-specific measurements.
@@ -24,7 +24,29 @@ public static class CommsAgentServiceCollectionExtensions
         services.TryAddSingleton<CommsAgentMetrics>();
         services.TryAddSingleton<ICommsResponder, AgentCommsResponder>();
         services.AddMessagingMcp();
+        services.AddToolApproval();
         return services.AddAgentRuntimeClient();
+    }
+
+    /// <summary>
+    /// Registers the <see cref="ToolApprovalService"/> that answers approval prompts posted for tools gated
+    /// by <see cref="ToolApprovalMcpServerBuilderExtensions.WithToolApproval"/>.
+    /// </summary>
+    /// <remarks>
+    /// The service is also an <see cref="IPollVoteHandler"/>, so approval votes are decided in code before
+    /// the <see cref="ICommsResponder"/> sees them.
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The same <see cref="IServiceCollection"/> for chaining.</returns>
+    public static IServiceCollection AddToolApproval(this IServiceCollection services)
+    {
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(ToolApprovalService)))
+            return services;
+
+        services.AddToolApprovalConfig();
+        services.AddSingleton<ToolApprovalService>();
+        services.AddSingleton<IPollVoteHandler>(sp => sp.GetRequiredService<ToolApprovalService>());
+        return services;
     }
 
     /// <summary>

@@ -57,6 +57,40 @@ both. The bundled application wires workload authentication in its
 The runtime owns tenant definitions, credentials, agent construction, tools and version-qualified
 session state. Comms retains Signal delivery, typing, reactions, polls, attachments and diagnostics.
 
+## Tool Approval
+
+High-impact MCP tools, such as unlocking a door, can require a person in the chat group to approve
+each call. Mark the tool method with `[RequiresApproval]` and add the filter to the MCP server that
+exposes it:
+
+```csharp
+using CasCap.Attributes;
+using Microsoft.Extensions.DependencyInjection;
+
+[McpServerTool(ReadOnly = false, Destructive = true)]
+[RequiresApproval]
+[Description("Opens the gate. A person in the household chat must approve each call.")]
+public Task<bool> OpenGate() => gateSvc.OpenAsync();
+
+services.AddMcpServer()
+    .WithHttpTransport()
+    .WithTools<GateMcpQueryService>()
+    .WithToolApproval();
+```
+
+A gated call posts an Approve/Deny poll naming the tool, its arguments and the requesting agent,
+then waits up to `ToolApprovalConfig.TimeoutMs`. `ToolApprovalService` claims votes on that poll
+through `IPollVoteHandler` before the responder sees them, so a model can neither read nor answer
+its own approval request. Only an accepted Approve runs the tool. A Deny, timeout, unreachable
+gateway, cancelled caller or restart returns a refusal the model can relay, not an error.
+
+The filter fails closed. `AddCommsAgent()` registers `ToolApprovalService`; an MCP host without it
+refuses gated tools rather than running them. The requesting agent is read from the
+`agentizr/agent-name` call `_meta` key sent by the Agent Runtime, falling back to the MCP client
+name. It is informational only and never authorizes anything.
+
+Pending approvals are process-local, which suits the single-replica Comms deployment.
+
 ## Public Surface
 
 | Type | Purpose |
@@ -69,7 +103,11 @@ session state. Comms retains Signal delivery, typing, reactions, polls, attachme
 | `CommsDebugStep` | One step of the monitor-group pipeline timeline |
 | `MessagingMcpQueryService` | MCP poll tools (`create_poll`, `close_poll`, `get_poll_status`) on the chat group |
 | [`IPollTracker`](https://github.com/f2calv/signalizr/blob/b5ae4f04ff8a6f9f9f611da60a08872a41e34176/src/CasCap.Comms.AI/Abstractions/IPollTracker.cs), `InMemoryPollTracker` | Comms-owned poll lifecycle, votes, result summaries, and TTL expiry; process-local, so a restart forgets open polls |
-| `CommsAgentServiceCollectionExtensions` | `AddCommsAgent()` and `AddMessagingMcp()` |
+| `RequiresApprovalAttribute` | Marks an MCP tool method that needs approval before it runs |
+| `ToolApprovalService` | Posts approval polls and decides them from accepted votes |
+| `ToolApprovalOutcome` | `Approved`, `Denied`, `TimedOut` or `Unavailable` |
+| `CommsAgentServiceCollectionExtensions` | `AddCommsAgent()`, `AddMessagingMcp()` and `AddToolApproval()` |
+| `ToolApprovalMcpServerBuilderExtensions` | `WithToolApproval()` call-tool filter for an MCP server |
 
 ## Configuration
 
@@ -126,6 +164,26 @@ Runtime name, session and fallback prompt default to `CommsAgent`, `primary-grou
 `Describe this attachment.`. Register `IAgentRunEnricher` implementations only when needed;
 `RequiresDiagnosticDetails` opts into potentially sensitive tool arguments and property bags.
 
+Tool approval works with its defaults: enabled, a 30-second timeout and any chat-group member as
+approver. Restrict approvers or override gating per exposed tool name:
+
+```json
+{
+  "CasCap": {
+    "ToolApprovalConfig": {
+      "TimeoutMs": 30000,
+      "ApproverIds": ["00000000-0000-0000-0000-000000000000"],
+      "RequiredTools": ["open_garage"],
+      "WaivedTools": []
+    }
+  }
+}
+```
+
+`ApproverIds` are the voter identifiers Signal delivers. They are personal data, so keep them in
+private configuration. Votes from anyone else are ignored rather than treated as a denial.
+`ApprovalEnabled: false` runs gated tools immediately; use it only for local development.
+
 ## Runtime Scenarios
 
 ### Responder Turn
@@ -149,7 +207,7 @@ sequenceDiagram
 | `CasCap.Comms` | The pipeline this responder answers for |
 | `CasCap.AgentRuntime.Client` | Streamed turns and typed session/override operations |
 | `CasCap.AgentRuntime.Contracts` | Stable run, diagnostic and control DTOs |
-| `ModelContextProtocol` | Poll tool attributes |
+| `ModelContextProtocol` | Poll tool attributes and the tool-approval call filter |
 
 The poll MCP service registration supplies tools, not a listening MCP server. A host must expose
 them deliberately; it is separate from the gateway's optional operator `/mcp` surface.

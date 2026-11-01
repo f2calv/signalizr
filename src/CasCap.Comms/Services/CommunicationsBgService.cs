@@ -30,6 +30,7 @@ public sealed partial class CommunicationsBgService(
     ICommsEventFormatter eventFormatter,
     ICommsGroupRouter groupRouter,
     IRemoteCache remoteCache,
+    IEnumerable<IPollVoteHandler> pollVoteHandlers,
     ICommsResponder? responder = null) : IBgFeature
 {
     //Every delivery arrives through the gateway, so the identity no longer names the account.

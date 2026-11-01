@@ -68,6 +68,16 @@ public class InboundGrpcServiceTests
         await fixture.AddMessageAsync(SecondMessage);
         var acknowledgedSecond = await ReadResponseAsync(acknowledging.Response);
         Assert.Equal(SecondMessage, acknowledgedSecond.Message);
+        // Acknowledge the second delivery too; otherwise its own deadline can expire on a slow runner
+        // before the assertion below and close this healthy subscription.
+        acknowledging.Request.Write(new SubscribeRequest
+        {
+            Ack = new Ack { DeliveryId = acknowledgedSecond.DeliveryId }
+        });
+        await acknowledging.Request.WaitForReadAsync(
+            request => request.PayloadCase is SubscribeRequest.PayloadOneofCase.Ack
+                && request.Ack.DeliveryId == acknowledgedSecond.DeliveryId,
+            TestContext.Current.CancellationToken);
 
         var exception = await Assert.ThrowsAsync<RpcException>(
             () => stalled.Call.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));

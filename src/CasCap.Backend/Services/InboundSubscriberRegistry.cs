@@ -18,6 +18,10 @@ public sealed class InboundSubscriberRegistry(
     // TODO: Introduce durable ownership/fencing before allowing overlapping gateway replicas.
     // This registry enforces identity only within one process; retain single-owner deployment until
     // distributed cursor concurrency and takeover/replay behavior have explicit tests.
+    // A subscriber whose pod died without closing its stream (observed after a k3s control-plane
+    // restart) stays registered, so every reconnect fails with AlreadyExists until this process
+    // restarts. Detect dead streams (HTTP/2 keepalive or a server-side idle deadline) or let a newer
+    // connection with the same identity take over the stale subscription.
     private readonly ConcurrentDictionary<string, InboundSubscription> _subscriptions =
         new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _registrationLock = new(1, 1);

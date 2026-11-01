@@ -227,6 +227,58 @@ public class CommunicationsBgServiceTests
     }
 
     [Fact]
+    public async Task StaleInbound_IsIgnoredWithOneNoticeAndNeverReserved()
+    {
+        await using var fixture = new CommunicationsBgServiceTestFixture(staleInboundDroppingEnabled: true);
+        await fixture.StartAsync();
+        var twoDaysAgo = DateTimeOffset.UtcNow.AddDays(-2).ToUnixTimeMilliseconds();
+
+        fixture.Enqueue(CommunicationsBgServiceTestFixture.TextEnvelope("turn on the lights", twoDaysAgo));
+        fixture.Enqueue(CommunicationsBgServiceTestFixture.TextEnvelope("and the garage", twoDaysAgo + 1));
+
+        await CommunicationsBgServiceTestFixture.WaitForAsync(() => fixture.Signalizr.ReactionCount(RedCross) == 2);
+        await CommunicationsBgServiceTestFixture.AssertStaysFalseAsync(
+            () => fixture.Signalizr.StartTypingCallCount > 0 || fixture.Signalizr.ReactionCount(Eyes) > 0);
+
+        Assert.True(fixture.Deduplicator.Claims.IsEmpty);
+        var notice = Assert.Single(fixture.Signalizr.SentTo(CommunicationsBgServiceTestFixture.ChatGroupName));
+        Assert.Contains("2 day(s) ago", notice.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("lights", notice.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HungInbound_IsAbandonedAndTheSubscriptionContinues()
+    {
+        var neverCompletes = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var fixture = new CommunicationsBgServiceTestFixture(inboundProcessingTimeoutMs: 1_000);
+        fixture.Deduplicator.HangFirstClaim = neverCompletes.Task;
+        await fixture.StartAsync();
+
+        fixture.Enqueue(CommunicationsBgServiceTestFixture.TextEnvelope("hangs while reserving", 7_101));
+        fixture.Enqueue(CommunicationsBgServiceTestFixture.TextEnvelope("arrives after the hang", 7_102));
+
+        await CommunicationsBgServiceTestFixture.WaitForAsync(
+            () => fixture.Signalizr.ReactionCount(Eyes) == 1 && fixture.Deduplicator.Claims.Count == 2);
+        Assert.True(fixture.Signalizr.ReactionCount(RedCross) >= 1);
+        neverCompletes.TrySetResult(true);
+    }
+
+    [Fact]
+    public async Task FreshInbound_IsProcessedWhenStaleDroppingIsEnabled()
+    {
+        await using var fixture = new CommunicationsBgServiceTestFixture(staleInboundDroppingEnabled: true);
+        await fixture.StartAsync();
+
+        fixture.Enqueue(CommunicationsBgServiceTestFixture.TextEnvelope("turn on the lights",
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+
+        await CommunicationsBgServiceTestFixture.WaitForAsync(() => fixture.Signalizr.ReactionCount(Eyes) == 1);
+        Assert.Single(fixture.Deduplicator.Claims);
+        Assert.DoesNotContain(fixture.Signalizr.SentTo(CommunicationsBgServiceTestFixture.ChatGroupName),
+            sent => sent.Message.Contains("too late", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task DisabledModeRejectsVoiceWithoutDownloading()
     {
         await using var fixture = new CommunicationsBgServiceTestFixture(VoiceProcessingMode.Disabled);

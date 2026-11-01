@@ -248,6 +248,37 @@ public sealed record CommsConfig : IAppConfig
     [Range(1, 720)]
     public int MessageDeduplicationTtlHours { get; init; } = 168;
 
+    /// <summary>
+    /// Whether inbound chat messages older than <see cref="MaxInboundMessageAgeMs"/> are ignored instead of
+    /// acted on.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="true"/>. A subscriber that stalls or restarts receives its unacknowledged
+    /// backlog when it reconnects, and duplicate suppression only covers messages that were reserved. Without
+    /// this guard a request from days ago, such as switching lights on, is executed as if it were new. Ignored
+    /// messages are acknowledged, marked with a red cross and summarised in one rate-limited chat notice.
+    /// </remarks>
+    public bool StaleInboundDroppingEnabled { get; init; } = true;
+
+    /// <summary>Maximum age in milliseconds of an inbound chat message before it is ignored as stale.</summary>
+    /// <remarks>
+    /// Defaults to <c>300000</c> ms (5 minutes). Compared against the sender's Signal timestamp when the
+    /// message is received, so it must cover normal delivery and processing delays.
+    /// </remarks>
+    [Range(10_000, 86_400_000)]
+    public int MaxInboundMessageAgeMs { get; init; } = 300_000;
+
+    /// <summary>Maximum time in milliseconds the subscription waits for one inbound message to be handled.</summary>
+    /// <remarks>
+    /// Defaults to <c>120000</c> ms (2 minutes). The subscription acknowledges a message only after handling it,
+    /// so one hung handler would otherwise silence the chat indefinitely: the gateway drops the unacknowledged
+    /// stream, but the stuck consumer never observes it or resubscribes. When the limit elapses the handler is
+    /// cancelled, the message is reported as failed and the subscription moves on. Handling covers admission,
+    /// attachment download, transcription and queueing; the agent turn itself runs on the reply queue.
+    /// </remarks>
+    [Range(1_000, 3_600_000)]
+    public int InboundProcessingTimeoutMs { get; init; } = 120_000;
+
     /// <summary>Time-to-live in milliseconds for agent-created polls awaiting votes.</summary>
     /// <remarks>Defaults to <c>3600000</c> ms (1 hour).</remarks>
     [Range(1, int.MaxValue)]

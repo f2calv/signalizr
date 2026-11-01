@@ -141,6 +141,9 @@ groups exactly, including spaces and case.
 | `MediaCacheKeyPrefix` | `"comms:cache:media"` | Redis key prefix for cached attachments |
 | `MediaCacheTtlMs` | `300000` | Lifetime of an unsent cached attachment |
 | `MessageDeduplicationTtlHours` | `168` | Duplicate-suppression window |
+| `StaleInboundDroppingEnabled` | `true` | Ignore inbound chat messages older than `MaxInboundMessageAgeMs`, so a replayed backlog cannot act on old requests |
+| `MaxInboundMessageAgeMs` | `300000` | Stale inbound-message cut-off, measured from the sender's Signal timestamp |
+| `InboundProcessingTimeoutMs` | `120000` | Per-message handling limit; a hung handler is abandoned so the subscription keeps acknowledging |
 | `PollTtlMs` | `3600000` | Process-local poll tracker expiry when the AI responder is installed |
 
 ## Configuration Examples

@@ -55,6 +55,7 @@ public sealed partial class CommunicationsBgService(
     private long _rateLimitedSinceNotice;
     private long _staleSinceNotice;
     private long _lastDropNoticeTicks;
+    private long _lastStaleInboundNoticeTicks;
 
     /// <inheritdoc/>
     public string FeatureName => CommsFeatureNames.Comms;

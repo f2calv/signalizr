@@ -26,6 +26,8 @@ namespace CasCap.Tests.Unit;
 /// <param name="agentRuntimeResponder">Replaces the fake Agent Runtime's default empty-answer response.</param>
 /// <param name="streamConsumptionEnabled">Whether the comms stream is consumed; when off the service gets a cache that throws on any use.</param>
 /// <param name="pollVoteHandlers">Handlers offered each poll vote before the responder.</param>
+/// <param name="inboundProcessingTimeoutMs">Per-message handling limit for the inbound subscription.</param>
+/// <param name="staleInboundDroppingEnabled">Whether stale inbound messages are ignored; off by default because most tests use small synthetic timestamps.</param>
 public sealed class CommunicationsBgServiceTestFixture(
     VoiceProcessingMode voiceMode = VoiceProcessingMode.Enabled,
     bool responderEnabled = true,
@@ -40,7 +42,9 @@ public sealed class CommunicationsBgServiceTestFixture(
     string[]? directDeliverySources = null,
     Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? agentRuntimeResponder = null,
     bool streamConsumptionEnabled = true,
-    IPollVoteHandler[]? pollVoteHandlers = null) : IAsyncDisposable
+    IPollVoteHandler[]? pollVoteHandlers = null,
+    bool staleInboundDroppingEnabled = false,
+    int inboundProcessingTimeoutMs = 120_000) : IAsyncDisposable
 {
     /// <summary>The gateway's own account, whose messages the service must ignore.</summary>
     public const string Account = "+10000000000";
@@ -77,7 +81,9 @@ public sealed class CommunicationsBgServiceTestFixture(
         directDeliverySources,
         agentRuntimeResponder,
         streamConsumptionEnabled,
-        pollVoteHandlers);
+        pollVoteHandlers,
+        staleInboundDroppingEnabled,
+        inboundProcessingTimeoutMs);
 
     /// <summary>The duplicate-suppression fake.</summary>
     public FakeSignalMessageDeduplicator Deduplicator => _state.Deduplicator;
@@ -300,7 +306,9 @@ public sealed class CommunicationsBgServiceTestFixture(
             string[]? directDeliverySources,
             Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? agentRuntimeResponder,
             bool streamConsumptionEnabled,
-            IPollVoteHandler[]? pollVoteHandlers)
+            IPollVoteHandler[]? pollVoteHandlers,
+            bool staleInboundDroppingEnabled,
+            int inboundProcessingTimeoutMs)
         {
             var deduplicator = new FakeSignalMessageDeduplicator();
             var pollTracker = new FakePollTracker();
@@ -323,6 +331,8 @@ public sealed class CommunicationsBgServiceTestFixture(
                 StreamSendRatePerMinute = streamSendRatePerMinute,
                 EchoTranscriptToDebugChat = echoTranscriptToDebugChat,
                 StreamConsumptionEnabled = streamConsumptionEnabled,
+                StaleInboundDroppingEnabled = staleInboundDroppingEnabled,
+                InboundProcessingTimeoutMs = inboundProcessingTimeoutMs,
             });
             var speechToTextConfig = Options.Create(new SpeechToTextConfig { Mode = voiceMode });
 

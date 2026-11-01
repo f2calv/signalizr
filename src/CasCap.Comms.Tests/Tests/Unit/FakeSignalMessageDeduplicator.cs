@@ -15,11 +15,18 @@ public sealed class FakeSignalMessageDeduplicator : ISignalMessageDeduplicator
     /// <summary>Every identity presented to <see cref="ReleaseAsync"/>, in order.</summary>
     public ConcurrentQueue<SignalMessageIdentity> Releases { get; } = new();
 
+    /// <summary>When set, the first claim waits on this task without observing cancellation, simulating a hung store.</summary>
+    public Task? HangFirstClaim { get; set; }
+
+    private int _hung;
+
     /// <inheritdoc/>
-    public Task<bool> TryClaimAsync(SignalMessageIdentity identity, CancellationToken cancellationToken = default)
+    public async Task<bool> TryClaimAsync(SignalMessageIdentity identity, CancellationToken cancellationToken = default)
     {
         Claims.Enqueue(identity);
-        return Task.FromResult(ClaimResult);
+        if (HangFirstClaim is { } hang && Interlocked.Exchange(ref _hung, 1) == 0)
+            await hang;
+        return ClaimResult;
     }
 
     /// <inheritdoc/>

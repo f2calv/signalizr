@@ -126,7 +126,9 @@ Runtime name, session and fallback prompt default to `CommsAgent`, `primary-grou
 `Describe this attachment.`. Register `IAgentRunEnricher` implementations only when needed;
 `RequiresDiagnosticDetails` opts into potentially sensitive tool arguments and property bags.
 
-## Service Architecture
+## Runtime Scenarios
+
+### Responder Turn
 
 ```mermaid
 sequenceDiagram

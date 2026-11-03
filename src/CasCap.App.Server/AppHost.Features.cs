@@ -110,8 +110,8 @@ public static partial class AppHost
         });
 
         if (logger.IsEnabled(LogLevel.Information))
-            logger.LogInformation("{AppName} serving HTTP/1.1 on {Http1Port} and gRPC on {Http2Port}",
-                AppDomain.CurrentDomain.FriendlyName, grpcHostConfig.Http1Port, grpcHostConfig.Http2Port);
+            logger.LogInformation("{ClassName} serving HTTP/1.1 on {Http1Port} and gRPC on {Http2Port}",
+                nameof(AppHost), grpcHostConfig.Http1Port, grpcHostConfig.Http2Port);
 
         return true;
     }

@@ -210,6 +210,13 @@ service name independently. The host also subscribes to `CasCap.Api.SignalCli` t
 Metrics cover queue drops, persistence, subscriber delivery/acknowledgements, pruning and wrapper
 receive/reconnect health; identifiers and message content are not metric labels or trace attributes.
 
+At the default `Information` level each HTTP request writes one summary with its route template,
+never the raw path or query, and an idle replica is otherwise quiet after startup. An unreachable
+wrapper, gateway or Redis writes one `Warning` when it starts failing, `Debug` while it keeps
+failing, and one `Information` with the failure count and downtime when it recovers. Per-message
+progress is `Debug` and is logged by length and count only. Development lowers the `CasCap`
+namespaces to `Debug`.
+
 ## License
 
 [MIT](LICENSE).

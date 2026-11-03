@@ -34,8 +34,10 @@ public sealed class GroupsApiExceptionHandler(ILogger<GroupsApiExceptionHandler>
         if (problem.Item1 == 0)
             return false;
 
-        if (exception is HttpRequestException)
-            logger.LogError("Signal group operation failed because the upstream wrapper was unavailable");
+        // The exception itself is not logged: its message can carry upstream details.
+        if (exception is HttpRequestException && logger.IsEnabled(LogLevel.Error))
+            logger.LogError("{ClassName} Signal group operation failed because the upstream wrapper was unavailable",
+                nameof(GroupsApiExceptionHandler));
 
         await TypedResults.Problem(statusCode: problem.Item1, title: problem.Item2, detail: problem.Item3)
             .ExecuteAsync(httpContext);

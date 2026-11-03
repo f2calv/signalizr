@@ -34,8 +34,9 @@ public sealed class SignalizrMcpMessagingService(
             var response = await messageGateway.SendAsync(groupName, request, cancellationToken);
             if (string.IsNullOrWhiteSpace(response.Timestamp))
             {
-                logger.LogWarning("{ClassName} send returned no acknowledgement timestamp",
-                    nameof(SignalizrMcpMessagingService));
+                if (logger.IsEnabled(LogLevel.Warning))
+                    logger.LogWarning("{ClassName} send returned no acknowledgement timestamp",
+                        nameof(SignalizrMcpMessagingService));
                 throw new McpException("No acknowledgement timestamp was returned. The message may have been sent; do not retry automatically.");
             }
             return new(response.Timestamp);
@@ -46,14 +47,16 @@ public sealed class SignalizrMcpMessagingService(
         }
         catch (HttpRequestException)
         {
-            logger.LogWarning("{ClassName} send could not confirm upstream acceptance",
-                nameof(SignalizrMcpMessagingService));
+            if (logger.IsEnabled(LogLevel.Warning))
+                logger.LogWarning("{ClassName} send could not confirm upstream acceptance",
+                    nameof(SignalizrMcpMessagingService));
             throw new McpException("Upstream acceptance could not be confirmed. The message may have been sent; do not retry automatically.");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            logger.LogWarning("{ClassName} upstream send timed out",
-                nameof(SignalizrMcpMessagingService));
+            if (logger.IsEnabled(LogLevel.Warning))
+                logger.LogWarning("{ClassName} upstream send timed out",
+                    nameof(SignalizrMcpMessagingService));
             throw new McpException("The upstream send timed out. The message may have been sent; do not retry automatically.");
         }
     }

@@ -33,6 +33,7 @@ public sealed class OperatorNotifier(
     /// <inheritdoc/>
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
+        var failures = 0;
         await foreach (var notice in _notices.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
         {
             try
@@ -45,13 +46,38 @@ public sealed class OperatorNotifier(
                     Message = $"signalizr: {notice}"
                 };
                 if (await client.SendMessage(request, cancellationToken).ConfigureAwait(false) is null)
-                    logger.LogWarning("{ClassName} the wrapper returned no result for an operator notice", nameof(OperatorNotifier));
+                {
+                    OnSendFailed(++failures, exception: null);
+                    continue;
+                }
+
+                if (failures > 0 && logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation("{ClassName} operator notices delivered again after {FailureCount} failed notice(s)",
+                        nameof(OperatorNotifier), failures);
+                }
+                failures = 0;
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 // A lost notice must not stop the gateway; the log and metrics remain the record.
-                logger.LogWarning(ex, "{ClassName} could not send an operator notice", nameof(OperatorNotifier));
+                OnSendFailed(++failures, ex);
             }
+        }
+    }
+
+    // During an upstream outage every queued notice fails, so only the first failure is a Warning.
+    private void OnSendFailed(int failures, Exception? exception)
+    {
+        if (failures == 1)
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+                logger.LogWarning(exception, "{ClassName} could not send an operator notice", nameof(OperatorNotifier));
+        }
+        else if (logger.IsEnabled(LogLevel.Debug))
+        {
+            logger.LogDebug("{ClassName} operator notice still failing FailureCount={FailureCount}",
+                nameof(OperatorNotifier), failures);
         }
     }
 }

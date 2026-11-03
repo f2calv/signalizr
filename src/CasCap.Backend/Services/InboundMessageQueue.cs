@@ -112,7 +112,7 @@ public sealed class InboundMessageQueue(
             // Only the first drop is logged: by the time messages are being dropped the consumer is
             // already behind, and a line per drop would compete with it for the same thread pool.
             // The running total is the durable signal.
-            if (dropped == 1)
+            if (dropped == 1 && Logger.IsEnabled(LogLevel.Warning))
             {
                 Logger.LogWarning(
                     "{ClassName} dropped an inbound message because the queue is full. " +

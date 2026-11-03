@@ -60,7 +60,8 @@ adds the stream sink and a hosted progress/timeout reporter for `ITrackedOperati
   optional spoken replies.
 
 Without an available responder, chat-bound events are formatted and sent directly and inbound
-messages are only logged. With `StreamEventTurnsEnabled` set to `false`, chat-bound events are sent
+messages are ignored, recorded at `Debug` by length and attachment count only. With
+`StreamEventTurnsEnabled` set to `false`, chat-bound events are sent
 directly even when a responder answers inbound messages; `DirectDeliverySources` does the same for
 selected event sources only. [CasCap.Comms.AI](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Comms.AI/README.md)
 provides the AI agent responder.

@@ -76,40 +76,34 @@ public sealed partial class CommunicationsBgService(
         var monitorEnabled = !string.IsNullOrEmpty(commsConfig.Value.MonitorGroupName);
         var responderEnabled = ActiveResponder is not null;
         LogStarting(logger, nameof(CommunicationsBgService), monitorEnabled, responderEnabled);
-        try
+
+        // Start consuming the comms stream immediately — this must not be gated behind the gateway
+        // connection, otherwise stream events queue indefinitely until Signalizr becomes reachable.
+        Task streamTask;
+        if (commsConfig.Value.StreamConsumptionEnabled)
         {
-            // Start consuming the comms stream immediately — this must not be gated behind the gateway
-            // connection, otherwise stream events queue indefinitely until Signalizr becomes reachable.
-            Task streamTask;
-            if (commsConfig.Value.StreamConsumptionEnabled)
-            {
-                await EnsureConsumerGroupAsync();
-                streamTask = DrainStreamAsync(cancellationToken);
-            }
-            else
-            {
-                LogStreamConsumptionDisabled(logger, nameof(CommunicationsBgService));
-                //Never completes, so WhenAny below waits on the reply queue and subscription alone.
-                streamTask = Task.Delay(Timeout.Infinite, cancellationToken);
-            }
-
-            await WaitForGroupsAsync(cancellationToken);
-            _groupReady.TrySetResult();
-
-            var replyTask = DrainReplyQueueAsync(cancellationToken);
-
-            LogSubscribing(logger, nameof(CommunicationsBgService));
-            var incomingTask = SubscribeToMessagesAsync(cancellationToken);
-
-            //await-await-WhenAny propagates the first faulted task immediately so the
-            //service crashes and the pod restarts rather than running in a degraded state.
-            await await Task.WhenAny(streamTask, replyTask, incomingTask);
+            await EnsureConsumerGroupAsync();
+            streamTask = DrainStreamAsync(cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException and not TaskCanceledException)
+        else
         {
-            LogFatalError(logger, ex, nameof(CommunicationsBgService));
-            throw;
+            LogStreamConsumptionDisabled(logger, nameof(CommunicationsBgService));
+            //Never completes, so WhenAny below waits on the reply queue and subscription alone.
+            streamTask = Task.Delay(Timeout.Infinite, cancellationToken);
         }
+
+        await WaitForGroupsAsync(cancellationToken);
+        _groupReady.TrySetResult();
+
+        var replyTask = DrainReplyQueueAsync(cancellationToken);
+
+        LogSubscribing(logger, nameof(CommunicationsBgService));
+        var incomingTask = SubscribeToMessagesAsync(cancellationToken);
+
+        //await-await-WhenAny propagates the first faulted task immediately so the
+        //service crashes and the pod restarts rather than running in a degraded state.
+        //The fault is not logged here: the hosting layer records it once as it stops the host.
+        await await Task.WhenAny(streamTask, replyTask, incomingTask);
         LogExiting(logger, nameof(CommunicationsBgService));
     }
 
@@ -123,6 +117,8 @@ public sealed partial class CommunicationsBgService(
     private async Task WaitForGroupsAsync(CancellationToken cancellationToken)
     {
         var retryMs = commsConfig.Value.HealthCheckProbeDelayMs;
+        var failures = 0;
+        var failingSince = default(DateTimeOffset);
         var missingOptional = await signalizrClient.WaitForGroupsAsync(
             [commsConfig.Value.GroupName],
             [commsConfig.Value.MonitorGroupName],
@@ -130,15 +126,23 @@ public sealed partial class CommunicationsBgService(
             timeProvider,
             (ex, attempt) =>
             {
-                var level = attempt % 10 == 0 ? LogLevel.Warning : LogLevel.Debug;
-                if (logger.IsEnabled(level))
+                // One Warning when the gateway is first unreachable; each further attempt is Debug.
+                failures = attempt;
+                if (attempt == 1)
                 {
-                    logger.Log(level, ex,
-                        "{ClassName} Signalizr gateway not reachable, attempt {Attempt}, retrying in {RetryMs}ms",
-                        nameof(CommunicationsBgService), attempt, retryMs);
+                    failingSince = timeProvider.GetUtcNow();
+                    LogGatewayUnreachable(logger, ex, nameof(CommunicationsBgService), retryMs);
                 }
+                else
+                    LogGatewayStillUnreachable(logger, nameof(CommunicationsBgService), attempt, retryMs);
             },
             cancellationToken);
+
+        if (failures > 0)
+        {
+            var downtime = timeProvider.GetUtcNow() - failingSince;
+            LogGatewayRecovered(logger, nameof(CommunicationsBgService), failures, downtime);
+        }
 
         if (missingOptional.Count > 0)
             LogMonitorGroupUnavailable(logger, nameof(CommunicationsBgService));

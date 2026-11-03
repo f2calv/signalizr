@@ -33,8 +33,8 @@ public sealed class RedisSignalMessageDeduplicator(
         try
         {
             var claimed = await remoteCache.Db.StringSetAsync(key, 1, ttl, When.NotExists);
-            if (!claimed && logger.IsEnabled(LogLevel.Information))
-                logger.LogInformation("{ClassName} duplicate suppressed for reservation {ReservationKey}",
+            if (!claimed && logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug("{ClassName} duplicate suppressed for reservation {ReservationKey}",
                     nameof(RedisSignalMessageDeduplicator), key);
             return claimed;
         }

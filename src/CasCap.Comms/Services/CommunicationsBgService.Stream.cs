@@ -9,6 +9,9 @@ public sealed partial class CommunicationsBgService
     //Used only when a producer's MediaReference omits the media type.
     private const string FallbackMediaType = "application/octet-stream";
 
+    private int _streamReadFailures;
+    private DateTimeOffset _streamReadFailingSince;
+
     private async Task EnsureConsumerGroupAsync()
     {
         try
@@ -41,6 +44,13 @@ public sealed partial class CommunicationsBgService
                     commsConfig.Value.ConsumerName,
                     commsConfig.Value.StreamReadPosition,
                     count: commsConfig.Value.StreamReadCount);
+
+                if (_streamReadFailures != 0)
+                {
+                    var downtime = timeProvider.GetUtcNow() - _streamReadFailingSince;
+                    LogStreamReadRecovered(logger, nameof(CommunicationsBgService), _streamReadFailures, downtime);
+                    _streamReadFailures = 0;
+                }
 
                 if (entries.Length > 0)
                 {
@@ -86,7 +96,14 @@ public sealed partial class CommunicationsBgService
             }
             catch (Exception ex) when (ex is not OperationCanceledException and not TaskCanceledException)
             {
-                LogStreamReadError(logger, ex, nameof(CommunicationsBgService));
+                // One Warning when reads start failing, for example while Redis is down; repeats are Debug.
+                if (_streamReadFailures++ == 0)
+                {
+                    _streamReadFailingSince = timeProvider.GetUtcNow();
+                    LogStreamReadFailing(logger, ex, nameof(CommunicationsBgService));
+                }
+                else
+                    LogStreamReadStillFailing(logger, nameof(CommunicationsBgService), _streamReadFailures);
                 await Task.Delay(TimeSpan.FromMilliseconds(commsConfig.Value.PollingIntervalMs), timeProvider, cancellationToken);
             }
         }

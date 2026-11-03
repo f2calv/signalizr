@@ -17,13 +17,21 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} subscribing to the configured Signalizr chat group")]
     private static partial void LogSubscribing(ILogger logger, string className);
 
-    [LoggerMessage(Level = LogLevel.Error,
-        Message = "{ClassName} fatal error during execution")]
-    private static partial void LogFatalError(ILogger logger, Exception ex, string className);
-
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} exiting")]
     private static partial void LogExiting(ILogger logger, string className);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "{ClassName} Signalizr gateway not reachable, retrying in {RetryMs}ms")]
+    private static partial void LogGatewayUnreachable(ILogger logger, Exception ex, string className, int retryMs);
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "{ClassName} Signalizr gateway still not reachable Attempt={Attempt}, retrying in {RetryMs}ms")]
+    private static partial void LogGatewayStillUnreachable(ILogger logger, string className, int attempt, int retryMs);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "{ClassName} Signalizr gateway reachable again ConsecutiveFailures={ConsecutiveFailures} Downtime={Downtime}")]
+    private static partial void LogGatewayRecovered(ILogger logger, string className, int consecutiveFailures, TimeSpan downtime);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "{ClassName} configured Signalizr monitor group is unavailable, diagnostics will not be delivered")]
@@ -47,7 +55,7 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} consuming stream {StreamKey} as {ConsumerGroup}/{ConsumerName}")]
     private static partial void LogStreamConsuming(ILogger logger, string className, string streamKey, string consumerGroup, string consumerName);
 
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} stream consumption disabled; only inbound messages are answered")]
     private static partial void LogStreamConsumptionDisabled(ILogger logger, string className);
 
@@ -55,11 +63,19 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} consumer group disappeared, recreating")]
     private static partial void LogConsumerGroupDisappeared(ILogger logger, string className);
 
-    [LoggerMessage(Level = LogLevel.Error,
-        Message = "{ClassName} error during stream read cycle")]
-    private static partial void LogStreamReadError(ILogger logger, Exception ex, string className);
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "{ClassName} stream read failing, retrying")]
+    private static partial void LogStreamReadFailing(ILogger logger, Exception ex, string className);
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "{ClassName} stream read still failing ConsecutiveFailures={ConsecutiveFailures}")]
+    private static partial void LogStreamReadStillFailing(ILogger logger, string className, int consecutiveFailures);
 
     [LoggerMessage(Level = LogLevel.Information,
+        Message = "{ClassName} stream read recovered ConsecutiveFailures={ConsecutiveFailures} Downtime={Downtime}")]
+    private static partial void LogStreamReadRecovered(ILogger logger, string className, int consecutiveFailures, TimeSpan downtime);
+
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} processing stream event from {Source}, messageChars={MessageLength}")]
     private static partial void LogProcessingStreamEvent(ILogger logger, string className, string source, int messageLength);
 
@@ -79,15 +95,15 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} could not fetch the event media, sending without it")]
     private static partial void LogMediaFetchFailed(ILogger logger, Exception ex, string className);
 
-    [LoggerMessage(Level = LogLevel.Warning,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} stream event from {Source} suppressed by rate limiter ({SuppressedCount} suppressed since last notice)")]
     private static partial void LogStreamEventSuppressed(ILogger logger, string className, string source, long suppressedCount);
 
-    [LoggerMessage(Level = LogLevel.Warning,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} stream event from {Source} dropped as stale ({AgeSeconds}s old, {StaleCount} stale since last notice)")]
     private static partial void LogStreamEventStale(ILogger logger, string className, string source, long ageSeconds, long staleCount);
 
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Warning,
         Message = "{ClassName} sent drop notice, {DroppedCount} message(s) dropped, delivered={Delivered}")]
     private static partial void LogDropNoticeSent(ILogger logger, string className, long droppedCount, bool delivered);
 
@@ -101,15 +117,23 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} message subscription loop started")]
     private static partial void LogPollingStarted(ILogger logger, string className);
 
-    [LoggerMessage(Level = LogLevel.Error,
-        Message = "{ClassName} error during subscription")]
-    private static partial void LogPollCycleError(ILogger logger, Exception ex, string className);
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "{ClassName} subscription failing, retrying")]
+    private static partial void LogSubscriptionFailing(ILogger logger, Exception? ex, string className);
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "{ClassName} subscription still failing ConsecutiveFailures={ConsecutiveFailures}")]
+    private static partial void LogSubscriptionStillFailing(ILogger logger, string className, int consecutiveFailures);
 
     [LoggerMessage(Level = LogLevel.Information,
+        Message = "{ClassName} subscription recovered ConsecutiveFailures={ConsecutiveFailures} Downtime={Downtime}")]
+    private static partial void LogSubscriptionRecovered(ILogger logger, string className, int consecutiveFailures, TimeSpan downtime);
+
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} no responder available, ignoring message of {MessageLength} character(s) and {AttachmentCount} attachment(s)")]
     private static partial void LogInboundIgnored(ILogger logger, string className, int messageLength, int attachmentCount);
 
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} received message of {MessageLength} character(s) and {AttachmentCount} attachment(s)")]
     private static partial void LogInboundMessage(ILogger logger, string className, int messageLength, int attachmentCount);
 
@@ -125,7 +149,7 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} inbound message handling exceeded {TimeoutSeconds}s; abandoned so the subscription can continue")]
     private static partial void LogInboundProcessingTimedOut(ILogger logger, string className, long timeoutSeconds);
 
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} duplicate message suppressed, already reserved")]
     private static partial void LogDuplicateSuppressed(ILogger logger, string className);
 
@@ -133,13 +157,13 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} message has {Count} attachments, only the first will be processed")]
     private static partial void LogMultipleAttachments(ILogger logger, string className, int count);
 
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} voice message rejected, voice processing is disabled")]
     private static partial void LogVoiceRejected(ILogger logger, string className);
 
-    [LoggerMessage(Level = LogLevel.Information,
-        Message = "{ClassName} downloaded attachment ({ContentType}, {Size} bytes)")]
-    private static partial void LogAttachmentDownloaded(ILogger logger, string className, string? contentType, int size);
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "{ClassName} downloaded attachment of {Size} bytes")]
+    private static partial void LogAttachmentDownloaded(ILogger logger, string className, int size);
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{ClassName} voice transcription outcome={Outcome}, transcriptChars={TranscriptChars}")]
@@ -161,7 +185,7 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} could not show {Interaction} feedback in the configured chat group")]
     private static partial void LogGroupInteractionFailed(ILogger logger, Exception ex, string className, string interaction);
 
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} enqueued turn")]
     private static partial void LogReplyEnqueued(ILogger logger, string className);
 
@@ -169,11 +193,11 @@ public sealed partial class CommunicationsBgService
         Message = "{ClassName} reply queue consumer started")]
     private static partial void LogReplyQueueStarted(ILogger logger, string className);
 
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} processing turn")]
     private static partial void LogProcessingReply(ILogger logger, string className);
 
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "{ClassName} sending reply ({Length} chars, {AttachmentCount} attachment(s)) to the configured chat group")]
     private static partial void LogSendingReply(ILogger logger, string className, int length, int attachmentCount);
 

@@ -25,19 +25,7 @@ public sealed partial class CommunicationsBgService
                     .SubscribeAsync(cancellationToken)
                     .ConfigureAwait(false))
                 {
-                    if (_subscriptionFailures != 0)
-                        OnSubscriptionRecovered();
-
-                    if (!ShouldProcessMessage(message))
-                        continue;
-
-                    if (IsStaleInbound(message))
-                    {
-                        await IgnoreStaleInboundAsync(message, cancellationToken);
-                        continue;
-                    }
-
-                    await ProcessInboundWithTimeoutAsync(message, cancellationToken);
+                    await ProcessSubscriptionMessageAsync(message, cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException and not TaskCanceledException)
@@ -50,6 +38,23 @@ public sealed partial class CommunicationsBgService
                 OnSubscriptionFailed(failure);
             await Task.Delay(TimeSpan.FromMilliseconds(commsConfig.Value.PollingIntervalMs), timeProvider, cancellationToken);
         }
+    }
+
+    private async Task ProcessSubscriptionMessageAsync(SignalizrMessage message, CancellationToken cancellationToken)
+    {
+        if (_subscriptionFailures != 0)
+            OnSubscriptionRecovered();
+
+        if (!ShouldProcessMessage(message))
+            return;
+
+        if (IsStaleInbound(message))
+        {
+            await IgnoreStaleInboundAsync(message, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        await ProcessInboundWithTimeoutAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
     // One Warning when the subscription starts failing, Debug while it keeps failing, and one

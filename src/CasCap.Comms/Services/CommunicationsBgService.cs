@@ -56,6 +56,8 @@ public sealed partial class CommunicationsBgService(
     private long _staleSinceNotice;
     private long _lastDropNoticeTicks;
     private long _lastStaleInboundNoticeTicks;
+    private int _gatewayFailures;
+    private DateTimeOffset _gatewayFailingSince;
 
     /// <inheritdoc/>
     public string FeatureName => CommsFeatureNames.Comms;
@@ -117,36 +119,36 @@ public sealed partial class CommunicationsBgService(
     private async Task WaitForGroupsAsync(CancellationToken cancellationToken)
     {
         var retryMs = commsConfig.Value.HealthCheckProbeDelayMs;
-        var failures = 0;
-        var failingSince = default(DateTimeOffset);
+        _gatewayFailures = 0;
         var missingOptional = await signalizrClient.WaitForGroupsAsync(
             [commsConfig.Value.GroupName],
             [commsConfig.Value.MonitorGroupName],
             TimeSpan.FromMilliseconds(retryMs),
             timeProvider,
-            (ex, attempt) =>
-            {
-                // One Warning when the gateway is first unreachable; each further attempt is Debug.
-                failures = attempt;
-                if (attempt == 1)
-                {
-                    failingSince = timeProvider.GetUtcNow();
-                    LogGatewayUnreachable(logger, ex, nameof(CommunicationsBgService), retryMs);
-                }
-                else
-                    LogGatewayStillUnreachable(logger, nameof(CommunicationsBgService), attempt, retryMs);
-            },
+            (ex, attempt) => OnGatewayReadinessFailed(ex, attempt, retryMs),
             cancellationToken);
 
-        if (failures > 0)
+        if (_gatewayFailures > 0)
         {
-            var downtime = timeProvider.GetUtcNow() - failingSince;
-            LogGatewayRecovered(logger, nameof(CommunicationsBgService), failures, downtime);
+            var downtime = timeProvider.GetUtcNow() - _gatewayFailingSince;
+            LogGatewayRecovered(logger, nameof(CommunicationsBgService), _gatewayFailures, downtime);
         }
 
         if (missingOptional.Count > 0)
             LogMonitorGroupUnavailable(logger, nameof(CommunicationsBgService));
 
         LogChatGroupReady(logger, nameof(CommunicationsBgService));
+    }
+
+    private void OnGatewayReadinessFailed(Exception exception, int attempt, int retryMs)
+    {
+        _gatewayFailures = attempt;
+        if (attempt == 1)
+        {
+            _gatewayFailingSince = timeProvider.GetUtcNow();
+            LogGatewayUnreachable(logger, exception, nameof(CommunicationsBgService), retryMs);
+        }
+        else
+            LogGatewayStillUnreachable(logger, nameof(CommunicationsBgService), attempt, retryMs);
     }
 }

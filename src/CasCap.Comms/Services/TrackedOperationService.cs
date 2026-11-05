@@ -55,11 +55,7 @@ public sealed partial class TrackedOperationService(
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    // Only the first of consecutive failures is a Warning; the finish event records the outcome.
-                    if (pollFailures++ == 0)
-                        LogPollFailed(logger, ex, nameof(TrackedOperationService), operationId);
-                    else
-                        LogPollStillFailing(logger, nameof(TrackedOperationService), operationId, pollFailures);
+                    LogPollFailureTransition(ex, operationId, ++pollFailures);
                 }
 
                 if (progress?.IsFinished is true)
@@ -95,6 +91,14 @@ public sealed partial class TrackedOperationService(
         {
             LogPollFailed(logger, ex, nameof(TrackedOperationService), operationId);
         }
+    }
+
+    private void LogPollFailureTransition(Exception exception, string operationId, int failures)
+    {
+        if (failures == 1)
+            LogPollFailed(logger, exception, nameof(TrackedOperationService), operationId);
+        else
+            LogPollStillFailing(logger, nameof(TrackedOperationService), operationId, failures);
     }
 
     // An unchanged status is repeated less often so a stalled operation still shows signs of life without flooding the chat.

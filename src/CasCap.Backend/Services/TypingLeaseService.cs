@@ -73,8 +73,11 @@ public sealed class TypingLeaseService(
             if (_leases.TryRemove(new KeyValuePair<string, CancellationTokenSource>(groupName, lease)))
             {
                 await client.HideTypingIndicator(account, groupId, CancellationToken.None).ConfigureAwait(false);
-                logger.LogWarning("{ClassName} typing was not stopped within {MaxDuration}, cleared it",
-                    nameof(TypingLeaseService), maxDuration);
+                if (logger.IsEnabled(LogLevel.Warning))
+                {
+                    logger.LogWarning("{ClassName} typing was not stopped within {MaxDuration}, cleared it",
+                        nameof(TypingLeaseService), maxDuration);
+                }
                 lease.Dispose();
             }
         }
@@ -84,8 +87,8 @@ public sealed class TypingLeaseService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "{ClassName} could not refresh typing",
-                nameof(TypingLeaseService));
+            if (logger.IsEnabled(LogLevel.Warning))
+                logger.LogWarning(ex, "{ClassName} could not refresh typing", nameof(TypingLeaseService));
         }
     }
 

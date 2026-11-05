@@ -180,6 +180,11 @@ REST sends. The separate Comms pipeline throttles its own stream-originated traf
 For Kubernetes, use the [application chart guide](charts/signalizr/README.md), including migration
 ordering and persistent storage. The [Grafana guide](charts/signalizr-dashboards/README.md)
 explains dashboard provisioning; it does not install Grafana or a metrics collector.
+Standalone chart migrations require `migrate.enabled: true`, including when upgrading an existing
+installation. The default SQLite receiver still migrates on startup.
+
+The [dependency graph](docs/architecture.md#dependency-graph) covers the published package graph;
+the [deployment flow](docs/architecture.md#deployment-flow) distinguishes validation from publication.
 
 ## Authentication and Privacy
 
@@ -209,6 +214,13 @@ The host exports OpenTelemetry through `AppConfig:OtlpExporterEndpoint` when con
 service name independently. The host also subscribes to `CasCap.Api.SignalCli` telemetry.
 Metrics cover queue drops, persistence, subscriber delivery/acknowledgements, pruning and wrapper
 receive/reconnect health; identifiers and message content are not metric labels or trace attributes.
+
+At the default `Information` level each HTTP request writes one summary with its route template,
+never the raw path or query, and an idle replica is otherwise quiet after startup. An unreachable
+wrapper, gateway or Redis writes one `Warning` when it starts failing, `Debug` while it keeps
+failing, and one `Information` with the failure count and downtime when it recovers. Per-message
+progress is `Debug` and is logged by length and count only. Development lowers the `CasCap`
+namespaces to `Debug`.
 
 ## License
 

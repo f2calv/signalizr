@@ -2,6 +2,7 @@ using CasCap.Common.Abstractions;
 using CasCap.Common.Extensions;
 using CasCap.Extensions;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Serilog;
 
 namespace CasCap;
 
@@ -15,6 +16,8 @@ public static partial class AppHost
         IReadOnlySet<string> enabledFeatures,
         bool servesGrpc)
     {
+        // First, so the summary times the whole pipeline and leaves the exception event to the handler.
+        app.UseCasCapRequestLogging();
         app.UseExceptionHandler();
         app.MapControllers();
         app.MapSignalizrMcp(enabledFeatures);

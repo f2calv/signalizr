@@ -7,12 +7,15 @@ namespace CasCap.Services;
 /// silent loss. Within a process this is enforced below; across pods it is the replica count,
 /// which is why the receiver role must not be scaled out.
 /// </remarks>
-public sealed class ReceiverBgService(
+public sealed partial class ReceiverBgService(
     ILogger<ReceiverBgService> logger,
     ISignalCliReceiver receiver,
-    IInboundMessageQueue queue) : IBgFeature
+    IInboundMessageQueue queue,
+    TimeProvider timeProvider) : IBgFeature
 {
     private int _started;
+    private int _consecutiveFailures;
+    private DateTimeOffset _failingSince;
 
     /// <inheritdoc/>
     public string FeatureName => FeatureNames.Receiver;
@@ -43,7 +46,7 @@ public sealed class ReceiverBgService(
                 // A stream that ends without cancellation means the transport closed on its own,
                 // so reconnect rather than leaving the account unread.
                 if (!cancellationToken.IsCancellationRequested)
-                    logger.LogWarning("{ClassName} receive stream ended, reconnecting", nameof(ReceiverBgService));
+                    OnReceiveFailed(exception: null, delay: TimeSpan.Zero);
 
                 delay = TimeSpan.FromSeconds(5);
             }
@@ -55,9 +58,8 @@ public sealed class ReceiverBgService(
             {
                 // A transport failure is recoverable and must not crash the pod: readiness already
                 // reflects an unreachable wrapper, and a crash loop would turn an outage into a
-                // restart storm.
-                logger.LogWarning(ex, "{ClassName} receive stream failed, retrying in {Delay}",
-                    nameof(ReceiverBgService), delay);
+                // restart storm. Only the transition into failure is a Warning; repeats are Debug.
+                OnReceiveFailed(ex, delay);
 
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 60));
@@ -75,15 +77,56 @@ public sealed class ReceiverBgService(
 
     /// <summary>Reads the stream, doing nothing per message but queueing it.</summary>
     /// <remarks>
-    /// Deliberately free of logging, resolution and dispatch. Anything done here happens while the
-    /// upstream is not being read, and the upstream drops whatever arrives in that window.
+    /// Deliberately free of per-message logging, resolution and dispatch. Anything done here happens
+    /// while the upstream is not being read, and the upstream drops whatever arrives in that window.
+    /// The only exception is the single recovery event after an outage, behind an integer check.
     /// </remarks>
     private async Task DrainAsync(CancellationToken cancellationToken)
     {
         await foreach (var message in receiver.StreamMessagesAsync(cancellationToken)
             .WithCancellation(cancellationToken).ConfigureAwait(false))
         {
+            if (_consecutiveFailures != 0)
+                OnReceiveRecovered();
+
             queue.TryEnqueue(message);
         }
     }
+
+    private void OnReceiveFailed(Exception? exception, TimeSpan delay)
+    {
+        if (_consecutiveFailures++ == 0)
+        {
+            _failingSince = timeProvider.GetUtcNow();
+            if (exception is null)
+                LogReceiveEnded(logger, nameof(ReceiverBgService));
+            else
+                LogReceiveFailing(logger, exception, nameof(ReceiverBgService), delay);
+        }
+        else
+            LogReceiveStillFailing(logger, nameof(ReceiverBgService), _consecutiveFailures, delay);
+    }
+
+    // Recovery is observed at the first delivered message: a connectionless transport has no
+    // other signal that the wrapper is answering again.
+    private void OnReceiveRecovered()
+    {
+        var downtime = timeProvider.GetUtcNow() - _failingSince;
+        LogReceiveRecovered(logger, nameof(ReceiverBgService), _consecutiveFailures, downtime);
+        _consecutiveFailures = 0;
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{ClassName} receive stream failed, retrying in {Delay}")]
+    private static partial void LogReceiveFailing(ILogger logger, Exception exception, string className, TimeSpan delay);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{ClassName} receive stream ended, reconnecting")]
+    private static partial void LogReceiveEnded(ILogger logger, string className);
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "{ClassName} receive stream still failing ConsecutiveFailures={ConsecutiveFailures}, retrying in {Delay}")]
+    private static partial void LogReceiveStillFailing(ILogger logger, string className, int consecutiveFailures, TimeSpan delay);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "{ClassName} receive stream recovered ConsecutiveFailures={ConsecutiveFailures} Downtime={Downtime}")]
+    private static partial void LogReceiveRecovered(ILogger logger, string className, int consecutiveFailures, TimeSpan downtime);
 }

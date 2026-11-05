@@ -10,9 +10,12 @@ namespace CasCap.Services;
 /// Signal dependency and no inbound surface of its own — only a gateway address — which is what
 /// keeps shipping it inside the product image justified.
 /// </remarks>
-public sealed class DemoClientBgService(
-    ILogger<DemoClientBgService> logger, ISignalizrClient client) : IBgFeature
+public sealed partial class DemoClientBgService(
+    ILogger<DemoClientBgService> logger, ISignalizrClient client, TimeProvider timeProvider) : IBgFeature
 {
+    private int _consecutiveFailures;
+    private DateTimeOffset _failingSince;
+
     /// <inheritdoc/>
     public string FeatureName => FeatureNames.DemoClient;
 
@@ -41,9 +44,7 @@ public sealed class DemoClientBgService(
             }
             catch (Exception ex)
             {
-                if (logger.IsEnabled(LogLevel.Warning))
-                    logger.LogWarning(ex, "{ClassName} could not reach the gateway, retrying in {Delay}",
-                        nameof(DemoClientBgService), delay);
+                OnGatewayFailed(ex, delay);
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 60));
             }
@@ -63,14 +64,16 @@ public sealed class DemoClientBgService(
         try
         {
             var groups = await client.GetGroupsAsync(cancellationToken).ConfigureAwait(false);
-            if (logger.IsEnabled(LogLevel.Information))
-                logger.LogInformation("{ClassName} gateway has {Count} configured Signal group(s)",
+            // Retries while the subscription is failing would otherwise repeat this line every attempt.
+            var level = _consecutiveFailures == 0 ? LogLevel.Information : LogLevel.Debug;
+            if (logger.IsEnabled(level))
+                logger.Log(level, "{ClassName} gateway has {Count} configured Signal group(s)",
                     nameof(DemoClientBgService), groups.Count);
         }
         catch (SignalizrRoleNotEnabledException)
         {
-            if (logger.IsEnabled(LogLevel.Information))
-                logger.LogInformation("{ClassName} this gateway serves no send surface, subscribing only",
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug("{ClassName} this gateway serves no send surface, subscribing only",
                     nameof(DemoClientBgService));
         }
     }
@@ -79,12 +82,46 @@ public sealed class DemoClientBgService(
     {
         await foreach (var message in client.SubscribeAsync(cancellationToken).ConfigureAwait(false))
         {
-            if (logger.IsEnabled(LogLevel.Information))
-                logger.LogInformation("{ClassName} received {Length} character(s)",
-                    nameof(DemoClientBgService), message.Message?.Length ?? 0);
+            if (_consecutiveFailures != 0)
+                OnGatewayRecovered();
+            LogMessageReceived(logger, nameof(DemoClientBgService), message.Message?.Length ?? 0);
         }
 
+        if (_consecutiveFailures != 0)
+            OnGatewayRecovered();
         if (logger.IsEnabled(LogLevel.Information))
             logger.LogInformation("{ClassName} subscription ended, resubscribing", nameof(DemoClientBgService));
     }
+
+    private void OnGatewayFailed(Exception exception, TimeSpan delay)
+    {
+        if (_consecutiveFailures++ == 0)
+        {
+            _failingSince = timeProvider.GetUtcNow();
+            LogGatewayFailing(logger, exception, nameof(DemoClientBgService), delay);
+        }
+        else
+            LogGatewayStillFailing(logger, nameof(DemoClientBgService), _consecutiveFailures, delay);
+    }
+
+    private void OnGatewayRecovered()
+    {
+        var downtime = timeProvider.GetUtcNow() - _failingSince;
+        LogGatewayRecovered(logger, nameof(DemoClientBgService), _consecutiveFailures, downtime);
+        _consecutiveFailures = 0;
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{ClassName} received {Length} character(s)")]
+    private static partial void LogMessageReceived(ILogger logger, string className, int length);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{ClassName} could not reach the gateway, retrying in {Delay}")]
+    private static partial void LogGatewayFailing(ILogger logger, Exception exception, string className, TimeSpan delay);
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "{ClassName} gateway still unreachable ConsecutiveFailures={ConsecutiveFailures}, retrying in {Delay}")]
+    private static partial void LogGatewayStillFailing(ILogger logger, string className, int consecutiveFailures, TimeSpan delay);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "{ClassName} gateway reachable again ConsecutiveFailures={ConsecutiveFailures} Downtime={Downtime}")]
+    private static partial void LogGatewayRecovered(ILogger logger, string className, int consecutiveFailures, TimeSpan downtime);
 }

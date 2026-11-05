@@ -56,7 +56,7 @@ public sealed partial class AgentCommsResponder(
     {
         var pollId = pollVote.PollId;
         var selectedIndices = pollVote.OptionIndexes.ToArray();
-        if (logger.IsEnabled(LogLevel.Information))
+        if (logger.IsEnabled(LogLevel.Debug))
         {
             var selectedIndicesText = string.Join(", ", selectedIndices);
             LogPollVoteReceived(logger, nameof(AgentCommsResponder), pollId, selectedIndicesText);
@@ -144,7 +144,7 @@ public sealed partial class AgentCommsResponder(
         return new CommsReply(result.OutputText, footer, attachments, async ct =>
         {
             // Send the detailed pipeline timeline to the monitor group.
-            if (logger.IsEnabled(LogLevel.Information))
+            if (logger.IsEnabled(LogLevel.Debug))
             {
                 var stepsWithResult = debugSteps.Count(s => s.Result is not null);
                 var stepsWithUsage = debugSteps.Count(s => s.Result?.Usage is not null);

@@ -50,7 +50,7 @@ public sealed class InboundMessagePersistenceService(
         }
 
         var deleteFailures = await DeleteWrapperAttachmentsAsync(sourceAttachments, cancellationToken).ConfigureAwait(false);
-        if (deleteFailures > 0)
+        if (deleteFailures > 0 && logger.IsEnabled(LogLevel.Warning))
         {
             logger.LogWarning(
                 "{ClassName} persisted inbound binaries but failed to delete {FailureCount} wrapper attachment(s)",

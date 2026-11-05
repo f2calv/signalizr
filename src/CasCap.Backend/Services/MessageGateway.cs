@@ -40,8 +40,9 @@ public sealed class MessageGateway(
         var response = await client.SendMessage(message, cancellationToken).ConfigureAwait(false)
             ?? throw new HttpRequestException("The signal-cli wrapper returned no send result.");
 
-        if (logger.IsEnabled(LogLevel.Information))
-            logger.LogInformation("{ClassName} sent a message to a configured Signal group",
+        // The request summary is the Information record; this detail is Debug.
+        if (logger.IsEnabled(LogLevel.Debug))
+            logger.LogDebug("{ClassName} sent a message to a configured Signal group",
                 nameof(MessageGateway));
         metrics.RecordSent();
         TrackSendRate(groupName);
@@ -155,8 +156,9 @@ public sealed class MessageGateway(
         }, cancellationToken).ConfigureAwait(false)
             ?? throw new HttpRequestException("The signal-cli wrapper returned no poll result.");
 
-        if (logger.IsEnabled(LogLevel.Information))
-            logger.LogInformation("{ClassName} created a poll in a configured Signal group",
+        // The request summary is the Information record; this detail is Debug.
+        if (logger.IsEnabled(LogLevel.Debug))
+            logger.LogDebug("{ClassName} created a poll in a configured Signal group",
                 nameof(MessageGateway));
 
         return new GroupPollResponse { GroupName = groupName, PollId = response.Timestamp };

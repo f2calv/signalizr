@@ -9,38 +9,72 @@ public sealed partial class CommunicationsBgService
     private const string GreenTick = "\u2705";
     private const string RedCross = "\u274C";
 
+    private int _subscriptionFailures;
+    private DateTimeOffset _subscriptionFailingSince;
+
     private async Task SubscribeToMessagesAsync(CancellationToken cancellationToken)
     {
         LogPollingStarted(logger, nameof(CommunicationsBgService));
 
         while (!cancellationToken.IsCancellationRequested)
         {
+            Exception? failure = null;
             try
             {
                 await foreach (var message in signalizrClient
                     .SubscribeAsync(cancellationToken)
                     .ConfigureAwait(false))
                 {
-                    if (!ShouldProcessMessage(message))
-                        continue;
-
-                    if (IsStaleInbound(message))
-                    {
-                        await IgnoreStaleInboundAsync(message, cancellationToken);
-                        continue;
-                    }
-
-                    await ProcessInboundWithTimeoutAsync(message, cancellationToken);
+                    await ProcessSubscriptionMessageAsync(message, cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException and not TaskCanceledException)
             {
-                LogPollCycleError(logger, ex, nameof(CommunicationsBgService));
+                failure = ex;
             }
 
             // A clean end of the Signalizr gRPC subscription also means the gateway went away, so both paths back off.
+            if (!cancellationToken.IsCancellationRequested)
+                OnSubscriptionFailed(failure);
             await Task.Delay(TimeSpan.FromMilliseconds(commsConfig.Value.PollingIntervalMs), timeProvider, cancellationToken);
         }
+    }
+
+    private async Task ProcessSubscriptionMessageAsync(SignalizrMessage message, CancellationToken cancellationToken)
+    {
+        if (_subscriptionFailures != 0)
+            OnSubscriptionRecovered();
+
+        if (!ShouldProcessMessage(message))
+            return;
+
+        if (IsStaleInbound(message))
+        {
+            await IgnoreStaleInboundAsync(message, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        await ProcessInboundWithTimeoutAsync(message, cancellationToken).ConfigureAwait(false);
+    }
+
+    // One Warning when the subscription starts failing, Debug while it keeps failing, and one
+    // Information at the first delivery afterwards.
+    private void OnSubscriptionFailed(Exception? exception)
+    {
+        if (_subscriptionFailures++ == 0)
+        {
+            _subscriptionFailingSince = timeProvider.GetUtcNow();
+            LogSubscriptionFailing(logger, exception, nameof(CommunicationsBgService));
+        }
+        else
+            LogSubscriptionStillFailing(logger, nameof(CommunicationsBgService), _subscriptionFailures);
+    }
+
+    private void OnSubscriptionRecovered()
+    {
+        var downtime = timeProvider.GetUtcNow() - _subscriptionFailingSince;
+        LogSubscriptionRecovered(logger, nameof(CommunicationsBgService), _subscriptionFailures, downtime);
+        _subscriptionFailures = 0;
     }
 
     /// <summary>Accepts a delivery for the chat group that carries content and was not sent by the gateway itself.</summary>
@@ -303,7 +337,7 @@ public sealed partial class CommunicationsBgService
 
         var content = await signalizrClient.GetAttachmentAsync(attachmentId, cancellationToken);
         if (content.Length > 0)
-            LogAttachmentDownloaded(logger, nameof(CommunicationsBgService), attachment.ContentType, content.Length);
+            LogAttachmentDownloaded(logger, nameof(CommunicationsBgService), content.Length);
 
         if (!isVoice)
             return new(content, attachment.ContentType, false, null);

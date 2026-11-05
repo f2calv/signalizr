@@ -11,8 +11,8 @@ runtime definitions, credentials or session storage.
 dotnet add package CasCap.Comms.AI
 ```
 
-The package depends on `CasCap.Comms` and the Agent Runtime client and contracts. Debug builds of this
-repository use adjacent Agent Runtime source projects instead.
+The package depends on the matching `CasCap.Comms` version and Agent Runtime client and contracts
+1.4.0. Debug builds of this repository use adjacent Agent Runtime source projects instead.
 
 After configuring the base Comms host and its Redis/gateway dependencies:
 

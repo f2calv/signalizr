@@ -11,7 +11,8 @@ public sealed class GatewayBgService(
     IOptions<GatewayConfig> gatewayConfig,
     ISignalCliClient client,
     IGroupResolver groups,
-    IOperatorNotifier operatorNotifier) : IBgFeature
+    IOperatorNotifier operatorNotifier,
+    TimeProvider timeProvider) : IBgFeature
 {
     /// <inheritdoc/>
     public string FeatureName => FeatureNames.Gateway;
@@ -41,19 +42,36 @@ public sealed class GatewayBgService(
     private async Task ResolveGroupsAsync(CancellationToken cancellationToken)
     {
         var delay = TimeSpan.FromSeconds(5);
+        var failures = 0;
+        var failingSince = default(DateTimeOffset);
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
                 await groups.RefreshAsync(cancellationToken).ConfigureAwait(false);
+                if (failures > 0 && logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation("{ClassName} wrapper reachable again ConsecutiveFailures={ConsecutiveFailures} Downtime={Downtime}",
+                        nameof(GatewayBgService), failures, timeProvider.GetUtcNow() - failingSince);
+                }
                 return;
             }
             catch (HttpRequestException ex)
             {
-                if (logger.IsEnabled(LogLevel.Warning))
+                // One Warning when the wrapper becomes unreachable; each further retry is Debug.
+                if (failures++ == 0)
                 {
-                    logger.LogWarning(ex, "{ClassName} could not reach the wrapper, retrying in {Delay}",
-                        nameof(GatewayBgService), delay);
+                    failingSince = timeProvider.GetUtcNow();
+                    if (logger.IsEnabled(LogLevel.Warning))
+                    {
+                        logger.LogWarning(ex, "{ClassName} could not reach the wrapper, retrying in {Delay}",
+                            nameof(GatewayBgService), delay);
+                    }
+                }
+                else if (logger.IsEnabled(LogLevel.Debug))
+                {
+                    logger.LogDebug("{ClassName} wrapper still unreachable ConsecutiveFailures={ConsecutiveFailures}, retrying in {Delay}",
+                        nameof(GatewayBgService), failures, delay);
                 }
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 60));

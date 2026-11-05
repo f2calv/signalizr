@@ -41,6 +41,7 @@ public sealed partial class TrackedOperationService(
         var started = timeProvider.GetTimestamp();
         var lastReported = started;
         var lastReportedCompleted = -1;
+        var pollFailures = 0;
         TrackedOperationProgress? progress = null;
         try
         {
@@ -50,10 +51,11 @@ public sealed partial class TrackedOperationService(
                 try
                 {
                     progress = await operation.PollAsync(cancellationToken);
+                    pollFailures = 0;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    LogPollFailed(logger, ex, nameof(TrackedOperationService), operationId);
+                    LogPollFailureTransition(ex, operationId, ++pollFailures);
                 }
 
                 if (progress?.IsFinished is true)
@@ -89,6 +91,14 @@ public sealed partial class TrackedOperationService(
         {
             LogPollFailed(logger, ex, nameof(TrackedOperationService), operationId);
         }
+    }
+
+    private void LogPollFailureTransition(Exception exception, string operationId, int failures)
+    {
+        if (failures == 1)
+            LogPollFailed(logger, exception, nameof(TrackedOperationService), operationId);
+        else
+            LogPollStillFailing(logger, nameof(TrackedOperationService), operationId, failures);
     }
 
     // An unchanged status is repeated less often so a stalled operation still shows signs of life without flooding the chat.
@@ -138,4 +148,8 @@ public sealed partial class TrackedOperationService(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "{ClassName} progress check failed for operation {OperationId}")]
     private static partial void LogPollFailed(ILogger logger, Exception ex, string className, string operationId);
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "{ClassName} progress check still failing for operation {OperationId} ConsecutiveFailures={ConsecutiveFailures}")]
+    private static partial void LogPollStillFailing(ILogger logger, string className, string operationId, int consecutiveFailures);
 }

@@ -12,7 +12,7 @@ One release image provides every signalizr process; `CasCap:FeatureConfig:Enable
 its role. The gateway runs `Gateway` and `Receiver` together and is the single owner of the Signal
 account. A Comms responder is the same image running only `Comms`: a client of the gateway like any
 other application. The [chart](../charts/signalizr/README.md) deploys the wrapper, the gateway and a
-migration Job, with dormant DemoClient and Comms responder workloads.
+migration Job when explicitly enabled, with dormant DemoClient and Comms responder workloads.
 
 ```mermaid
 flowchart LR
@@ -44,6 +44,55 @@ flowchart LR
 ```
 
 PostgreSQL and Redis are supplied by the deployment; the Compose file starts local instances.
+
+## Dependency Graph
+
+The four green nodes are the published packages. Release builds consume the verified Common
+5.1.0, Azure authentication 2.0.0, SignalCli 0.11.12, Voice 0.2.3 and Agent Runtime 1.4.0
+packages; Debug substitutes adjacent source projects for those external dependencies.
+
+```mermaid
+graph TD
+    classDef owned fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef published fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef external fill:#fef3c7,stroke:#d97706,color:#78350f
+
+    host["Application host"]:::owned --> backend["Backend"]:::owned
+    backend --> data["Data"]:::owned
+    host --> ai["CasCap.Comms.AI"]:::published
+    host --> client["CasCap.Signalizr.Client"]:::published
+    fake["CasCap.Signalizr.Client.Testing"]:::published --> client
+    ai --> comms["CasCap.Comms"]:::published
+    comms --> client
+    ai --> runtime["Agent Runtime client and contracts<br/>1.4.0"]:::external
+    comms --> voice["Voice<br/>0.2.3"]:::external
+    host & backend & comms --> common["Common packages<br/>5.1.0"]:::external
+    host --> azure["Azure authentication<br/>2.0.0"]:::external
+    backend --> signalcli["SignalCli API<br/>0.11.12"]:::external
+```
+
+Same-repository edges remain project references in both configurations. Consumers should align
+the four signalizr package versions with one another and their gateway.
+
+## Deployment Flow
+
+The CI workflow validates pull requests without publishing. On the default branch, the same
+Release source publishes all four packages, the multi-platform image and the umbrella chart before
+creating the immutable release. Publication does not roll out an application.
+
+```mermaid
+flowchart TD
+    classDef owned fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef terminal fill:#dcfce7,stroke:#15803d,color:#14532d
+    source([Pull request or default-branch source]) --> lint["Repository lint"]:::owned
+    source --> version["Resolve version"]:::owned
+    source --> helm["Helm validation"]:::owned
+    version --> build["Release build and<br/>non-Integration tests"]:::owned
+    version & build --> package["Four NuGet packages<br/>default branch only"]:::owned
+    version & build --> image["Multi-platform image<br/>PR build, default-branch push"]:::owned
+    version & image --> chart["Umbrella chart<br/>PR package, default-branch push"]:::owned
+    lint & version & build & helm & package & image & chart --> release([Immutable release<br/>default branch only]):::terminal
+```
 
 ## Gateway Components
 

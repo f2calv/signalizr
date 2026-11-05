@@ -13,7 +13,6 @@ and cursors use separate storage.
 The OCI location is `oci://ghcr.io/f2calv/charts/signalizr`. Choose an explicitly published
 immutable version from the [chart package](https://github.com/f2calv/signalizr/pkgs/container/charts%2Fsignalizr);
 do not install the source `Chart.yaml` placeholder `0.1.0` as though it identifies a published release.
-The registry currently contains development-version tags, not a verified stable chart release.
 Set the same application image tag on each enabled workload, including the migration Job.
 
 Prepare your account and values first:
@@ -35,13 +34,12 @@ signalizr:
   envSecrets:
     CasCap__SignalCliConfig__PhoneNumber: signalizr-account
 migrate:
-  kind: Deployment
-  replicaCount: 0
+  enabled: false
 ```
 
 The `signalizr-account` Secret must contain key `CasCap__SignalCliConfig__PhoneNumber`.
-Create it through your secret-management process. The example disables the standalone migrator
-because the default Job is not a configured SQLite migration barrier.
+Create it through your secret-management process. The standalone migrator is disabled by default;
+the receiver applies SQLite migrations on startup.
 
 ```bash
 helm upgrade --install signalizr oci://ghcr.io/f2calv/charts/signalizr \
@@ -58,8 +56,8 @@ Use a version whose image provides the selected roles.
 ```mermaid
 graph TD
     ROOT([signalizr application chart])
-    WRAPPER["signalcli 1.1.0"]
-    WORKLOAD["workload 1.6.0"]
+    WRAPPER["signalcli 1.2.0"]
+    WORKLOAD["workload 1.7.0"]
     DASH["signalizr-dashboards 0.1.0"]
     GATEWAY["signalizr: Gateway + Receiver"]
     MIGRATOR["migrate: --migrate"]
@@ -67,7 +65,8 @@ graph TD
     RESPONDER["Optional Comms responders"]
     ROOT --> WRAPPER
     ROOT --> DASH
-    ROOT --> GATEWAY & MIGRATOR & DEMO & RESPONDER
+    ROOT --> GATEWAY
+    ROOT -.-> MIGRATOR & DEMO & RESPONDER
     GATEWAY & MIGRATOR & DEMO & RESPONDER --> WORKLOAD
     classDef external fill:#f3f4f6,stroke:#6b7280,color:#111827
     class WRAPPER,WORKLOAD external
@@ -95,7 +94,7 @@ The authoritative [values file](values.yaml) contains workload settings; use the
 | `signalizr.envVars.CasCap__SubscriberConfig__SubscriberGroups__<subscriber>__*` | None; groups each subscriber name receives. Configure an entry for every enabled responder and the demo client |
 | `signalizr.envSecrets` | Empty map of environment key to Secret name |
 | `signalizr.persistentVolumeClaims` | 1 GiB SQLite claim, mounted at `/var/lib/signalizr`; group ownership 1654 |
-| `migrate.kind`, `migrate.replicaCount` | `Job`, `0`; finite `--migrate` schema owner |
+| `migrate.enabled`, `migrate.kind` | `false`, `Job`; explicit opt-in to the finite `--migrate` schema owner |
 | `demo.replicaCount` | `0`; set `1` for the length-only inbound demo subscriber |
 | `signalizrResponder.replicaCount`, `agentizrResponder.replicaCount` | `0`; enable each only after configuring its Comms dependencies |
 | Daemon alias `terminationGracePeriodSeconds` | `90`; shared graceful shutdown budget |
@@ -109,9 +108,10 @@ Plaintext gRPC must use the dedicated HTTP/2 listener, not the HTTP/1.1 Service 
 ## Persistence and Migration
 
 The default application uses SQLite on its own PVC and migrates on startup. The checked-in
-`migrate` Job has neither a shared SQLite volume nor sequencing annotations; it must be disabled
-as in the fresh-install example, or configured explicitly. Setting `replicaCount: 0` alone does not
-disable a workload whose `kind` is `Job`.
+`migrate` Job has neither a shared SQLite volume nor sequencing annotations and is disabled by
+`migrate.enabled: false`. Configure it explicitly before enabling it. **Existing installations
+using an external migrator must add `migrate.enabled: true` when upgrading.** `replicaCount`
+does not control whether a Job is rendered.
 
 For an independently managed SQLite migrator, mount the same claim into the Job, give it writable
 permissions, stop the receiver while migrating, and start the receiver only after successful
@@ -133,6 +133,7 @@ signalizr:
   volumes: []
   volumeMounts: []
 migrate:
+  enabled: true
   kind: Job
   envVars:
     CasCap__DatabaseConfig__Provider: Postgres

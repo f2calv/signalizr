@@ -11,6 +11,7 @@ signalizr:
   volumes: []
   volumeMounts: []
 migrate:
+  enabled: true
   envVars:
     CasCap__DatabaseConfig__Provider: Postgres
   envSecrets:

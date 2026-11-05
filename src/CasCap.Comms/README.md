@@ -27,6 +27,8 @@ is a concrete integration, with an additional AI responder; it is not the librar
 
 Redis is required for stream/media storage and inbound duplicate suppression. An existing gateway
 must serve your configured groups. Voice modes remain disabled until you configure their providers.
+The Release dependency graph uses Common 5.1.0 and Voice 0.2.3; its Signalizr client remains
+aligned with this package's repository version.
 
 For producer-only processes, register `AddCommsStreamSink()` instead of starting a consumer. Resolve
 [`IEventSink<CommsEvent>`](https://github.com/f2calv/CasCap.Common/blob/main/src/CasCap.Common.Abstractions/Abstractions/IEventSink%7BT%7D.cs) and write a notification:

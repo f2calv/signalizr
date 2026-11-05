@@ -180,6 +180,11 @@ REST sends. The separate Comms pipeline throttles its own stream-originated traf
 For Kubernetes, use the [application chart guide](charts/signalizr/README.md), including migration
 ordering and persistent storage. The [Grafana guide](charts/signalizr-dashboards/README.md)
 explains dashboard provisioning; it does not install Grafana or a metrics collector.
+Standalone chart migrations require `migrate.enabled: true`, including when upgrading an existing
+installation. The default SQLite receiver still migrates on startup.
+
+The [dependency graph](docs/architecture.md#dependency-graph) covers the published package graph;
+the [deployment flow](docs/architecture.md#deployment-flow) distinguishes validation from publication.
 
 ## Authentication and Privacy
 

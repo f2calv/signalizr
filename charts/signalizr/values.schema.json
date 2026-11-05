@@ -22,8 +22,13 @@
       }
     },
     "migrate": {
-      "description": "One-shot EF Core migration job. Validated by the workload subchart.",
-      "type": "object"
+      "description": "Optional one-shot EF Core migration job. Other values are validated by the workload subchart.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
     },
     "demo": {
       "description": "The same image running only the DemoClient role.",

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <!-- Kept identical to the sibling repositories so build.ps1/build.sh need no per-repo default. -->
     <AssemblyName>CasCap.App.Server</AssemblyName>

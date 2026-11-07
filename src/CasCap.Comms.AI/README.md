@@ -1,6 +1,6 @@
 # CasCap.Comms.AI
 
-The .NET 10 AI responder for the
+The .NET 11 AI responder for the
 [CasCap.Comms pipeline](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Comms/README.md).
 It connects Signal messages to a separately operated Agent Runtime; it does not host models or own
 runtime definitions, credentials or session storage.

@@ -1,6 +1,6 @@
 # CasCap.Backend
 
-The .NET 10 gateway core used by the signalizr application host. It resolves named groups, owns
+The .NET 11 gateway core used by the signalizr application host. It resolves named groups, owns
 inbound persistence and subscriber cursors, and implements Signal sends and group interactions.
 It is not a published NuGet package or a standalone service.
 

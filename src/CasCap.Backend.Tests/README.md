@@ -1,12 +1,12 @@
 # CasCap.Backend.Tests
 
-Source-declared tests for signalizr's .NET 10 gateway, durable delivery, .NET client helpers and
+Source-declared tests for signalizr's .NET 11 gateway, durable delivery, .NET client helpers and
 HTTP MCP contract. Fixtures use synthetic inputs and local/in-memory dependencies, not a live
 Signal account.
 
 ## Prerequisites
 
-Use .NET 10 with xUnit v3 and Microsoft.Testing.Platform. The project references the application
+Use the .NET 11 RC3 SDK pinned in `global.json` with xUnit v3 and Microsoft.Testing.Platform. The project references the application
 host; its Debug build requires the declared adjacent shared-library and Agent Runtime sources.
 Release builds resolve the same dependencies from NuGet; see
 [host prerequisites](../CasCap.App.Server/README.md#run).
@@ -37,7 +37,7 @@ Source includes test configuration files, but these fixtures use synthetic optio
 | `InboundGrpcServiceTests` | 9 | 11 | Quiet/blocked-write acknowledgement expiry, healthy idle streams, independent consumers, duplicate identity/refusal, request EOF/failure and cancellation |
 | `SignalizrClientTransportTests` | 3 | 3 | gRPC liveness budgets, unchanged REST transport and a loopback HTTP/2 peer that ignores keepalive pings |
 | `SignalizrMcpTests` | 25 | 41 | Authentication, feature gates, status, groups, bounded history, prompts and controlled sending |
-| **Total** | **115** | **145** | |
+| **Total** | **115** | **146** | |
 
 Counts are statically derived from facts, theories and inline data, not observed test results.
 These fixtures do not establish production-scale reliability, long-running stability or loss
@@ -49,7 +49,7 @@ behavior during a real wrapper outage.
 | --- | ---: | --- |
 | `Integration` | 51 | Local HTTP REST/MCP fixtures, HTTP/2 transport, SQLite schema migrations and offline EF metadata |
 
-The remaining 94 cases have no category trait, including the service-level gRPC fixtures.
+The remaining 95 cases have no category trait, including the service-level gRPC fixtures.
 Filtering out `Category=Integration` therefore does not mean “no database-backed fixture.”
 
 `PersistenceModelTests` uses the [Data design-time factory](../CasCap.Data/SignalizrDbContextDesignTimeFactory.cs)

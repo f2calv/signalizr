@@ -11,14 +11,14 @@
 # Pinned to $BUILDPLATFORM and CROSS-COMPILES to $TARGETPLATFORM; emulating the
 # target under QEMU instead is often an order of magnitude slower.
 # ------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:11.0.100-rc.3-resolute AS build
 WORKDIR /repo
 COPY ["Directory.Build.props", "Directory.Packages.props", "global.json", "./"]
 
 ARG WORKLOAD=CasCap.App.Server
 ARG PROJECT=src/${WORKLOAD}/${WORKLOAD}.csproj
 ARG CONFIGURATION=Release
-ARG TARGET_FRAMEWORK=net10.0
+ARG TARGET_FRAMEWORK=net11.0
 ARG VERSION=0.0.0-local
 ARG GIT_REPOSITORY=n/a
 ARG GIT_BRANCH=n/a
@@ -87,7 +87,7 @@ EOF
 # no package manager, which is affordable here because the gateway needs no native runtime
 # dependency. Reaching for a fuller base image means one has been introduced - say why.
 # ------------------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0.0-rc.3-resolute-chiseled AS runtime
 WORKDIR /app
 
 COPY --link --from=build /app/publish .

@@ -30,8 +30,8 @@ public static partial class AppHost
             // Configuration
             var (appConfig, configuredFeatures, applicationMetadata) = builder.InitializeConfiguration(entryAssembly);
             builder.Services.AddApplicationHostLifecycle(builder.Configuration);
-            var enabledFeatures = migrateArgument
-                ? new HashSet<string>([FeatureNames.DbMigrator], StringComparer.OrdinalIgnoreCase)
+            HashSet<string> enabledFeatures = migrateArgument
+                ? [with(StringComparer.OrdinalIgnoreCase), FeatureNames.DbMigrator]
                 : configuredFeatures;
             var migrateOnly = enabledFeatures.SetEquals([FeatureNames.DbMigrator]);
 

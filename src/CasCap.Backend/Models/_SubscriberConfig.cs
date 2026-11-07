@@ -36,5 +36,5 @@ public sealed record SubscriberConfig
     /// <see cref="GroupConfig.GroupNames"/>; messages from other groups and direct messages are never
     /// delivered to it.
     /// </remarks>
-    public Dictionary<string, string[]> SubscriberGroups { get; init; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string[]> SubscriberGroups { get; init; } = [with(StringComparer.Ordinal)];
 }

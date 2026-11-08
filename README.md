@@ -95,7 +95,7 @@ do not retry automatically after an uncertain outcome.
 
 ## Projects
 
-Projects in this checkout target .NET 11 and use the RC3 SDK pinned in `global.json`; published versions retain their own framework requirements. The host and core are application components, not NuGet libraries.
+Published libraries and their tests in this checkout target .NET 10 and .NET 11; application components and their tests target .NET 11. All use the .NET 11 SDK pinned in `global.json`; published versions retain their own framework requirements. The host and core are application components, not NuGet libraries.
 
 | Component | Consumer purpose | Delivery |
 | --- | --- | --- |

@@ -6,7 +6,7 @@ Signal account.
 
 ## Prerequisites
 
-Use the .NET 11 RC3 SDK pinned in `global.json` with xUnit v3 and Microsoft.Testing.Platform. The project references the application
+Use the .NET 11 SDK pinned in `global.json` with xUnit v3 and Microsoft.Testing.Platform. The project references the application
 host; its Debug build requires the declared adjacent shared-library and Agent Runtime sources.
 Release builds resolve the same dependencies from NuGet; see
 [host prerequisites](../CasCap.App.Server/README.md#run).

@@ -5,7 +5,7 @@ Source-declared, credential-free tests for [CasCap.Comms](../CasCap.Comms/README
 
 ## Prerequisites
 
-Use the .NET 11 RC3 SDK pinned in `global.json`, xUnit v3 and Microsoft.Testing.Platform. Debug builds require the declared adjacent
+Use the .NET 11 SDK pinned in `global.json`, xUnit v3 and Microsoft.Testing.Platform. Debug builds require the declared adjacent
 shared, voice and Agent Runtime source dependencies. Release builds resolve those dependencies
 from NuGet, including the runtime client and contracts consumed through `CasCap.Comms.AI`.
 No Redis server, gateway, model or runtime credential is needed by these fixtures.

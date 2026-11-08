@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <PackageId>CasCap.Signalizr.Client</PackageId>
     <Description>Client for the signalizr gateway: send to a named channel over REST, subscribe to inbound messages over gRPC.</Description>

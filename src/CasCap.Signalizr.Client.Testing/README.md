@@ -17,7 +17,7 @@ Reference it from test projects only, and match its version to `CasCap.Signalizr
 deliveries to the consumer's subscription, then asserts on every group operation the consumer
 performed. There is no network, gRPC channel or Signal account involved.
 
-**Target framework:** `net11.0`
+**Target frameworks:** `net10.0`, `net11.0`
 
 ## Public Surface
 

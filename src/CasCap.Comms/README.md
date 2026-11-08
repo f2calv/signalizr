@@ -2,7 +2,7 @@
 
 The Signalizr communications pipeline shared by applications that talk to Signal Messenger through
 a [signalizr](https://github.com/f2calv/signalizr) gateway. It combines Redis event delivery,
-inbound messages, optional voice processing and a bounded reply queue for .NET 11 hosts.
+inbound messages, optional voice processing and a bounded reply queue for .NET 10/11 hosts.
 
 ## Installation and Host Setup
 

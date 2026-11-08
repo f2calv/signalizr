@@ -1,7 +1,7 @@
 # CasCap.Signalizr.Client
 
 Client for the [signalizr](https://github.com/f2calv/signalizr) gateway: send, react, show typing
-and run polls on a named group over REST, and subscribe to inbound messages over gRPC from .NET 11.
+and run polls on a named group over REST, and subscribe to inbound messages over gRPC from .NET 10/11.
 
 ## Installation
 

@@ -95,7 +95,7 @@ do not retry automatically after an uncertain outcome.
 
 ## Projects
 
-All projects target .NET 10. The host and core are application components, not NuGet libraries.
+Published libraries and their tests in this checkout target .NET 10 and .NET 11; application components and their tests target .NET 11. Build with a stable .NET 11 SDK; `global.json` selects Microsoft.Testing.Platform without pinning an SDK version. Published versions retain their own framework requirements. The host and core are application components, not NuGet libraries.
 
 | Component | Consumer purpose | Delivery |
 | --- | --- | --- |

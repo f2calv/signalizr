@@ -2,7 +2,7 @@
 
 The Signalizr communications pipeline shared by applications that talk to Signal Messenger through
 a [signalizr](https://github.com/f2calv/signalizr) gateway. It combines Redis event delivery,
-inbound messages, optional voice processing and a bounded reply queue for .NET 10 hosts.
+inbound messages, optional voice processing and a bounded reply queue for .NET 10/11 hosts.
 
 ## Installation and Host Setup
 
@@ -27,7 +27,7 @@ is a concrete integration, with an additional AI responder; it is not the librar
 
 Redis is required for stream/media storage and inbound duplicate suppression. An existing gateway
 must serve your configured groups. Voice modes remain disabled until you configure their providers.
-The Release dependency graph uses Common 5.1.0 and Voice 0.2.3; its Signalizr client remains
+The Release dependency graph uses Common 5.2.0 and Voice 0.3.0; its Signalizr client remains
 aligned with this package's repository version.
 
 For producer-only processes, register `AddCommsStreamSink()` instead of starting a consumer. Resolve

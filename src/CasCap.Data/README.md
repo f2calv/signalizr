@@ -1,6 +1,6 @@
 # CasCap.Data
 
-Internal, non-packable .NET 10 EF Core model and migrations for signalizr's durable messages,
+Internal, non-packable .NET 11 EF Core model and migrations for signalizr's durable messages,
 attachments and subscriber cursors. Application delivery policy belongs to
 [CasCap.Backend](../CasCap.Backend/README.md).
 

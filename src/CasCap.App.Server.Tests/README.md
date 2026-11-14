@@ -1,11 +1,11 @@
 # CasCap.App.Server.Tests
 
-Source-declared unit and integration tests for the .NET 10 signalizr ASP.NET Core host and startup
+Source-declared unit and integration tests for the .NET 11 signalizr ASP.NET Core host and startup
 configuration. These tests do not require a live Signal account or Agent Runtime.
 
 ## Prerequisites
 
-Use the .NET 10 SDK with xUnit v3 on Microsoft.Testing.Platform. Debug project references require
+Use a stable .NET 11 SDK with xUnit v3 on Microsoft.Testing.Platform. Debug project references require
 the adjacent shared-library and Agent Runtime sources used by the host; Release builds resolve them
 from NuGet.
 

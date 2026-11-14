@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <RootNamespace>CasCap.Tests</RootNamespace>
     <IsTestProject>true</IsTestProject>
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
@@ -20,6 +20,8 @@
     <ProjectReference Include="..\..\..\CasCap.Api.Voice\src\CasCap.Api.Voice.Testing\CasCap.Api.Voice.Testing.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(Configuration)'=='Release'">
+    <PackageReference Include="CasCap.AgentRuntime.Client" />
+    <PackageReference Include="CasCap.AgentRuntime.Contracts" />
     <PackageReference Include="CasCap.Api.Voice.Testing" />
   </ItemGroup>
 

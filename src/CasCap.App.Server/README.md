@@ -1,6 +1,6 @@
 # CasCap.App.Server
 
-The .NET 10 ASP.NET Core host for signalizr. Operators select gateway, receive, migration, demo
+The .NET 11 ASP.NET Core host for signalizr. Operators select gateway, receive, migration, demo
 or communications roles from the same application image; applications consume its REST and gRPC
 contracts rather than referencing this executable.
 
@@ -16,7 +16,7 @@ For a configured source checkout:
 dotnet run --project src/CasCap.App.Server/CasCap.App.Server.csproj --configuration Debug
 ```
 
-Run from the repository root. Debug builds require the adjacent source dependencies declared by the
+Run from the repository root with a stable .NET 11 SDK. Debug builds require the adjacent source dependencies declared by the
 project graph, including the remote Agent Runtime client and contracts. Release builds and the
 Dockerfile resolve the same dependencies from NuGet, so they work from a clean clone.
 

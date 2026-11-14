@@ -1,6 +1,6 @@
 # CasCap.Signalizr.Client.Testing
 
-An in-memory [`ISignalizrClient`](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Signalizr.Client/Abstractions/ISignalizrClient.cs) for .NET 10 tests of [signalizr](https://github.com/f2calv/signalizr)
+An in-memory [`ISignalizrClient`](https://github.com/f2calv/signalizr/blob/main/src/CasCap.Signalizr.Client/Abstractions/ISignalizrClient.cs) for .NET 10/11 tests of [signalizr](https://github.com/f2calv/signalizr)
 consumers, without a gateway, Signal account or network connection.
 
 ## Installation
@@ -17,7 +17,7 @@ Reference it from test projects only, and match its version to `CasCap.Signalizr
 deliveries to the consumer's subscription, then asserts on every group operation the consumer
 performed. There is no network, gRPC channel or Signal account involved.
 
-**Target framework:** `net10.0`
+**Target frameworks:** `net10.0`, `net11.0`
 
 ## Public Surface
 

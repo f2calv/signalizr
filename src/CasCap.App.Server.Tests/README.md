@@ -5,7 +5,7 @@ configuration. These tests do not require a live Signal account or Agent Runtime
 
 ## Prerequisites
 
-Use the .NET 11 SDK pinned in `global.json` with xUnit v3 on Microsoft.Testing.Platform. Debug project references require
+Use a stable .NET 11 SDK with xUnit v3 on Microsoft.Testing.Platform. Debug project references require
 the adjacent shared-library and Agent Runtime sources used by the host; Release builds resolve them
 from NuGet.
 

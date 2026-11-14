@@ -20,6 +20,8 @@
     <ProjectReference Include="..\..\..\CasCap.Api.Voice\src\CasCap.Api.Voice.Testing\CasCap.Api.Voice.Testing.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(Configuration)'=='Release'">
+    <PackageReference Include="CasCap.AgentRuntime.Client" />
+    <PackageReference Include="CasCap.AgentRuntime.Contracts" />
     <PackageReference Include="CasCap.Api.Voice.Testing" />
   </ItemGroup>
 

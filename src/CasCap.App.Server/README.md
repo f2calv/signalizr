@@ -16,7 +16,7 @@ For a configured source checkout:
 dotnet run --project src/CasCap.App.Server/CasCap.App.Server.csproj --configuration Debug
 ```
 
-Run from the repository root with the .NET 11 SDK pinned in `global.json`. Debug builds require the adjacent source dependencies declared by the
+Run from the repository root with a stable .NET 11 SDK. Debug builds require the adjacent source dependencies declared by the
 project graph, including the remote Agent Runtime client and contracts. Release builds and the
 Dockerfile resolve the same dependencies from NuGet, so they work from a clean clone.
 

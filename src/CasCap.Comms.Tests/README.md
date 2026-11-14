@@ -5,9 +5,9 @@ Source-declared, credential-free tests for [CasCap.Comms](../CasCap.Comms/README
 
 ## Prerequisites
 
-Use the .NET 11 SDK pinned in `global.json`, xUnit v3 and Microsoft.Testing.Platform. Debug builds require the declared adjacent
+Use a stable .NET 11 SDK, xUnit v3 and Microsoft.Testing.Platform. Debug builds require the declared adjacent
 shared, voice and Agent Runtime source dependencies. Release builds resolve those dependencies
-from NuGet, including the runtime client and contracts consumed through `CasCap.Comms.AI`.
+from NuGet, including direct references to the runtime client and contracts.
 No Redis server, gateway, model or runtime credential is needed by these fixtures.
 
 ## Purpose
@@ -39,8 +39,9 @@ AI provider.
 | `ToolApprovalMcpFilterTests` | 3 | 11 | Approval | Gating by attribute and configuration, requester naming from call metadata and refusals that are not errors |
 | **Total** | **77** | **111** | | |
 
-Counts expand the inline-data theories in current source. They are not a claim that the suite was
-executed during documentation maintenance.
+Counts expand the inline-data theories in current source: 111 cases per target framework, or 222
+across .NET 10 and .NET 11. They are not a claim that the suite was executed during documentation
+maintenance.
 
 ## Trait Categories
 

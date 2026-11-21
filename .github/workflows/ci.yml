@@ -36,7 +36,8 @@ jobs:
     with:
       version: ${{ needs.versioning.outputs.version }}
       solution-name: signalizr.Release.slnx
-      dotnet-test-args: '["--filter-not-trait", "Category=Integration"]'
+      # TODO: Run local integrations once the PostgreSQL and Redis fixtures are validated in CI.
+      dotnet-test-args: '["--filter-not-trait", "Category=Integration", "--filter-not-trait", "Category=Live"]'
 
   helm:
     uses: f2calv/gha-workflows/.github/workflows/helm-lint.yml@v1

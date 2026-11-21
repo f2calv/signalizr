@@ -17,6 +17,7 @@ using Xunit;
 namespace CasCap.Tests;
 
 /// <summary>Service-level tests for the bidirectional inbound gRPC contract.</summary>
+[Trait("Category", "Integration")]
 public class InboundGrpcServiceTests
 {
     private const string SecondMessage = "second";

@@ -45,10 +45,9 @@ documentation there rather than in these repository-specific constraints.
 
 ## Maintenance
 
-- Keep the EF Core runtime, Design, InMemory and Sqlite packages and `dotnet-ef` on a coherent
-  10.x family with `Npgsql.EntityFrameworkCore.PostgreSQL` 10.x. The provider requires EF Core below
-  11 even though the application targets .NET 11. Reassess the family when a stable compatible
-  PostgreSQL provider is available, with both persistence adapters validated in a dedicated migration.
+- Update the EF Core runtime, Design, InMemory and Sqlite packages, `dotnet-ef` and
+  `Npgsql.EntityFrameworkCore.PostgreSQL` as a compatible family. Validate both the PostgreSQL
+  and SQLite persistence adapters when the family changes.
 - Change shared build/deploy orchestration and its tests in the central `containers-workflows`
   skill, not in this repository's root shims.
 - This repository owns and publishes `CasCap.Signalizr.Client`, `CasCap.Signalizr.Client.Testing`,

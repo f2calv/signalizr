@@ -133,7 +133,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:18-alpine
+    image: postgres:19-alpine
     profiles: [postgres]
     environment:
       POSTGRES_DB: signalizr
